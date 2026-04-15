@@ -1,0 +1,108 @@
+{
+  "name": "jrxml-editor-extension",
+  "displayName": "JRXML Editor",
+  "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
+  "version": "1.5.2",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "publisher": "jrxml-tools",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "jrxml",
+    "jasperreports",
+    "jasper",
+    "java",
+    "expression"
+  ],
+  "activationEvents": [
+    "onLanguage:jrxml"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "jrxml",
+        "aliases": [
+          "JRXML",
+          "JasperReports XML"
+        ],
+        "extensions": [
+          ".jrxml"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "jrxml",
+        "scopeName": "source.jrxml",
+        "path": "./syntaxes/jrxml.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "jrxml.openExpressionEditor",
+        "title": "JRXML: Open Expression Editor",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "jrxml.goToDeclaration",
+        "title": "JRXML: Go to Declaration"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "jrxml.openExpressionEditor",
+          "when": "resourceExtname == .jrxml",
+          "group": "jrxml"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "JRXML Expression Editor",
+      "properties": {
+        "jrxml.indentSize": {
+          "type": "number",
+          "default": 4,
+          "description": "Indent size for expression formatting"
+        },
+        "jrxml.autoOpenEditor": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically open expression editor when cursor is inside an expression"
+        },
+        "jrxml.formatOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically clean up expression formatting (comma spacing, operator spacing) when saving a .jrxml file"
+        },
+        "jrxml.showUnusedWarnings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show warnings for declared fields, parameters, or variables that are never used in any expression."
+        },
+        "jrxml.validateExpressions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show errors for unbalanced parentheses, unclosed strings, and undeclared $F/$P/$V references."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.3.2"
+  }
+}
