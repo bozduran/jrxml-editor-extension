@@ -1,0 +1,269 @@
+{
+  "name": "JRXML",
+  "scopeName": "source.jrxml",
+  "fileTypes": ["jrxml"],
+  "patterns": [
+    { "include": "#xml_comment" },
+    { "include": "#doctype" },
+    { "include": "#expression_tag" },
+    { "include": "#xml_tag" }
+  ],
+  "repository": {
+    "xml_comment": {
+      "name": "comment.block.xml",
+      "begin": "<!--",
+      "end": "-->",
+      "captures": {
+        "0": { "name": "punctuation.definition.comment.xml" }
+      }
+    },
+    "doctype": {
+      "name": "meta.tag.sgml.doctype.xml",
+      "begin": "<!(?:DOCTYPE|ENTITY)",
+      "end": ">"
+    },
+    "expression_tag": {
+      "comment": "JRXML expression elements - contains Java/Jasper expressions",
+      "patterns": [
+        {
+          "name": "meta.expression-element.jrxml",
+          "begin": "(<(?:reportElement|textFieldExpression|imageExpression|variableExpression|groupExpression|printWhenExpression|initialValueExpression|crosstabExpression|bucketExpression|sortFieldExpression|returnValue|filterExpression|expression|jr:expression|defaultValueExpression|anchorNameExpression|bookmarkLevelExpression|hyperlinkReferenceExpression|hyperlinkAnchorExpression|hyperlinkPageExpression|hyperlinkTooltipExpression|labelExpression|datasetExpression|connectionExpression|subreportExpression|subreportReturnValue|customExpression|chartTitleExpression|chartSubtitleExpression|categoryExpression|valueExpression|seriesExpression|labelExpression|keyExpression|lowExpression|highExpression|openExpression|closeExpression|volumeExpression|xValueExpression|yValueExpression|zValueExpression|timePeriodExpression|startDateExpression|endDateExpression|colorExpression|sizeExpression|shapeExpression)(?=[\\s>]|\\/))",
+          "end": "(</(?:reportElement|textFieldExpression|imageExpression|variableExpression|groupExpression|printWhenExpression|initialValueExpression|crosstabExpression|bucketExpression|sortFieldExpression|returnValue|filterExpression|expression|jr:expression|defaultValueExpression|anchorNameExpression|bookmarkLevelExpression|hyperlinkReferenceExpression|hyperlinkAnchorExpression|hyperlinkPageExpression|hyperlinkTooltipExpression|labelExpression|datasetExpression|connectionExpression|subreportExpression|subreportReturnValue|customExpression|chartTitleExpression|chartSubtitleExpression|categoryExpression|valueExpression|seriesExpression|labelExpression|keyExpression|lowExpression|highExpression|openExpression|closeExpression|volumeExpression|xValueExpression|yValueExpression|zValueExpression|timePeriodExpression|startDateExpression|endDateExpression|colorExpression|sizeExpression|shapeExpression)>)",
+          "beginCaptures": {
+            "1": { "name": "entity.name.tag.jrxml" }
+          },
+          "endCaptures": {
+            "1": { "name": "entity.name.tag.jrxml" }
+          },
+          "patterns": [
+            { "include": "#tag_attributes" },
+            { "include": "#cdata_expression" },
+            { "include": "#java_expression_content" }
+          ]
+        }
+      ]
+    },
+    "cdata_expression": {
+      "name": "meta.cdata.jrxml",
+      "begin": "<!\\[CDATA\\[",
+      "end": "\\]\\]>",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.xml" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.xml" }
+      },
+      "patterns": [
+        { "include": "#java_expression_content" }
+      ]
+    },
+    "java_expression_content": {
+      "patterns": [
+        { "include": "#jasper_builtin_functions" },
+        { "include": "#jasper_fields_params_vars" },
+        { "include": "#java_keywords" },
+        { "include": "#java_types" },
+        { "include": "#java_string" },
+        { "include": "#java_number" },
+        { "include": "#java_comment" },
+        { "include": "#java_static_call" },
+        { "include": "#java_method_call" },
+        { "include": "#bracket_level1" }
+      ]
+    },
+    "jasper_builtin_functions": {
+      "patterns": [
+        {
+          "comment": "JasperReports built-in functions / helpers",
+          "name": "support.function.jasper.jrxml",
+          "match": "\\b(TODAY|NOW|DATE|IF|AND|OR|NOT|CONTAINS|STARTSWITH|ENDSWITH|LEN|LEFT|RIGHT|MID|UPPER|LOWER|TRIM|REPLACE|CONCATENATE|TEXT|VALUE|INT|ROUND|ROUNDDOWN|ROUNDUP|FLOOR|CEILING|ABS|MOD|POWER|SQRT|SUM|MIN|MAX|AVG|COUNT|COUNTIF|SUMIF|FIRST|STDEV|VAR)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "support.function.jasper.jrxml" }
+          }
+        },
+        {
+          "comment": "JasperReports class references",
+          "name": "support.class.jasper.jrxml",
+          "match": "\\b(JRDataSource|JREmptyDataSource|JRBeanCollectionDataSource|JRBeanArrayDataSource|JRResultSetDataSource|JRTableModelDataSource|JRMapCollectionDataSource|JRMapArrayDataSource|JRCsvDataSource|JRXlsDataSource|JRXmlDataSource|JRXlsxDataSource|JasperReport|JasperPrint|JasperFillManager|JasperCompileManager|JasperExportManager|JRParameter|JRVariable|JRField|JRGroup|JRBand|JRElement|JRTextElement|JRImage|JRSubreport|JRChart|JRCrosstab|JRComponentElement|net\\.sf\\.jasperreports\\.[\\w.]+)\\b"
+        },
+        {
+          "comment": "Jasper $X{} extended expressions only — $F/$P/$V handled by jasper_fields_params_vars",
+          "name": "variable.language.jasper.jrxml",
+          "match": "\\$X\\{[^}]+\\}"
+        },
+        {
+          "comment": "Jasper resource / message",
+          "name": "support.function.jasper.msg.jrxml",
+          "match": "\\$R\\{[\\w.]+\\}"
+        }
+      ]
+    },
+    "jasper_fields_params_vars": {
+      "patterns": [
+        {
+          "name": "meta.jasper.field.jrxml",
+          "match": "(\\$F)\\{([\\w.]+)\\}",
+          "captures": {
+            "1": { "name": "keyword.other.jasper.field-prefix.jrxml" },
+            "2": { "name": "variable.other.field.jrxml" }
+          }
+        },
+        {
+          "name": "meta.jasper.parameter.jrxml",
+          "match": "(\\$P)\\{([\\w.]+)\\}",
+          "captures": {
+            "1": { "name": "keyword.other.jasper.param-prefix.jrxml" },
+            "2": { "name": "variable.other.parameter.jrxml" }
+          }
+        },
+        {
+          "name": "meta.jasper.variable.jrxml",
+          "match": "(\\$V)\\{([\\w.]+)\\}",
+          "captures": {
+            "1": { "name": "keyword.other.jasper.var-prefix.jrxml" },
+            "2": { "name": "variable.other.variable.jrxml" }
+          }
+        }
+      ]
+    },
+    "java_keywords": {
+      "name": "keyword.control.java.jrxml",
+      "match": "\\b(if|else|for|while|do|switch|case|break|continue|return|try|catch|finally|throw|throws|new|instanceof|null|true|false|this|super|import|package|class|interface|enum|extends|implements|static|final|abstract|public|private|protected|void|import)\\b"
+    },
+    "java_types": {
+      "name": "storage.type.java.jrxml",
+      "match": "\\b(String|Integer|Long|Double|Float|Boolean|Byte|Short|Character|Number|Object|BigDecimal|BigInteger|Date|java\\.util\\.Date|LocalDate|LocalDateTime|List|Map|Set|Collection|ArrayList|HashMap|Iterator|Optional|StringBuilder|StringBuffer|Math|System)\\b"
+    },
+    "java_string": {
+      "name": "string.quoted.double.java.jrxml",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.java",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "java_number": {
+      "name": "constant.numeric.java.jrxml",
+      "match": "\\b(0[xX][0-9a-fA-F]+|\\d+\\.?\\d*([eE][+-]?\\d+)?[fFdDlL]?)\\b"
+    },
+    "java_comment": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.java.jrxml",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block.java.jrxml",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "java_static_call": {
+      "name": "meta.static-call.java.jrxml",
+      "match": "\\b([A-Z][\\w]*)\\s*\\.\\s*([a-zA-Z_][\\w]*)",
+      "captures": {
+        "1": { "name": "entity.name.type.java.jrxml" },
+        "2": { "name": "entity.name.function.java.jrxml" }
+      }
+    },
+    "java_method_call": {
+      "name": "meta.method-call.java.jrxml",
+      "match": "\\b([a-z_][\\w]*)\\s*(?=\\()",
+      "captures": {
+        "1": { "name": "entity.name.function.java.jrxml" }
+      }
+    },
+    "bracket_level1": {
+      "name": "meta.bracket.level1.jrxml",
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": { "0": { "name": "punctuation.bracket.round.level1.jrxml" } },
+      "endCaptures": { "0": { "name": "punctuation.bracket.round.level1.jrxml" } },
+      "patterns": [
+        { "include": "#jasper_builtin_functions" },
+        { "include": "#jasper_fields_params_vars" },
+        { "include": "#java_keywords" },
+        { "include": "#java_types" },
+        { "include": "#java_string" },
+        { "include": "#java_number" },
+        { "include": "#java_comment" },
+        { "include": "#java_static_call" },
+        { "include": "#java_method_call" },
+        { "include": "#bracket_level2" }
+      ]
+    },
+    "bracket_level2": {
+      "name": "meta.bracket.level2.jrxml",
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": { "0": { "name": "punctuation.bracket.round.level2.jrxml" } },
+      "endCaptures": { "0": { "name": "punctuation.bracket.round.level2.jrxml" } },
+      "patterns": [
+        { "include": "#jasper_builtin_functions" },
+        { "include": "#jasper_fields_params_vars" },
+        { "include": "#java_keywords" },
+        { "include": "#java_types" },
+        { "include": "#java_string" },
+        { "include": "#java_number" },
+        { "include": "#java_comment" },
+        { "include": "#java_static_call" },
+        { "include": "#java_method_call" },
+        { "include": "#bracket_level3" }
+      ]
+    },
+    "bracket_level3": {
+      "name": "meta.bracket.level3.jrxml",
+      "begin": "\\(",
+      "end": "\\)",
+      "beginCaptures": { "0": { "name": "punctuation.bracket.round.level3.jrxml" } },
+      "endCaptures": { "0": { "name": "punctuation.bracket.round.level3.jrxml" } },
+      "patterns": [
+        { "include": "#jasper_builtin_functions" },
+        { "include": "#jasper_fields_params_vars" },
+        { "include": "#java_keywords" },
+        { "include": "#java_types" },
+        { "include": "#java_string" },
+        { "include": "#java_number" },
+        { "include": "#java_comment" },
+        { "include": "#java_static_call" },
+        { "include": "#java_method_call" }
+      ]
+    },
+    "xml_tag": {
+      "patterns": [
+        {
+          "name": "meta.tag.xml",
+          "begin": "(</?)((?:[\\w.-]+:)?[\\w.-]+)",
+          "end": "(/?>)",
+          "beginCaptures": {
+            "1": { "name": "punctuation.definition.tag.xml" },
+            "2": { "name": "entity.name.tag.xml" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.tag.xml" }
+          },
+          "patterns": [
+            { "include": "#tag_attributes" }
+          ]
+        }
+      ]
+    },
+    "tag_attributes": {
+      "patterns": [
+        {
+          "name": "meta.attribute.xml",
+          "match": "([\\w.-]+)\\s*(=)\\s*(\"[^\"]*\"|'[^']*')",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.xml" },
+            "2": { "name": "punctuation.separator.key-value.xml" },
+            "3": { "name": "string.quoted.xml" }
+          }
+        }
+      ]
+    }
+  }
+}
