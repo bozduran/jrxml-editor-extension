@@ -48,7 +48,7 @@ function findInsertionPoint(text, tagName) {
 function buildDeclarationSnippet(kind, name) {
     switch (kind) {
         case 'field':
-            return `\n\t<field name="${name}" class="java.lang.Object">\n\t\t<fieldDescription><![CDATA[]]></fieldDescription>\n\t</field>`;
+            return `\n\t<field name="${name}" class="java.lang.Object">\n\t\t<description><![CDATA[]]></description>\n\t</field>`;
         case 'parameter':
             return `\n\t<parameter name="${name}" class="java.lang.Object" isForPrompting="true"/>`;
         case 'variable':
