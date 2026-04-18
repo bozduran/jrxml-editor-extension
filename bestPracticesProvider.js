@@ -36,9 +36,16 @@ const RULES = [
             const hits     = [];
             const boolNames = buildTypeSet(declarations, isBoolean);
 
-            const boolEqualsRe = /Boolean\.(TRUE|FALSE)\.equals\s*\(\s*(\$(F|P|V)\{([\w.]+)\})\s*\)/g;
+            // Catch BOTH Boolean.FALSE.equals($F{x}) AND $F{x}.equals(Boolean.FALSE)
+            const boolEqualsRe = /(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*(\$(F|P|V)\{([\w.]+)\})\s*\)|(\$(F|P|V)\{([\w.]+)\})\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/g;
+            let m;
             while ((m = boolEqualsRe.exec(expr)) !== null) {
-                const [full, boolConst, ref, sigil, name] = m;
+                const full      = m[0];
+                const boolConst = m[1] || m[8];
+                const ref       = m[2] || m[5];
+                const sigil     = m[3] || m[6];
+                const name      = m[4] || m[7];
+
                 if (!boolNames[sigil].has(name)) continue;
                 const boolVal     = boolConst === 'TRUE' ? 'true' : 'false';
                 const replacement = `EQUALS(${ref}, ${boolVal})`;
@@ -48,9 +55,9 @@ const RULES = [
                     fix: { label: `Replace with ${replacement}`, replacement }
                 });
             }
+
             // $F{x} == true|false  /  $F{x} != true|false
             const cmpRe = /(\$(F|P|V)\{([\w.]+)\})\s*(==|!=)\s*(true|false)/g;
-            let m;
             while ((m = cmpRe.exec(expr)) !== null) {
                 const [full, ref, sigil, name, op, boolVal] = m;
                 if (!boolNames[sigil].has(name)) continue;
@@ -65,18 +72,15 @@ const RULES = [
             while ((m = bareRe.exec(expr)) !== null) {
                 const [full, ref, sigil, name] = m;
                 if (!boolNames[sigil].has(name)) continue;
-                if (/EQUALS\s*\(\s*$/.test(expr.slice(0, m.index))) continue;
                 
-                // ── NEW: skip if argument of Boolean.TRUE/FALSE.equals(...) ──
-                // Pattern: Boolean.FALSE.equals($F{x})  or  Boolean.TRUE.equals($F{x})
                 const beforeBare = expr.slice(0, m.index);
                 const afterBare  = expr.slice(m.index + full.length).trimStart();
-                if (/Boolean\.(TRUE|FALSE)\.equals\s*\(\s*$/.test(beforeBare)) continue;
-                if (/^\.equals\s*\(\s*Boolean\.(TRUE|FALSE)\s*\)/.test(afterBare)) continue;
-                // ── END NEW ──
+                
+                if (/EQUALS\s*\(\s*$/.test(beforeBare)) continue;
+                if (/(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*$/.test(beforeBare)) continue;
+                if (/^\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/.test(afterBare)) continue;
+                if (/^(==|!=)\s*(true|false)/.test(afterBare)) continue;
 
-                const after = expr.slice(m.index + full.length).trimStart();
-                if (/^(==|!=)\s*(true|false)/.test(after)) continue;
                 const replacement = `EQUALS(${ref}, true)`;
                 hits.push({ start: m.index, end: m.index + full.length,
                     fix: { label: `Replace with ${replacement}`, replacement } });
@@ -135,10 +139,8 @@ const RULES = [
 
         check(expr, declarations) {
             const hits     = [];
-            // Only flag types that are commonly nullable in reports
             const nullable = buildTypeSet(declarations, isNullable);
 
-            // Bare reference — not already inside Optional, null-check, or EQUALS
             const bareRe = /(\$(F|P|V)\{([\w.]+)\})/g;
             let m;
             while ((m = bareRe.exec(expr)) !== null) {
@@ -152,12 +154,13 @@ const RULES = [
                 if (/Optional\.ofNullable\s*\([^)]*$/.test(before)) continue;
                 if (/!=\s*null|null\s*!=/.test(before + ' ' + after))  continue;
                 if (/EQUALS\s*\(\s*$/.test(before))                    continue;
-                // Skip if it's the subject of .equals() — BP002 handles that
                 if (/^\.equals\s*\(/.test(after))                      continue;
-                // Skip if already inside a ternary null-guard pattern: $F{x} != null ? ...
                 if (/\?\s*$/.test(before) || /^\s*:/.test(after))      continue;
 
-                // Pick a sensible default based on type
+                // ── PREVENT CLASH WITH BP001 ──
+                if (/(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*$/.test(before)) continue;
+                if (/^\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/.test(after)) continue;
+
                 const decl    = findDecl(declarations, sigil, name);
                 const defVal  = defaultForType(decl?.fullType || decl?.type || '');
                 const replacement = `Optional.ofNullable(${ref}).orElse(${defVal})`;
