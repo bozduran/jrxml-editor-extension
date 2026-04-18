@@ -41,7 +41,7 @@ function extractFields(text) {
         const inner  = m[2] || '';
         const name   = attrValue(attrs, 'name');
         const type   = attrValue(attrs, 'class') || 'java.lang.Object';
-        const desc   = extractTagContent(inner, 'fieldDescription').trim();
+        const desc   = extractTagContent(inner, 'description').trim();
         if (!name) continue;
         const nameOffset = m.index + m[0].indexOf(`"${name}"`) + 1;
         results.push({ name, type: shortType(type), fullType: type, description: desc,
