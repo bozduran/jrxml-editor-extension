@@ -8,6 +8,7 @@
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
   },
   "publisher": "BozNtouranLabs",
+  "pricing": "Free",
   "engines": {
     "vscode": "^1.85.0"
   },
