@@ -50,6 +50,7 @@ function scanDirectoryForJavaMethods(dir, results) {
 }
 
 function extractStaticMethods(filePath, results) {
+
     try {
         const content = fs.readFileSync(filePath, 'utf-8');
         
