@@ -2,12 +2,12 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "1.5.2",
+  "version": "0.0.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
   },
-  "publisher": "jrxml-tools",
+  "publisher": "BozNtouranLabs",
   "engines": {
     "vscode": "^1.85.0"
   },
