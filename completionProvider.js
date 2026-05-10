@@ -5,10 +5,94 @@
 //   - $V{...}  → variables declared in this .jrxml file
 //   - Jasper built-in functions
 //   - Common Java types / static methods
+//   - Custom public static methods from local src/main/java
 
 const vscode = require('vscode');
+const fs = require('fs');
+const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations } = require('./jrxmlParser');
+
+// ── Custom Java Method Scanner & Cache ───────────────────────────────────────
+
+let cachedCustomJavaMethods = null;
+
+function getCustomJavaMethods() {
+    // Return cached results if we already scanned the project
+    if (cachedCustomJavaMethods) return cachedCustomJavaMethods;
+
+    cachedCustomJavaMethods = [];
+    
+    // Get the current workspace folders
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders) return cachedCustomJavaMethods;
+
+    for (const folder of workspaceFolders) {
+        const javaSrcPath = path.join(folder.uri.fsPath, 'src', 'main', 'java');
+        if (fs.existsSync(javaSrcPath)) {
+            scanDirectoryForJavaMethods(javaSrcPath, cachedCustomJavaMethods);
+        }
+    }
+
+    return cachedCustomJavaMethods;
+}
+
+function scanDirectoryForJavaMethods(dir, results) {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+        const fullPath = path.join(dir, file);
+        if (fs.statSync(fullPath).isDirectory()) {
+            scanDirectoryForJavaMethods(fullPath, results); // Recursive call
+        } else if (fullPath.endsWith('.java')) {
+            extractStaticMethods(fullPath, results);
+        }
+    }
+}
+
+function extractStaticMethods(filePath, results) {
+
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        
+        // Find class name
+        const classMatch = content.match(/public\s+(?:final\s+)?class\s+(\w+)/);
+        if (!classMatch) return; // Skip if no public class found
+        const className = classMatch[1];
+
+        // Find package name
+        const packageMatch = content.match(/package\s+([\w.]+);/);
+        const pkg = packageMatch ? packageMatch[1] : '';
+
+        // Match public static methods
+        const methodRegex = /public\s+static\s+([\w<>\[\]]+)\s+(\w+)\s*\(([^)]*)\)/g;
+        let match;
+
+        while ((match = methodRegex.exec(content)) !== null) {
+            const returnType = match[1];
+            const methodName = match[2];
+            const argsString = match[3].trim();
+
+            // Convert arguments to VS Code snippet format: String name, int age -> ${1:name}, ${2:age}
+            let snippetArgs = '';
+            if (argsString) {
+                const args = argsString.split(',').map(a => a.trim());
+                snippetArgs = args.map((arg, index) => {
+                    const varName = arg.split(/\s+/).pop();
+                    return `\${${index + 1}:${varName}}`;
+                }).join(', ');
+            }
+
+            results.push({
+                label: `${className}.${methodName}`,
+                detail: `${className}.${methodName}(${argsString}) : ${returnType}`,
+                doc: `**Class:** \`${pkg}.${className}\`\n\nReturns: \`${returnType}\``,
+                snippet: `${className}.${methodName}(${snippetArgs})`
+            });
+        }
+    } catch (err) {
+        console.error(`Error scanning Java file ${filePath}:`, err);
+    }
+}
 
 // ── Jasper built-in function definitions ──────────────────────────────────────
 const JASPER_FUNCTIONS = [
@@ -133,15 +217,6 @@ function isInsideExpressionTag(document, position) {
 }
 
 // ── Context detection: what is the user typing right now? ────────────────────
-/**
- * Analyse the text before the cursor and return one of:
- *   { mode: 'field',     prefix: string }   — cursor is inside  $F{...
- *   { mode: 'param',     prefix: string }   — cursor is inside  $P{...
- *   { mode: 'variable',  prefix: string }   — cursor is inside  $V{...
- *   { mode: 'resource',  prefix: string }   — cursor is inside  $R{...
- *   { mode: 'dollar'  }                     — user just typed $
- *   { mode: 'general' }                     — anywhere else in the expression
- */
 function detectContext(linePrefix) {
     // Check for open $X{ without a closing }
     const dollarBrace = linePrefix.match(/\$([FPVR])\{([^}]*)$/);
@@ -167,11 +242,6 @@ function makeItem(label, kind, detail, doc, snippet, sortPrefix) {
     return item;
 }
 
-/**
- * Build items for user-defined + built-in fields/params/vars.
- * When already inside $F{  we only insert the name (no $F{ prefix).
- * When at general level  we insert the full $F{name} wrapper.
- */
 function makeDeclarationItems(declarations, sigil, kind, alreadyInsideBrace, sortPrefix) {
     return declarations.map(decl => {
         const label   = alreadyInsideBrace ? decl.name : `$${sigil}{${decl.name}}`;
@@ -207,7 +277,6 @@ const provider = vscode.languages.registerCompletionItemProvider(
             const linePrefix = document.lineAt(position).text.slice(0, position.character);
             const ctx        = detectContext(linePrefix);
 
-            // Parse the file to get user-defined declarations
             let decls;
             try {
                 decls = parseDeclarations(document);
@@ -217,45 +286,23 @@ const provider = vscode.languages.registerCompletionItemProvider(
 
             const items = [];
 
-            // ── Inside $F{ → show only fields ────────────────────────────────
             if (ctx.mode === 'field') {
-                items.push(...makeDeclarationItems(
-                    decls.fields, 'F',
-                    vscode.CompletionItemKind.Field,
-                    true, '0_'
-                ));
+                items.push(...makeDeclarationItems(decls.fields, 'F', vscode.CompletionItemKind.Field, true, '0_'));
                 return items;
             }
 
-            // ── Inside $P{ → show parameters (user + system) ─────────────────
             if (ctx.mode === 'param') {
-                const allParams = [
-                    ...decls.parameters,
-                    ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))
-                ];
-                items.push(...makeDeclarationItems(
-                    allParams, 'P',
-                    vscode.CompletionItemKind.TypeParameter,
-                    true, '0_'
-                ));
+                const allParams = [...decls.parameters, ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))];
+                items.push(...makeDeclarationItems(allParams, 'P', vscode.CompletionItemKind.TypeParameter, true, '0_'));
                 return items;
             }
 
-            // ── Inside $V{ → show variables (user + system) ───────────────────
             if (ctx.mode === 'variable') {
-                const allVars = [
-                    ...decls.variables,
-                    ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))
-                ];
-                items.push(...makeDeclarationItems(
-                    allVars, 'V',
-                    vscode.CompletionItemKind.Variable,
-                    true, '0_'
-                ));
+                const allVars = [...decls.variables, ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))];
+                items.push(...makeDeclarationItems(allVars, 'V', vscode.CompletionItemKind.Variable, true, '0_'));
                 return items;
             }
 
-            // ── Just typed $ → offer $F/$P/$V shortcuts ───────────────────────
             if (ctx.mode === 'dollar') {
                 const shortcuts = [
                     { label: '$F{', detail: `Field  (${decls.fields.length} defined)`,     snippet: 'F{$1}', kind: vscode.CompletionItemKind.Field },
@@ -270,47 +317,36 @@ const provider = vscode.languages.registerCompletionItemProvider(
             }
 
             // ── General context → show everything ────────────────────────────
-            // 1. User fields   $F{name}
-            items.push(...makeDeclarationItems(
-                decls.fields, 'F',
-                vscode.CompletionItemKind.Field,
-                false, '1_F_'
-            ));
+            
+            // 1. User fields
+            items.push(...makeDeclarationItems(decls.fields, 'F', vscode.CompletionItemKind.Field, false, '1_F_'));
 
-            // 2. User parameters  $P{name}
-            items.push(...makeDeclarationItems(
-                decls.parameters.filter(p => !p.isSystem), 'P',
-                vscode.CompletionItemKind.TypeParameter,
-                false, '1_P_'
-            ));
+            // 2. User parameters
+            items.push(...makeDeclarationItems(decls.parameters.filter(p => !p.isSystem), 'P', vscode.CompletionItemKind.TypeParameter, false, '1_P_'));
 
-            // 3. User variables  $V{name}
-            items.push(...makeDeclarationItems(
-                decls.variables, 'V',
-                vscode.CompletionItemKind.Variable,
-                false, '1_V_'
-            ));
+            // 3. User variables
+            items.push(...makeDeclarationItems(decls.variables, 'V', vscode.CompletionItemKind.Variable, false, '1_V_'));
 
             // 4. Jasper built-in functions
             for (const fn of JASPER_FUNCTIONS) {
-                items.push(makeItem(
-                    fn.label,
-                    vscode.CompletionItemKind.Function,
-                    fn.detail,
-                    `**JasperReports built-in**\n\n${fn.doc}`,
-                    fn.snippet,
-                    '2_'
-                ));
+                items.push(makeItem(fn.label, vscode.CompletionItemKind.Function, fn.detail, `**JasperReports built-in**\n\n${fn.doc}`, fn.snippet, '2_'));
             }
 
             // 5. Java types/statics
             for (const t of JAVA_TYPES) {
+                items.push(makeItem(t.label, vscode.CompletionItemKind.Class, t.label, '', t.snippet, '3_'));
+            }
+
+            // 6. Custom Local Java Methods (from src/main/java)
+            const localMethods = getCustomJavaMethods();
+            for (const m of localMethods) {
                 items.push(makeItem(
-                    t.label,
-                    vscode.CompletionItemKind.Class,
-                    t.label, '',
-                    t.snippet,
-                    '3_'
+                    m.label, 
+                    vscode.CompletionItemKind.Method, 
+                    m.detail, 
+                    m.doc, 
+                    m.snippet, 
+                    '4_' // Renders at the bottom of the default list, keeping built-ins on top
                 ));
             }
 

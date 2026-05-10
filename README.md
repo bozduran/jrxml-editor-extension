@@ -35,6 +35,27 @@ Inside the expression preview, brackets are colored by depth:
 - Level 2: **Orchid**
 - Level 3: **Sky blue**
 
+🔧 Updated Features section (add this)
+
+### 4. Best Practices & Null Safety Recommendations
+
+The editor provides inline recommendations to improve expression quality:
+
+Suggests null-safe patterns (e.g., avoiding direct .toString() on nullable values)
+Encourages defensive checks ($F{field} != null)
+Highlights risky constructs that may cause runtime exceptions in JasperReports
+Promotes cleaner, more maintainable expressions
+
+### 5. Smart Autocomplete (Experimental)
+
+Autocomplete is enhanced with JRXML-aware intelligence:
+
+Suggests fields, parameters, and variables ($F, $P, $V)
+Includes jaspersoft native functions
+Detects and includes user-defined helper functions
+Scans project files to provide custom function suggestions
+Improves discoverability of reusable logic
+
 ---
 
 ## Usage
