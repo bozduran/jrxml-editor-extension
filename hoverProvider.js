@@ -3,30 +3,12 @@
 
 const vscode = require('vscode');
 const { parseDeclarations } = require('./jrxmlParser');
-
-// Built-in variable/parameter descriptions for system ones
-const BUILTIN_VAR_DOCS = {
-    PAGE_NUMBER:         { type: 'Integer', desc: 'Current page number' },
-    PAGE_COUNT:          { type: 'Integer', desc: 'Total number of pages' },
-    REPORT_COUNT:        { type: 'Integer', desc: 'Total records processed across the whole report' },
-    COLUMN_NUMBER:       { type: 'Integer', desc: 'Current column number' },
-    COLUMN_COUNT:        { type: 'Integer', desc: 'Total number of columns' },
-    MASTER_CURRENT_PAGE: { type: 'Integer', desc: 'Current page in the master report' },
-    MASTER_TOTAL_PAGES:  { type: 'Integer', desc: 'Total pages in the master report' },
-};
-
-const BUILTIN_PARAM_DOCS = {
-    REPORT_CONNECTION:         { type: 'java.sql.Connection',              desc: 'JDBC database connection' },
-    REPORT_DATA_SOURCE:        { type: 'JRDataSource',                     desc: 'The JRDataSource object' },
-    REPORT_PARAMETERS_MAP:     { type: 'java.util.Map',                    desc: 'Map of all report parameters' },
-    IS_IGNORE_PAGINATION:      { type: 'Boolean',                          desc: 'Disables pagination when true' },
-    REPORT_LOCALE:             { type: 'java.util.Locale',                 desc: 'Report locale' },
-    REPORT_TIME_ZONE:          { type: 'java.util.TimeZone',               desc: 'Report time zone' },
-    REPORT_FORMAT_FACTORY:     { type: 'JRFormatFactory',                  desc: 'Format factory for dates/numbers' },
-    REPORT_CLASS_LOADER:       { type: 'ClassLoader',                      desc: 'Class loader for the report' },
-    REPORT_MAX_COUNT:          { type: 'Integer',                          desc: 'Maximum number of records to process' },
-    REPORT_VIRTUALIZER:        { type: 'JRVirtualizer',                    desc: 'Virtualizer for large reports' },
-};
+const {
+    BUILTIN_VARIABLES,
+    BUILTIN_PARAMETERS,
+    BUILTIN_VARIABLE_NAMES,
+    BUILTIN_PARAMETER_NAMES,
+} = require('./jasperBuiltins');
 
 /**
  * Sanitize file-derived text before appending it to a MarkdownString.
@@ -83,15 +65,17 @@ const provider = vscode.languages.registerHoverProvider(
                 kind = 'Field';
             } else if (ref.sigil === 'P') {
                 decl = parsed.parameters.find(p => p.name === ref.name);
-                if (!decl && BUILTIN_PARAM_DOCS[ref.name]) {
-                    decl = { ...BUILTIN_PARAM_DOCS[ref.name], name: ref.name, type: BUILTIN_PARAM_DOCS[ref.name].type, description: BUILTIN_PARAM_DOCS[ref.name].desc };
+                if (!decl && BUILTIN_PARAMETER_NAMES.has(ref.name)) {
+                    const b = BUILTIN_PARAMETERS.find(p => p.name === ref.name);
+                    decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
                     isBuiltin = true;
                 }
                 kind = 'Parameter';
             } else if (ref.sigil === 'V') {
                 decl = parsed.variables.find(v => v.name === ref.name);
-                if (!decl && BUILTIN_VAR_DOCS[ref.name]) {
-                    decl = { ...BUILTIN_VAR_DOCS[ref.name], name: ref.name, type: BUILTIN_VAR_DOCS[ref.name].type, description: BUILTIN_VAR_DOCS[ref.name].desc };
+                if (!decl && BUILTIN_VARIABLE_NAMES.has(ref.name)) {
+                    const b = BUILTIN_VARIABLES.find(v => v.name === ref.name);
+                    decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
                     isBuiltin = true;
                 }
                 kind = 'Variable';

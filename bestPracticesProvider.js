@@ -207,6 +207,9 @@ function isString(t) {
 function isNullable(t) {
     if (!t) return false;
     const l = t.toLowerCase();
+    // NOTE: booleans are intentionally excluded. BP001 owns Boolean references
+    // and rewrites them with EQUALS(); including them here made BP001 and BP003
+    // emit two overlapping diagnostics with conflicting quick fixes.
     return ['string','java.lang.string',
             'integer','java.lang.integer',
             'long','java.lang.long',
@@ -215,8 +218,7 @@ function isNullable(t) {
             'bigdecimal','java.math.bigdecimal',
             'date','java.util.date',
             'localdate','java.time.localdate',
-            'localdatetime','java.time.localdatetime',
-            'boolean','java.lang.boolean'].includes(l);
+            'localdatetime','java.time.localdatetime'].includes(l);
 }
 
 /** Return the sensible orElse default for a Java type */
@@ -542,7 +544,14 @@ function register(context) {
         vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('jrxml.suppressedBestPractices'))
                 runAndRefresh(vscode.window.activeTextEditor?.document);
-        })
+        }),
+        // Drop per-document state when a file closes
+        vscode.workspace.onDidCloseTextDocument(doc => {
+            storedHits.delete(doc.uri.toString());
+            bpDiagnostics.delete(doc.uri);
+        }),
+        // Cancel a pending debounce when the extension deactivates
+        { dispose: () => clearTimeout(timer) }
     );
 
     // Commands

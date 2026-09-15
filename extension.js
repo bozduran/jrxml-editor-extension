@@ -4,7 +4,7 @@
 const vscode = require('vscode');
 const ExpressionEditorPanel  = require('./expressionEditorPanel');
 const { findExpressionAtCursor } = require('./expressionUtils');
-const { provider: completionProvider } = require('./completionProvider');
+const { provider: completionProvider, clearCustomJavaCache } = require('./completionProvider');
 const { provider: hoverProvider }      = require('./hoverProvider');
 const { provider: definitionProvider } = require('./definitionProvider');
 const { provider: outlineProvider }    = require('./outlineProvider');
@@ -43,6 +43,25 @@ function activate(context) {
         definitionProvider,
         outlineProvider,
         codeActionsProvider,
+    );
+
+    // The Java helper scan is cached; invalidate it when sources change.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => clearCustomJavaCache()),
+        vscode.workspace.onDidSaveTextDocument(doc => {
+            if (doc.fileName.endsWith('.java')) clearCustomJavaCache();
+        }),
+        vscode.workspace.onDidCreateFiles(e => {
+            if (e.files.some(f => f.fsPath.endsWith('.java'))) clearCustomJavaCache();
+        }),
+        vscode.workspace.onDidDeleteFiles(e => {
+            if (e.files.some(f => f.fsPath.endsWith('.java'))) clearCustomJavaCache();
+        }),
+        vscode.workspace.onDidRenameFiles(e => {
+            if (e.files.some(f => f.newUri.fsPath.endsWith('.java') || f.oldUri.fsPath.endsWith('.java'))) {
+                clearCustomJavaCache();
+            }
+        })
     );
 
     // ── Best practices + diagnostics ──────────────────────────────────────────
