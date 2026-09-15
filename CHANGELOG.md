@@ -94,5 +94,15 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Shared diff-preview provider (`preview.js`), and XML entity decoding/encoding
   aligned with the hook (single-pass named+numeric decode, attribute encoder).
 
+- Added a dedicated settings panel (`JRXML: Open Settings`) with grouped,
+  live-bound toggles for every `jrxml.*` setting, plus filtering and
+  "Reset all to defaults". Its schema is cross-checked against `package.json` by
+  a test so the panel cannot drift.
+- The Best Practices (JRXML) view now lists file-level issues alongside rule hits:
+  "Elements are not sorted by position" (inline action opens the sort diff) and
+  "SQL query can be migrated to …" (inline action runs the migration).
+- Added `jrxml.migrate.targetLanguage` (default `jsonql`), used as the migration
+  target instead of a hardcoded value.
+
 ### Not ported (deliberately)
 - The hook's `validate`/`compile` gate — it needs the JasperReports engine.

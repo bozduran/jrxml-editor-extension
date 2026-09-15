@@ -68,6 +68,11 @@ Formatting only runs when you ask for it (Format Document, the fix-all action, o
 
 Warnings can be suppressed per rule from the **Best Practices (JRXML)** view or the lightbulb menu; quick fixes remain available while suppressed. The former `bp002`/`bp003` null-safety rules were retired in favour of the more precise `jrxml.lint.uncheckedNullDereference` diagnostic.
 
+The view also lists **file-level issues**, each with an inline action:
+
+- *Elements are not sorted by position* → opens the sort diff preview
+- *SQL query can be migrated to …* → runs the SQL→jsonql migration
+
 ### 7. Clear fixes and geometry sort
 Two destructive steps are opt-in commands, always previewed as a diff before applying:
 
@@ -83,6 +88,9 @@ Two destructive steps are opt-in commands, always previewed as a diff before app
 
 ### 8. Smart autocomplete
 Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
+
+### 9. Settings panel
+**JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 
 ---
 
@@ -109,6 +117,7 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `JRXML: Sort Band/Frame Elements by Position` | Reorder band/frame elements by geometry (previewed) |
 | `JRXML: Apply Clear Fixes` | Delete unused declarations, sync descriptions, fix jsonql (previewed) |
 | `JRXML: Migrate SQL Query to jsonql` | Prompt for jsonql and rewrite the `<query>` element |
+| `JRXML: Open Settings` | Open the dedicated JRXML settings panel |
 
 ---
 
@@ -132,6 +141,7 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
 | `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
 | `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |
+| `jrxml.migrate.targetLanguage` | `jsonql` | Language written to `<query language="...">` when migrating a SQL query |
 | `jrxml.suppressedBestPractices` | `[]` | Best-practice rule IDs whose squiggles are hidden |
 
 ---
