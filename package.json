@@ -2,13 +2,12 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
   },
   "publisher": "BozNtouranLabs",
-  "pricing": "Free",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -23,9 +22,6 @@
     "jasper",
     "java",
     "expression"
-  ],
-  "activationEvents": [
-    "onLanguage:jrxml"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -74,35 +70,17 @@
       },
       {
         "command": "jrxml.bp.suppressFromTree",
-        "title": "Suppress",
+        "title": "JRXML: Suppress Best Practice (hide squiggles)",
         "icon": "$(eye-closed)"
       },
       {
         "command": "jrxml.bp.unsuppressFromTree",
-        "title": "Re-enable",
-        "icon": "$(eye)"
-      },
-      {
-        "command": "jrxml.bp.suppressFromTree",
-        "title": "Suppress (hide squiggles)",
-        "icon": "$(eye-closed)"
-      },
-      {
-        "command": "jrxml.bp.unsuppressFromTree",
-        "title": "Re-enable squiggles",
+        "title": "JRXML: Re-enable Best Practice squiggles",
         "icon": "$(eye)"
       },
       {
         "command": "jrxml.bp.jumpToHit",
-        "title": "Jump to issue"
-      },
-      {
-        "command": "jrxml.bp.suppressRule",
-        "title": "Suppress rule"
-      },
-      {
-        "command": "jrxml.bp.unsuppressRule",
-        "title": "Re-enable rule"
+        "title": "JRXML: Jump to Issue"
       }
     ],
     "menus": {
@@ -139,6 +117,8 @@
         "jrxml.indentSize": {
           "type": "number",
           "default": 4,
+          "minimum": 1,
+          "maximum": 8,
           "description": "Indent size for expression formatting"
         },
         "jrxml.autoOpenEditor": {
@@ -178,9 +158,15 @@
     }
   },
   "scripts": {
+    "test": "node --test test/",
+    "lint": "eslint .",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.3.2"
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.3.2",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
   }
 }

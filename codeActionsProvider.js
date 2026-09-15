@@ -11,7 +11,6 @@
 //    → "Add <variable name='x' ...> declaration"
 
 const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
 
 // ── Insertion point helpers ───────────────────────────────────────────────────
 
