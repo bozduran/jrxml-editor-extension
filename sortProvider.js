@@ -20,6 +20,7 @@ function register(context) {
             }
 
             const document = editor.document;
+            const version  = document.version;
             const fix = discoverSortFix(document.getText());
             if (!fix) {
                 vscode.window.showInformationMessage('Elements are already ordered by position.');
@@ -43,6 +44,10 @@ function register(context) {
                     );
                     if (choice !== 'Apply') return;
                 }
+
+                // A WorkspaceEdit applies against the current text, so refuse to
+                // apply edits computed before the preview/confirmation wait.
+                if (!preview.ensureUnchanged(document, version)) return;
 
                 const edit = new vscode.WorkspaceEdit();
                 edit.replace(

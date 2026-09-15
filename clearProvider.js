@@ -32,7 +32,7 @@ async function confirm(message) {
     return choice === 'Apply';
 }
 
-async function previewThenApply(document, text, title, edits, message) {
+async function previewThenApply(document, version, text, title, edits, message) {
     const previewUri = preview.put(path.basename(document.fileName), text);
     try {
         await vscode.commands.executeCommand(
@@ -42,6 +42,12 @@ async function previewThenApply(document, text, title, edits, message) {
             `${title}: ${path.basename(document.fileName)}`
         );
         if (!(await confirm(message))) return false;
+
+        // The edits were computed before the diff and the prompt; a WorkspaceEdit
+        // applies its ranges to the document as it is now, so refuse to apply
+        // them if the file moved on in the meantime.
+        if (!preview.ensureUnchanged(document, version)) return false;
+
         return await applyEdits(document, edits);
     } finally {
         preview.drop(previewUri);
@@ -69,6 +75,7 @@ function register(context) {
             const document = activeJrxmlDocument();
             if (!document) return;
 
+            const version = document.version;
             const groups = discoverClearFixes(document.getText());
             const fixes = groups.flatMap(g => g.fixes).filter(f => f.edit);
             if (fixes.length === 0) {
@@ -84,6 +91,7 @@ function register(context) {
             const proposed = await proposedText(document, fixes.map(f => f.edit));
             const applied = await previewThenApply(
                 document,
+                version,
                 proposed,
                 'Clear fixes',
                 fixes.map(f => f.edit),
@@ -96,6 +104,7 @@ function register(context) {
             const document = activeJrxmlDocument();
             if (!document) return;
 
+            const version = document.version;
             const migration = discoverClearFixes(document.getText())
                 .find(g => g.label === 'query migration');
             if (!migration) {
@@ -122,6 +131,7 @@ function register(context) {
             const proposed = await proposedText(document, edits);
             const applied = await previewThenApply(
                 document,
+                version,
                 proposed,
                 'Migrate SQL query',
                 edits,

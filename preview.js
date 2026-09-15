@@ -6,6 +6,7 @@
 // proposed result.
 
 const vscode = require('vscode');
+const { isStale, STALE_MESSAGE } = require('./staleGuard');
 
 const SCHEME = 'jrxml-preview';
 const contents = new Map();
@@ -32,4 +33,14 @@ function drop(uri) {
     contents.delete(uri.toString());
 }
 
-module.exports = { provider, put, drop, SCHEME };
+/**
+ * Guard for destructive applies: returns false (and warns) when the document
+ * changed since `discoveredVersion` was captured.
+ */
+function ensureUnchanged(document, discoveredVersion) {
+    if (!isStale(discoveredVersion, document.version)) return true;
+    vscode.window.showWarningMessage(STALE_MESSAGE);
+    return false;
+}
+
+module.exports = { provider, put, drop, ensureUnchanged, SCHEME };
