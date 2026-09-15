@@ -17,6 +17,7 @@
 const vscode            = require('vscode');
 const { parseDeclarations } = require('./jrxmlParser');
 const { EXPRESSION_TAGS }   = require('./expressionUtils');
+const { collectFileIssues } = require('./fileIssues');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RULES
@@ -246,15 +247,17 @@ class BestPracticesTreeProvider {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData  = this._onDidChangeTreeData.event;
         this._grouped = {};
+        this._fileIssues = [];
     }
 
-    refresh(hits) {
+    refresh(hits, fileIssues) {
         this._grouped = {};
         for (const hit of (hits || [])) {
             const key = hit.rule.id;
             if (!this._grouped[key]) this._grouped[key] = { rule: hit.rule, hits: [] };
             this._grouped[key].hits.push(hit);
         }
+        this._fileIssues = fileIssues || [];
         this._onDidChangeTreeData.fire();
     }
 
@@ -262,11 +265,30 @@ class BestPracticesTreeProvider {
 
     getChildren(element) {
         if (!element) {
-            if (!this._grouped || Object.keys(this._grouped).length === 0) {
-                return [new BpTreeItem('No issues found ✓', vscode.TreeItemCollapsibleState.None, null, 'pass')];
+            // File-level issues (not sorted, SQL query to migrate) come first.
+            const fileItems = this._fileIssues.map(issue => {
+                const item = new BpTreeItem(
+                    issue.title,
+                    vscode.TreeItemCollapsibleState.None,
+                    null,
+                    issue.kind === 'sort' ? 'list-ordered' : 'database'
+                );
+                item.tooltip      = issue.detail;
+                item.contextValue = `bp-file-issue-${issue.kind}`;
+                item.command      = { command: issue.command, title: issue.title, arguments: [] };
+                return item;
+            });
+
+            const groups = Object.values(this._grouped);
+            if (groups.length === 0) {
+                if (fileItems.length === 0) {
+                    return [new BpTreeItem('No issues found ✓', vscode.TreeItemCollapsibleState.None, null, 'pass')];
+                }
+                return fileItems;
             }
+
             const suppressed = getSuppressed();
-            return Object.values(this._grouped).map(g => {
+            return [...fileItems, ...groups.map(g => {
                 const isSuppressed = suppressed.has(g.rule.id);
                 const item = new BpTreeItem(
                     `${isSuppressed ? '$(eye-closed) ' : ''}${g.rule.name}  (${g.hits.length})`,
@@ -284,7 +306,7 @@ class BestPracticesTreeProvider {
                     ? `${g.rule.name} — suppressed (quick fixes still available)`
                     : g.rule.message;
                 return item;
-            });
+            })];
         }
 
         if (element._hits) {
@@ -401,8 +423,13 @@ function register(context) {
     context.subscriptions.push(treeView);
 
     function runAndRefresh(doc) {
-        if (!doc || !doc.fileName.endsWith('.jrxml')) { treeProvider.refresh([]); return; }
-        treeProvider.refresh(runRules(doc));
+        if (!doc || !doc.fileName.endsWith('.jrxml')) { treeProvider.refresh([], []); return; }
+
+        const settings = vscode.workspace.getConfiguration('jrxml');
+        const issues = collectFileIssues(doc.getText(), {
+            targetLanguage: settings.get('migrate.targetLanguage', 'jsonql'),
+        });
+        treeProvider.refresh(runRules(doc), issues);
     }
 
     let timer;

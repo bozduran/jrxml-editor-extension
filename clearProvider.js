@@ -57,6 +57,12 @@ function activeJrxmlDocument() {
     return editor.document;
 }
 
+/** Target language for SQL query migration (default jsonql). */
+function readTargetLanguage() {
+    const value = vscode.workspace.getConfiguration('jrxml').get('migrate.targetLanguage', 'jsonql');
+    return (typeof value === 'string' && value.trim()) ? value.trim() : 'jsonql';
+}
+
 function register(context) {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.applyClearFixes', async () => {
@@ -97,15 +103,17 @@ function register(context) {
                 return;
             }
 
+            const targetLanguage = readTargetLanguage();
+
             const expression = await vscode.window.showInputBox({
-                prompt: 'jsonql expression to replace the SQL query',
-                placeHolder: 'e.g. { "select": [...] }',
+                prompt: `${targetLanguage} expression to replace the SQL query`,
+                placeHolder: targetLanguage === 'jsonql' ? 'e.g. { "select": [...] }' : undefined,
                 ignoreFocusOut: true,
             });
             // An empty answer applies nothing (matches the hook).
             if (!expression) return;
 
-            const edits = queryMigrationEdits(migration.fixes[0].query, expression);
+            const edits = queryMigrationEdits(migration.fixes[0].query, expression, targetLanguage);
             if (edits.length === 0) {
                 vscode.window.showWarningMessage('Nothing to migrate in this query.');
                 return;
@@ -117,9 +125,9 @@ function register(context) {
                 proposed,
                 'Migrate SQL query',
                 edits,
-                'Apply the jsonql migration?'
+                `Apply the ${targetLanguage} migration?`
             );
-            if (applied) vscode.window.showInformationMessage('Query migrated to jsonql.');
+            if (applied) vscode.window.showInformationMessage(`Query migrated to ${targetLanguage}.`);
         })
     );
 }

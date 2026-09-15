@@ -18,6 +18,7 @@ const {
 } = require('./documentFormatter');
 const { register: registerSort } = require('./sortProvider');
 const { register: registerClear } = require('./clearProvider');
+const { register: registerSettingsPanel } = require('./settingsPanel');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -63,6 +64,9 @@ function activate(context) {
 
     // ── Clear fixes + SQL migration (destructive, previewed) ─────────────────
     registerClear(context);
+
+    // ── Dedicated settings panel ─────────────────────────────────────────────
+    registerSettingsPanel(context);
 
     // Diff previews for whole-file rewrites
     context.subscriptions.push(previewProvider);

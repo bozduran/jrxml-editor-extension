@@ -93,6 +93,11 @@
       {
         "command": "jrxml.migrateSqlQuery",
         "title": "JRXML: Migrate SQL Query to jsonql"
+      },
+      {
+        "command": "jrxml.openSettingsPanel",
+        "title": "JRXML: Open Settings",
+        "icon": "$(settings-gear)"
       }
     ],
     "menus": {
@@ -119,6 +124,16 @@
         {
           "command": "jrxml.bp.unsuppressFromTree",
           "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressed",
+          "group": "inline"
+        },
+        {
+          "command": "jrxml.sortElements",
+          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-sort",
+          "group": "inline"
+        },
+        {
+          "command": "jrxml.migrateSqlQuery",
+          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-query",
           "group": "inline"
         }
       ]
@@ -207,6 +222,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show a diff and ask for confirmation before applying clear fixes or a SQL->jsonql migration."
+        },
+        "jrxml.migrate.targetLanguage": {
+          "type": "string",
+          "default": "jsonql",
+          "description": "Language written to <query language=\"...\"> when migrating a SQL query."
         },
         "jrxml.suppressedBestPractices": {
           "type": "array",

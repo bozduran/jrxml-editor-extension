@@ -286,6 +286,15 @@ test('a non-SQL query is not reported', () => {
     assert.strictEqual(group(text, 'query migration'), undefined);
 });
 
+test('query migration writes the configured target language', () => {
+    const text = report('  <query language="sql"><![CDATA[SELECT 1]]></query>');
+    const g = group(text, 'query migration');
+    const applied = applyEdits(text, queryMigrationEdits(g.fixes[0].query, 'expr', 'jsonql2'));
+
+    assert.ok(applied.includes('language="jsonql2"'));
+    assert.ok(!applied.includes('language="sql"'));
+});
+
 test('malformed XML yields no clear fixes', () => {
     assert.deepStrictEqual(discoverClearFixes('<r><a></b></r>'), []);
 });

@@ -302,15 +302,15 @@ function discoverClearFixes(text) {
 }
 
 /**
- * Edits for a query-migration fix once the user supplies the jsonql expression.
- * An empty answer applies nothing.
+ * Edits for a query-migration fix once the user supplies the expression.
+ * An empty answer applies nothing; the target language defaults to jsonql.
  */
-function queryMigrationEdits(query, expression) {
+function queryMigrationEdits(query, expression, targetLanguage = 'jsonql') {
     if (!query || !expression) return [];
 
     const edits = [];
     if (query.langValueStart >= 0 && query.langValueEnd > query.langValueStart) {
-        edits.push({ start: query.langValueStart, end: query.langValueEnd, replacement: 'jsonql' });
+        edits.push({ start: query.langValueStart, end: query.langValueEnd, replacement: targetLanguage });
     }
     // bodyStart === bodyEnd is a valid (empty) CDATA body: insert, don't replace.
     if (query.bodyStart >= 0) {
