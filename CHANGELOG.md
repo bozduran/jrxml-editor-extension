@@ -46,4 +46,23 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-- Initial release
+### Added
+- Ported the commit-time `myhooks` hook's `lint` step into the editor as three
+  structural diagnostics, each with a quick fix and its own toggle:
+  - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally
+    `true` or `false`.
+  - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing
+    `removeLineWhenBlank="true"` (or carrying a different value).
+  - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField
+    expression while `markup` is not `styled`, `html` or `rtf`.
+- Offset-accurate XML scanner (`xmlspan.js`) and edit helpers (`edits.js`) used by
+  the lint rules and their quick fixes.
+- Golden-fixture tests copied from the hook repository (`LintEdgeReport`,
+  `Blank_A4_1`, `MarkupReport`, `TextReport`) with expectations recorded from the
+  hook's own output.
+
+### Not ported (deliberately)
+- The hook's `validate`/`compile` gate — it needs the JasperReports engine.
+- The null-dereference lint rule — it overlaps the existing null-safety best
+  practices and needs a Java expression parser.
+- The mutating `clear` / `format` / `sort` / `textcheck` steps.

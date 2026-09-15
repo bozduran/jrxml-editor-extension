@@ -136,6 +136,21 @@
           "default": true,
           "description": "Show errors for unbalanced parentheses, unclosed strings, and undeclared $F/$P/$V references."
         },
+        "jrxml.lint.constantPrintWhen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a <printWhenExpression> is a constant 'true' or 'false'."
+        },
+        "jrxml.lint.removeLineWhenBlank": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a textField or subreport element is missing removeLineWhenBlank=\"true\"."
+        },
+        "jrxml.lint.markupTagWithoutMarkup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a textField expression contains markup tags but markup is not \"styled\", \"html\" or \"rtf\"."
+        },
         "jrxml.suppressedBestPractices": {
           "type": "array",
           "items": {

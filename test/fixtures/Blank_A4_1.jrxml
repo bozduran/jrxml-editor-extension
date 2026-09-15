@@ -1,0 +1,71 @@
+<!-- Created with Jaspersoft Studio version 7.0.6.final using JasperReports Library version 7.0.6-5d2a603fdc6b3db8f842a83383e594f41891534d  -->
+<jasperReport name="Blank_A4_1" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="e44c4c21-f72b-4e3a-83e7-6c0253ca3a03">
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+	<query language="sql"><![CDATA[]]></query>
+	<field name="Field_4" class="java.lang.String"/>
+	<field name="Field_3" class="java.lang.String"/>
+	<field name="Field_2" class="java.lang.String">
+		<description><![CDATA[Field_2]]></description>
+	</field>
+	<field name="Field_1" class="java.lang.String"/>
+	<variable name="Variable_1" class="java.lang.String">
+		<expression><![CDATA[$F{Field_3} +"test   space in var"+ (32<=42) ?"no space at dot.Dot":""]]></expression>
+	</variable>
+	<variable name="nouseofVariable_2" class="java.lang.String"/>
+	<background splitType="Stretch"/>
+	<title height="81" splitType="Stretch">
+		<element kind="textField" uuid="9e860e1e-f8a8-4736-8c16-c4434230617d" x="0" y="0" width="550" height="30">
+			<expression><![CDATA["Text Field"+$F{Field_4}+$V{nouseofVariable_2}+"no space dot textfield.dasasd" + "double  space"]]></expression>
+		</element>
+		<element kind="staticText" uuid="13ac4808-c81c-44f1-9801-68189a937be9" x="363" y="51" width="100" height="30">
+			<text><![CDATA[Static Text]]></text>
+		</element>
+		<element kind="break" uuid="45b93c9a-62c3-4323-aa32-6a7dc95629b2" x="0" y="38" width="100" height="1"/>
+	</title>
+	<pageHeader height="35" splitType="Stretch">
+		<element kind="textField" uuid="722b8331-ce2e-46b1-8ca0-da70bc252ac5" x="0" y="0" width="550" height="30">
+			<expression><![CDATA["Text Field"+$F{Field_4}+$V{nouseofVariable_2}+"no space dot textfield.dasasd" + "double  space"]]></expression>
+		</element>
+	</pageHeader>
+	<columnHeader height="61" splitType="Stretch">
+		<element kind="textField" uuid="a2745697-8c27-4101-952a-00b008a98abb" x="0" y="0" width="550" height="30">
+			<expression><![CDATA["Text Field"+$F{Field_4}+$V{nouseofVariable_2}+"no space dot textfield.dasasd" + "double  space"]]></expression>
+		</element>
+	</columnHeader>
+	<detail>
+		<band height="607" splitType="Stretch">
+			<element kind="textField" uuid="fae38f25-5494-470b-b96c-d3b5e0de8ef9" x="0" y="0" width="550" height="30">
+				<expression><![CDATA["Text Field"+$F{Field_4}+$V{nouseofVariable_2}+"no space dot textfield.dasasd" + "double  space"]]></expression>
+			</element>
+			<element kind="textField" uuid="f1cd8cff-39a2-47cb-956b-2cd148de3a9b" x="2" y="30" width="550" height="30">
+				<expression><![CDATA["Text Field"+$F{Field_4}+$V{nouseofVariable_2}+"no space dot textfield.dasasd" + "double  space"]]></expression>
+			</element>
+			<element kind="frame" uuid="fbec882b-78c2-4397-91b0-81a831d01597" x="0" y="120" width="200" height="140">
+				<element kind="textField" uuid="bc85dd3b-ee3e-4242-8021-60f81f7403a3" x="54" y="101" width="100" height="30">
+					<expression><![CDATA["Text Field"]]></expression>
+				</element>
+				<element kind="textField" uuid="1a90522d-4dd3-4484-8878-886204765499" x="30" y="50" width="100" height="30">
+					<expression><![CDATA["Text Field"]]></expression>
+				</element>
+				<element kind="subreport" uuid="9718dd2d-6ed7-4796-9b10-ce915accae8b" x="0" y="24" width="200" height="26">
+					<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+				</element>
+			</element>
+			<element kind="subreport" uuid="314f8014-6e5d-4125-a983-e3f769db2333" x="188" y="407" width="200" height="200">
+				<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+			</element>
+			<element kind="staticText" uuid="6774e42d-e512-4808-b9fd-1fb11aa54ee2" x="76" y="339" width="100" height="30">
+				<text><![CDATA[Static Text]]></text>
+			</element>
+			<element kind="textField" uuid="85a49741-1b63-4e0e-ba55-30595614ac29" x="297" y="363" width="100" height="30">
+				<expression><![CDATA["Text Field"]]></expression>
+			</element>
+			<element kind="break" uuid="661327c5-b275-44db-9363-432a14739f87" x="0" y="287" width="100" height="1"/>
+			<property name="com.jaspersoft.studio.unit.height" value="px"/>
+		</band>
+		<band height="50"/>
+	</detail>
+	<columnFooter height="45" splitType="Stretch"/>
+	<pageFooter height="54" splitType="Stretch"/>
+	<summary height="42" splitType="Stretch"/>
+</jasperReport>

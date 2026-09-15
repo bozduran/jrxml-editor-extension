@@ -4,11 +4,14 @@
 //   ERROR    — $F/$P/$V reference to a name that isn't declared
 //   ERROR    — unbalanced parentheses inside an expression tag
 //   WARNING  — unclosed string literal inside an expression tag
+//   WARNING  — structural lint rules (constant printWhenExpression,
+//              removeLineWhenBlank, markup tags without markup)
 
 const vscode = require('vscode');
 const { parseDeclarations, clearCache } = require('./jrxmlParser');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
+const { lintXml } = require('./xmlLint');
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
@@ -24,10 +27,16 @@ function updateDiagnostics(document) {
 
     const diagnostics = [];
     const parsed = parseDeclarations(document);
+    const text   = document.getText();
 
     const cfg = vscode.workspace.getConfiguration('jrxml');
     const checkUnused = cfg.get('showUnusedWarnings', true);
     const checkExpr   = cfg.get('validateExpressions', true);
+    const lintEnabled = {
+        constantPrintWhen:      cfg.get('lint.constantPrintWhen', true),
+        removeLineWhenBlank:    cfg.get('lint.removeLineWhenBlank', true),
+        markupTagWithoutMarkup: cfg.get('lint.markupTagWithoutMarkup', true),
+    };
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
     if (checkUnused) {
@@ -72,8 +81,6 @@ function updateDiagnostics(document) {
 
     // ── 2. Undeclared references + 3. expression validation ───────────────────
     if (checkExpr) {
-        const text = document.getText();
-
         const declaredFields = new Set(parsed.fields.map(f => f.name));
         const declaredParams = new Set([...parsed.parameters.map(p => p.name), ...BUILTIN_PARAMETER_NAMES]);
         const declaredVars   = new Set([...parsed.variables.map(v => v.name), ...BUILTIN_VARIABLE_NAMES]);
@@ -140,6 +147,18 @@ function updateDiagnostics(document) {
                     'jrxml.unclosedString'
                 ));
             }
+        }
+    }
+
+    // ── 4. Structural lint rules (ported from the commit-time hook) ───────────
+    // Malformed XML is skipped rather than guessed at.
+    const lint = lintXml(text, lintEnabled);
+    if (!lint.error) {
+        for (const finding of lint.findings) {
+            diagnostics.push(makeDiagnostic(
+                document, finding.offset, finding.length, finding.message,
+                vscode.DiagnosticSeverity.Warning, finding.code
+            ));
         }
     }
 

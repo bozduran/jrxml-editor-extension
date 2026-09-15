@@ -35,6 +35,13 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - Unused fields, parameters and variables
 - Undeclared `$F`/`$P`/`$V` references
 - Unbalanced parentheses and unclosed string literals
+- **Structural lint rules** ported from the project's commit-time `myhooks` hook:
+  - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
+  - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing `removeLineWhenBlank="true"` (or with another value)
+  - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField expression while `markup` is not `styled`, `html` or `rtf`
+
+  Each has a quick fix and can be switched off individually. The hook's structural
+  `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
 
 ### 5. Best practices & null-safety recommendations
@@ -84,6 +91,9 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `jrxml.autoOpenEditor` | `false` | Auto-open the editor when the cursor enters an expression |
 | `jrxml.showUnusedWarnings` | `true` | Warn about declared fields/parameters/variables that are never used |
 | `jrxml.validateExpressions` | `true` | Error on unbalanced parentheses, unclosed strings and undeclared `$F`/`$P`/`$V` references |
+| `jrxml.lint.constantPrintWhen` | `true` | Warn when `<printWhenExpression>` is a constant `true`/`false` |
+| `jrxml.lint.removeLineWhenBlank` | `true` | Warn when a `textField`/`subreport` is missing `removeLineWhenBlank="true"` |
+| `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
 | `jrxml.suppressedBestPractices` | `[]` | Best-practice rule IDs whose squiggles are hidden |
 
 ---
