@@ -151,6 +151,36 @@
           "default": true,
           "description": "Warn when a textField expression contains markup tags but markup is not \"styled\", \"html\" or \"rtf\"."
         },
+        "jrxml.format.reportName": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: set jasperReport/@name to the file base name."
+        },
+        "jrxml.format.positionType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: add/set positionType=\"Float\" on textField and subreport elements."
+        },
+        "jrxml.format.textAdjust": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: add/set textAdjust=\"StretchHeight\" on textField elements."
+        },
+        "jrxml.format.expression": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: normalise operator, ternary, comma and cast spacing inside expressions."
+        },
+        "jrxml.textcheck.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Text check: replace unrenderable characters, fix period spacing, collapse double spaces and normalize newlines in text and string literals."
+        },
+        "jrxml.formatOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the format + textcheck steps when saving a .jrxml file (never the clear or sort steps)."
+        },
         "jrxml.suppressedBestPractices": {
           "type": "array",
           "items": {

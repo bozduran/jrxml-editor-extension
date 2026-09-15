@@ -11,6 +11,11 @@ const { provider: outlineProvider }    = require('./outlineProvider');
 const { register: registerDiagnostics } = require('./diagnosticsProvider');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
 const { register: registerBestPractices } = require('./bestPracticesProvider');
+const {
+    provider: documentFormatter,
+    fixAllProvider,
+    registerFormatOnSave,
+} = require('./documentFormatter');
 /**
  * @param {vscode.ExtensionContext} context
  */
@@ -43,7 +48,12 @@ function activate(context) {
         definitionProvider,
         outlineProvider,
         codeActionsProvider,
+        documentFormatter,
+        fixAllProvider,
     );
+
+    // ── Opt-in format on save (format + textcheck only) ───────────────────────
+    registerFormatOnSave(context);
 
     // The Java helper scan is cached; invalidate it when sources change.
     context.subscriptions.push(

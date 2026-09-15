@@ -60,9 +60,22 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Golden-fixture tests copied from the hook repository (`LintEdgeReport`,
   `Blank_A4_1`, `MarkupReport`, `TextReport`) with expectations recorded from the
   hook's own output.
+- Ported the hook's `format` step: `jasperReport/@name` alignment with the file
+  base name, `positionType="Float"` on textField/subreport (anchored after `uuid`,
+  else `kind`), `textAdjust="StretchHeight"` on textField, and Java-expression
+  spacing (`javaExpr.js`). The formatter masks literals and
+  `$F{}`/`$P{}`/`$V{}`/`$P!{}` references, leaves generic type arguments alone,
+  and returns the input unchanged when it is not confident it is Java.
+- Ported the hook's `textcheck` step (`textRules.js`): unrenderable characters,
+  period spacing, double spaces, and markup-aware newline normalization, applied
+  to `<text>` CDATA and to the string/text-block literals inside expressions.
+- `DocumentFormattingEditProvider` (Format Document) and the `source.fixAll.jrxml`
+  "Fix all JRXML format and text issues" action, both limited to format +
+  textcheck. `jrxml.formatOnSave` returns as an explicit opt-in backed by a
+  `WorkspaceEdit`.
 
 ### Not ported (deliberately)
 - The hook's `validate`/`compile` gate — it needs the JasperReports engine.
 - The null-dereference lint rule — it overlaps the existing null-safety best
   practices and needs a Java expression parser.
-- The mutating `clear` / `format` / `sort` / `textcheck` steps.
+- The mutating `clear` and `sort` steps.

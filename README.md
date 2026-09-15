@@ -44,7 +44,23 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
 
-### 5. Best practices & null-safety recommendations
+### 5. Document formatting and text check
+The hook's `format` + `textcheck` steps run through **Format Document** and the
+`source.fixAll.jrxml` action **"Fix all JRXML format and text issues"**:
+
+- **report name** — `jasperReport/@name` set to the file base name
+- **positionType** — add/set `positionType="Float"` on `textField` and `subreport`
+- **textAdjust** — add/set `textAdjust="StretchHeight"` on `textField`
+- **expression spacing** — `==` `!=` `<` `>` `>=` `<=` `&&` `||`, ternaries, commas and
+  uppercase-reference casts. Generic type arguments, string/char/text-block literals and
+  `$F{}`/`$P{}`/`$V{}`/`$P!{}` references are left byte-for-byte untouched
+- **text check** — replaces unrenderable characters, adds a space after `.` before a capital,
+  collapses double spaces, and normalizes newlines to the element's `markup` token
+
+Formatting only runs when you ask for it (Format Document, the fix-all action, or opt-in
+`jrxml.formatOnSave`) and never reorders elements or deletes declarations.
+
+### 6. Best practices & null-safety recommendations
 An extensible rules engine surfaces inline recommendations and quick fixes:
 
 | Rule | What it flags |
@@ -55,7 +71,7 @@ An extensible rules engine surfaces inline recommendations and quick fixes:
 
 Warnings can be suppressed per rule from the **Best Practices (JRXML)** view or the lightbulb menu; quick fixes remain available while suppressed.
 
-### 6. Smart autocomplete
+### 7. Smart autocomplete
 Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
 
 ---
@@ -94,6 +110,12 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `jrxml.lint.constantPrintWhen` | `true` | Warn when `<printWhenExpression>` is a constant `true`/`false` |
 | `jrxml.lint.removeLineWhenBlank` | `true` | Warn when a `textField`/`subreport` is missing `removeLineWhenBlank="true"` |
 | `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
+| `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
+| `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
+| `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
+| `jrxml.format.expression` | `true` | Normalize expression operator/ternary/comma/cast spacing |
+| `jrxml.textcheck.enabled` | `true` | Rendered-text rules in text and string literals |
+| `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
 | `jrxml.suppressedBestPractices` | `[]` | Best-practice rule IDs whose squiggles are hidden |
 
 ---
