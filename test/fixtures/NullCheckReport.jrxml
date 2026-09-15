@@ -1,0 +1,21 @@
+<!-- Derived from examples/TextReport.jrxml variable usage; mixes guarded and unguarded dereferences. -->
+<jasperReport name="NullCheckReport" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="99999999-0000-0000-0000-000000000001">
+	<variable name="Unsafe" class="java.lang.String">
+		<expression><![CDATA[$V{CityNumber}.toString()]]></expression>
+	</variable>
+	<variable name="SafeAnd" class="java.lang.String">
+		<expression><![CDATA[$V{CityNumber} != null ? $V{CityNumber}.toString() : ""]]></expression>
+	</variable>
+	<variable name="SafeOr" class="java.lang.String">
+		<expression><![CDATA[$V{CityNumber} == null || $V{CityNumber}.toString().isEmpty()]]></expression>
+	</variable>
+	<variable name="SafeEquals" class="java.lang.String">
+		<expression><![CDATA[EQUALS($V{CityNumber}, null) ? "" : $V{CityNumber}.substring(0)]]></expression>
+	</variable>
+	<variable name="SafeValueOf" class="java.lang.String">
+		<expression><![CDATA[String.valueOf($V{CityNumber})]]></expression>
+	</variable>
+	<detail>
+		<band height="20"/>
+	</detail>
+</jasperReport>

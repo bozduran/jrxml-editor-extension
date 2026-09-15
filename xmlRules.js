@@ -117,6 +117,16 @@ function cdataOf(node, text) {
     return { start, end: close, content: text.slice(start, close) };
 }
 
+/** CDATA body if present, otherwise the raw element text; null when empty. */
+function contentOf(node, text) {
+    const cdata = cdataOf(node, text);
+    if (cdata) return cdata;
+
+    const from = node.startTagEnd;
+    const to = node.endTag >= 0 ? node.endTag : node.end;
+    return to > from ? { start: from, end: to, content: text.slice(from, to) } : null;
+}
+
 /** Nearest enclosing <element> markup value (raw), or ''. */
 function markupOf(node) {
     for (const ancestor of node.ancestors()) {
@@ -366,6 +376,7 @@ module.exports = {
     discoverTextcheckFixes,
     combinedFormatterEdits,
     cdataOf,
+    contentOf,
     markupOf,
     isTextContext,
     afterAttr,

@@ -90,93 +90,9 @@ const RULES = [
         }
     },
 
-    // ── BP002: Null-safe string comparison ────────────────────────────────────
-    // Flags $F{x}.equals("literal") where field is String/nullable
-    // Suggests CONTAINS($F{x}, "literal") with null guard
-    {
-        id:          'jrxml.bp002.nullSafeString',
-        name:        'Null-safe string comparison',
-        message:     '$ref.equals("value") throws NullPointerException if the field is null. Use "value".equals($ref) or wrap with a null check.',
-        severity:    vscode.DiagnosticSeverity.Warning,
-        suppressible: true,
-
-        check(expr, declarations) {
-            const hits      = [];
-            const strNames  = buildTypeSet(declarations, isString);
-
-            // $F{name}.equals("literal")  or  $F{name}.equals('literal')
-            const re = /(\$(F|P|V)\{([\w.]+)\})\.equals\(("[^"]*"|'[^']*')\)/g;
-            let m;
-            while ((m = re.exec(expr)) !== null) {
-                const [full, ref, sigil, name, literal] = m;
-                if (!strNames[sigil].has(name)) continue;
-
-                // Flip: put the literal first — safest one-click fix
-                const replacement = `${literal}.equals(${ref})`;
-                hits.push({
-                    start: m.index,
-                    end:   m.index + full.length,
-                    fix: {
-                        label:       `Flip to ${replacement}`,
-                        replacement,
-                    }
-                });
-            }
-            return hits;
-        }
-    },
-
-    // ── BP003: Optional.ofNullable for nullable fields ────────────────────────
-    // Flags bare $F{x} / $P{x} / $V{x} that are used without any null check
-    // when the type is a known nullable (String, Integer, BigDecimal, Date …)
-    // Suggests Optional.ofNullable($F{x}).orElse(<default>)
-    {
-        id:          'jrxml.bp003.optionalNullable',
-        name:        'Wrap nullable reference with Optional.ofNullable()',
-        message:     '$ref may be null. Consider Optional.ofNullable($ref).orElse(<default>) to avoid NullPointerException.',
-        severity:    vscode.DiagnosticSeverity.Information,
-        suppressible: true,
-
-        check(expr, declarations) {
-            const hits     = [];
-            const nullable = buildTypeSet(declarations, isNullable);
-
-            const bareRe = /(\$(F|P|V)\{([\w.]+)\})/g;
-            let m;
-            while ((m = bareRe.exec(expr)) !== null) {
-                const [full, ref, sigil, name] = m;
-                if (!nullable[sigil].has(name)) continue;
-
-                const before = expr.slice(0, m.index);
-                const after  = expr.slice(m.index + full.length).trimStart();
-
-                // Skip if already guarded
-                if (/Optional\.ofNullable\s*\([^)]*$/.test(before)) continue;
-                if (/!=\s*null|null\s*!=/.test(before + ' ' + after))  continue;
-                if (/EQUALS\s*\(\s*$/.test(before))                    continue;
-                if (/^\.equals\s*\(/.test(after))                      continue;
-                if (/\?\s*$/.test(before) || /^\s*:/.test(after))      continue;
-
-                // ── PREVENT CLASH WITH BP001 ──
-                if (/(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*$/.test(before)) continue;
-                if (/^\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/.test(after)) continue;
-
-                const decl    = findDecl(declarations, sigil, name);
-                const defVal  = defaultForType(decl?.fullType || decl?.type || '');
-                const replacement = `Optional.ofNullable(${ref}).orElse(${defVal})`;
-
-                hits.push({
-                    start: m.index,
-                    end:   m.index + full.length,
-                    fix: {
-                        label:       `Wrap with Optional.ofNullable(...).orElse(${defVal})`,
-                        replacement,
-                    }
-                });
-            }
-            return hits;
-        }
-    },
+    // BP002 (null-safe string comparison) and BP003 (Optional.ofNullable) were
+    // retired: the hook's `jrxml.lint.uncheckedNullDereference` rule replaces
+    // them with short-circuit-aware null-check analysis.
 
     // ── Add more rules below ──────────────────────────────────────────────────
     // {
@@ -198,41 +114,6 @@ function isBoolean(t) {
     return l === 'boolean' || l === 'java.lang.boolean';
 }
 
-function isString(t) {
-    if (!t) return false;
-    const l = t.toLowerCase();
-    return l === 'string' || l === 'java.lang.string';
-}
-
-function isNullable(t) {
-    if (!t) return false;
-    const l = t.toLowerCase();
-    // NOTE: booleans are intentionally excluded. BP001 owns Boolean references
-    // and rewrites them with EQUALS(); including them here made BP001 and BP003
-    // emit two overlapping diagnostics with conflicting quick fixes.
-    return ['string','java.lang.string',
-            'integer','java.lang.integer',
-            'long','java.lang.long',
-            'double','java.lang.double',
-            'float','java.lang.float',
-            'bigdecimal','java.math.bigdecimal',
-            'date','java.util.date',
-            'localdate','java.time.localdate',
-            'localdatetime','java.time.localdatetime'].includes(l);
-}
-
-/** Return the sensible orElse default for a Java type */
-function defaultForType(type) {
-    const t = (type || '').toLowerCase();
-    if (t.includes('string'))                          return '""';
-    if (t.includes('integer') || t.includes('long') ||
-        t.includes('double')  || t.includes('float'))  return '0';
-    if (t.includes('bigdecimal'))                      return 'java.math.BigDecimal.ZERO';
-    if (t.includes('boolean'))                         return 'false';
-    if (t.includes('date'))                            return 'new java.util.Date()';
-    return 'null';
-}
-
 /**
  * Build { F: Set<name>, P: Set<name>, V: Set<name> } for declarations
  * matching the predicate on fullType.
@@ -245,17 +126,10 @@ function buildTypeSet(declarations, predicate) {
     return sets;
 }
 
-function findDecl(declarations, sigil, name) {
-    const list = sigil === 'F' ? declarations.fields
-               : sigil === 'P' ? declarations.parameters
-               :                 declarations.variables;
-    return list.find(d => d.name === name) || null;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Suppress mechanism
 // Suppressed rule ids are stored in workspace config:
-//   jrxml.suppressedBestPractices: ["jrxml.bp002.nullSafeString", ...]
+//   jrxml.suppressedBestPractices: ["jrxml.bp001.booleanEquals", ...]
 // Suppressed rules still appear in the tree view and still offer quick fixes,
 // but do NOT emit a yellow diagnostic squiggly in the editor.
 // ─────────────────────────────────────────────────────────────────────────────

@@ -13,11 +13,14 @@
 // the hook (markup, then removeLineWhenBlank).
 
 const { scanXml } = require('./xmlspan');
+const { EXPRESSION_ELEMENTS, contentOf } = require('./xmlRules');
+const { checkNullDereference } = require('./lintNullDeref');
 
 const RULE = {
-    constantPrintWhen:      'jrxml.lint.constantPrintWhen',
-    removeLineWhenBlank:    'jrxml.lint.removeLineWhenBlank',
-    markupTagWithoutMarkup: 'jrxml.lint.markupTagWithoutMarkup',
+    constantPrintWhen:        'jrxml.lint.constantPrintWhen',
+    removeLineWhenBlank:      'jrxml.lint.removeLineWhenBlank',
+    markupTagWithoutMarkup:   'jrxml.lint.markupTagWithoutMarkup',
+    uncheckedNullDereference: 'jrxml.lint.uncheckedNullDereference',
 };
 
 // HTML / styled-text tags recognised by the markup rule.
@@ -59,6 +62,21 @@ function lintXml(text, enabled = {}) {
                     `printWhenExpression is a constant '${content}'`,
                     node
                 ));
+            }
+        }
+
+        if (EXPRESSION_ELEMENTS.has(node.tag) && enabled.uncheckedNullDereference !== false) {
+            const content = contentOf(node, text);
+            if (content && content.content.trim() !== '') {
+                for (const warning of checkNullDereference(content.content)) {
+                    findings.push({
+                        rule:    'uncheckedNullDereference',
+                        code:    RULE.uncheckedNullDereference,
+                        message: warning.message,
+                        offset:  content.start + warning.offset,
+                        length:  warning.length,
+                    });
+                }
             }
         }
 

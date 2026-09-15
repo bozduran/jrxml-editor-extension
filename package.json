@@ -163,6 +163,11 @@
           "default": true,
           "description": "Warn when a textField expression contains markup tags but markup is not \"styled\", \"html\" or \"rtf\"."
         },
+        "jrxml.lint.nullDereference": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a $F/$P/$V reference is used as a method-call receiver without a dominating null check."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,
