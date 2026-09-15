@@ -292,7 +292,7 @@ const bpDiagnostics = vscode.languages.createDiagnosticCollection('jrxml-bp');
 const storedHits = new Map();
 
 const EXPR_TAG_RE = () => new RegExp(
-    `(<(?:${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/(?:${EXPRESSION_TAGS.join('|')})>)`,
+    `(<(?<tag>${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)<\\/\\k<tag>>`,
     'g'
 );
 
@@ -313,7 +313,7 @@ function runRules(document) {
     let em;
     while ((em = tagRe.exec(text)) !== null) {
         const openTag    = em[1];
-        const inner      = em[2];
+        const inner      = em[3];
         const exprOffset = em.index + openTag.length;
 
         const rawExpr = inner

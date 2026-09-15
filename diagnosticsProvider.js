@@ -99,14 +99,14 @@ function updateDiagnostics(document) {
 
         // ── Expression syntax validation ──────────────────────────────────────
         const exprTagRe = new RegExp(
-            `(<(?:${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/(?:${EXPRESSION_TAGS.join('|')})>)`,
+            `(<(?<tag>${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)<\\/\\k<tag>>`,
             'g'
         );
 
         let em;
         while ((em = exprTagRe.exec(text)) !== null) {
             const openTag    = em[1];
-            const inner      = em[2];
+            const inner      = em[3];
             const exprOffset = em.index + openTag.length;
 
             // Strip CDATA

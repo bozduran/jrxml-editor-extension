@@ -83,3 +83,8 @@ test('findExpressionAtCursor matches jr:expression', () => {
     assert.strictEqual(result.tagName, 'jr:expression');
     assert.strictEqual(result.expression, '$P{x}');
 });
+
+test('findExpressionAtCursor does not span a mismatched closing tag', () => {
+    const text = '<textFieldExpression><![CDATA[$F{a}]]></variableExpression>';
+    assert.strictEqual(findExpressionAtCursor(fakeDocument(text), 20), null);
+});
