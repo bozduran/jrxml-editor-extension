@@ -28,8 +28,16 @@ function updateDiagnostics(document) {
     }
 
     const diagnostics = [];
-    const parsed = parseDeclarations(document);
     const text   = document.getText();
+
+    // Sections are isolated: a failure in one must not blank the others.
+    let parsed;
+    try {
+        parsed = parseDeclarations(document);
+    } catch (err) {
+        console.error('[JRXML] declaration parsing failed:', err);
+        parsed = { fields: [], parameters: [], variables: [], groups: [], references: [], outline: [] };
+    }
 
     const cfg = vscode.workspace.getConfiguration('jrxml');
     const checkUnused = cfg.get('showUnusedWarnings', true);
@@ -44,7 +52,13 @@ function updateDiagnostics(document) {
     if (checkUnused) {
         // References are collected from expression elements (plus query and
         // subreport pass-throughs), matching the hook's ground-truth model.
-        const used = collectUsedNames(text);
+        let used;
+        try {
+            used = collectUsedNames(text);
+        } catch (err) {
+            console.error('[JRXML] reference collection failed:', err);
+            used = new Set();
+        }
 
         for (const f of parsed.fields) {
             if (!used.has('FIELD:' + f.name)) {
@@ -154,23 +168,31 @@ function updateDiagnostics(document) {
 
     // ── 4. Structural lint rules (ported from the commit-time hook) ───────────
     // Malformed XML is skipped rather than guessed at.
-    const lint = lintXml(text, lintEnabled);
-    if (!lint.error) {
-        for (const finding of lint.findings) {
-            diagnostics.push(makeDiagnostic(
-                document, finding.offset, finding.length, finding.message,
-                vscode.DiagnosticSeverity.Warning, finding.code
-            ));
+    try {
+        const lint = lintXml(text, lintEnabled);
+        if (!lint.error) {
+            for (const finding of lint.findings) {
+                diagnostics.push(makeDiagnostic(
+                    document, finding.offset, finding.length, finding.message,
+                    vscode.DiagnosticSeverity.Warning, finding.code
+                ));
+            }
         }
+    } catch (err) {
+        console.error('[JRXML] lint rules failed:', err);
     }
 
     // ── 5. Text check (double spaces, period spacing, unrenderable, newlines) ─
     if (cfg.get('textcheck.diagnostics', true)) {
-        for (const issue of collectTextCheckIssues(text)) {
-            diagnostics.push(makeDiagnostic(
-                document, issue.offset, issue.length, issue.message,
-                vscode.DiagnosticSeverity.Warning, issue.code
-            ));
+        try {
+            for (const issue of collectTextCheckIssues(text)) {
+                diagnostics.push(makeDiagnostic(
+                    document, issue.offset, issue.length, issue.message,
+                    vscode.DiagnosticSeverity.Warning, issue.code
+                ));
+            }
+        } catch (err) {
+            console.error('[JRXML] text check failed:', err);
         }
     }
 

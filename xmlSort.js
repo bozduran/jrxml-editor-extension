@@ -47,7 +47,11 @@ function parse(text) {
     const containers = [];
     const warnings   = [];
 
-    const visit = (node) => {
+    // Iterative pre-order walk: deep nesting must not overflow the stack.
+    const stack = [scan.doc.root];
+    while (stack.length > 0) {
+        const node = stack.pop();
+
         if (isContainer(node)) {
             const children = node.children
                 .filter(child => child.tag === 'element')
@@ -59,9 +63,9 @@ function parse(text) {
                 children,
             });
         }
-        node.children.forEach(visit);
-    };
-    visit(scan.doc.root);
+
+        for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+    }
 
     return { containers, warnings };
 }

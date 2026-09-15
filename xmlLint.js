@@ -68,14 +68,19 @@ function lintXml(text, enabled = {}) {
         if (EXPRESSION_ELEMENTS.has(node.tag) && enabled.uncheckedNullDereference !== false) {
             const content = contentOf(node, text);
             if (content && content.content.trim() !== '') {
-                for (const warning of checkNullDereference(content.content)) {
-                    findings.push({
-                        rule:    'uncheckedNullDereference',
-                        code:    RULE.uncheckedNullDereference,
-                        message: warning.message,
-                        offset:  content.start + warning.offset,
-                        length:  warning.length,
-                    });
+                // A rule that throws must never take the whole linter down.
+                try {
+                    for (const warning of checkNullDereference(content.content)) {
+                        findings.push({
+                            rule:    'uncheckedNullDereference',
+                            code:    RULE.uncheckedNullDereference,
+                            message: warning.message,
+                            offset:  content.start + warning.offset,
+                            length:  warning.length,
+                        });
+                    }
+                } catch (err) {
+                    console.error('[JRXML] null-dereference rule failed:', err);
                 }
             }
         }
@@ -92,13 +97,17 @@ function lintXml(text, enabled = {}) {
                     c => c.tag === 'expression' || c.tag === 'textFieldExpression'
                 );
                 if (expression) {
-                    const tag = firstMarkupTag(expression.textContent());
-                    if (tag) {
-                        findings.push(makeFinding(
-                            RULE.markupTagWithoutMarkup,
-                            `text contains markup tag <${tag}> but markup is not "styled", "html" or "rtf"`,
-                            node
-                        ));
+                    try {
+                        const tag = firstMarkupTag(expression.textContent());
+                        if (tag) {
+                            findings.push(makeFinding(
+                                RULE.markupTagWithoutMarkup,
+                                `text contains markup tag <${tag}> but markup is not "styled", "html" or "rtf"`,
+                                node
+                            ));
+                        }
+                    } catch (err) {
+                        console.error('[JRXML] markup rule failed:', err);
                     }
                 }
             }

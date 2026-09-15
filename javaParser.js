@@ -39,6 +39,10 @@ const ASSIGNMENT_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '
 
 const FAIL = new Error('parse-fail');
 
+// Deeply nested input (parentheses, unary chains, casts) must not overflow the
+// stack; exceeding this fails the parse, which callers treat as "not Java".
+const MAX_DEPTH = 200;
+
 function tokenize(code) {
     const tokens = [];
     let i = 0;
@@ -95,6 +99,20 @@ class Parser {
     constructor(tokens) {
         this.tokens = tokens;
         this.i = 0;
+        this.depth = 0;
+    }
+
+    /** Depth guard around the recursive-descent entry points. */
+    guarded(fn) {
+        if (++this.depth > MAX_DEPTH) {
+            this.depth--;
+            throw FAIL;
+        }
+        try {
+            return fn();
+        } finally {
+            this.depth--;
+        }
     }
 
     peek(k = 0) { return this.tokens[this.i + k]; }
@@ -116,13 +134,15 @@ class Parser {
     }
 
     parseAssignment() {
-        const left = this.parseTernary();
-        const t = this.peek();
-        if (t && ASSIGNMENT_OPS.has(t.value)) {
-            this.next();
-            return { kind: 'binary', op: t.value, left, right: this.parseAssignment(), start: left.start };
-        }
-        return left;
+        return this.guarded(() => {
+            const left = this.parseTernary();
+            const t = this.peek();
+            if (t && ASSIGNMENT_OPS.has(t.value)) {
+                this.next();
+                return { kind: 'binary', op: t.value, left, right: this.parseAssignment(), start: left.start };
+            }
+            return left;
+        });
     }
 
     parseTernary() {
@@ -156,17 +176,19 @@ class Parser {
     }
 
     parseUnary() {
-        const t = this.peek();
-        if (t && (t.value === '!' || t.value === '~' || t.value === '+' || t.value === '-'
-            || t.value === '++' || t.value === '--')) {
-            this.next();
-            return { kind: 'unary', op: t.value, expr: this.parseUnary(), start: t.start };
-        }
+        return this.guarded(() => {
+            const t = this.peek();
+            if (t && (t.value === '!' || t.value === '~' || t.value === '+' || t.value === '-'
+                || t.value === '++' || t.value === '--')) {
+                this.next();
+                return { kind: 'unary', op: t.value, expr: this.parseUnary(), start: t.start };
+            }
 
-        const cast = this.tryCast();
-        if (cast) return cast;
+            const cast = this.tryCast();
+            if (cast) return cast;
 
-        return this.parsePostfix();
+            return this.parsePostfix();
+        });
     }
 
     /** Backtracking cast: `(Type) expr`. Returns null when it is not a cast. */

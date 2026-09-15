@@ -70,10 +70,17 @@ class XmlNode {
         return out;
     }
 
-    /** Depth-first walk over this node and all descendants. */
+    /**
+     * Document-order walk over this node and all descendants. Iterative, so
+     * deeply nested input cannot overflow the call stack.
+     */
     *walk() {
-        yield this;
-        for (const child of this.children) yield* child.walk();
+        const stack = [this];
+        while (stack.length > 0) {
+            const node = stack.pop();
+            yield node;
+            for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+        }
     }
 }
 
