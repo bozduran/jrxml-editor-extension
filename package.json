@@ -81,6 +81,10 @@
       {
         "command": "jrxml.bp.jumpToHit",
         "title": "JRXML: Jump to Issue"
+      },
+      {
+        "command": "jrxml.sortElements",
+        "title": "JRXML: Sort Band/Frame Elements by Position"
       }
     ],
     "menus": {
@@ -180,6 +184,11 @@
           "type": "boolean",
           "default": false,
           "description": "Run the format + textcheck steps when saving a .jrxml file (never the clear or sort steps)."
+        },
+        "jrxml.sort.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a diff and ask for confirmation before applying the geometry sort (the sort rewrites the whole file)."
         },
         "jrxml.suppressedBestPractices": {
           "type": "array",

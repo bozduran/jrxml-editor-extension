@@ -16,6 +16,7 @@ const {
     fixAllProvider,
     registerFormatOnSave,
 } = require('./documentFormatter');
+const { register: registerSort } = require('./sortProvider');
 /**
  * @param {vscode.ExtensionContext} context
  */
@@ -54,6 +55,9 @@ function activate(context) {
 
     // ── Opt-in format on save (format + textcheck only) ───────────────────────
     registerFormatOnSave(context);
+
+    // ── Explicit geometry sort (whole-file, previewed) ────────────────────────
+    registerSort(context);
 
     // The Java helper scan is cached; invalidate it when sources change.
     context.subscriptions.push(
