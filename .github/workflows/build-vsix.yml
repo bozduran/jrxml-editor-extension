@@ -1,0 +1,47 @@
+name: Build VSIX
+
+on:
+  # Manual trigger from the Actions tab.
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+    tags:
+      - 'v*'
+
+# Needed so a tag build can attach the VSIX to a GitHub Release.
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Package extension
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # The extension has no runtime dependencies, so vsce runs straight from
+      # npx with --no-dependencies and no npm install step is required.
+      - name: Package VSIX
+        run: npx --yes @vscode/vsce@^3.3.2 package --no-dependencies
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: jrxml-editor-vsix
+          path: '*.vsix'
+          if-no-files-found: error
+
+      - name: Attach VSIX to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
+          generate_release_notes: true
