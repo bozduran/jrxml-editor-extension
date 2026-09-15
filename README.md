@@ -43,6 +43,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 
   The first three have quick fixes and can be switched off individually. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
+- **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
 - Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
 
 ### 5. Document formatting and text check
@@ -138,6 +139,7 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
 | `jrxml.format.expression` | `true` | Normalize expression operator/ternary/comma/cast spacing |
 | `jrxml.textcheck.enabled` | `true` | Rendered-text rules in text and string literals |
+| `jrxml.textcheck.diagnostics` | `true` | Show warnings + quick fixes for text-check problems |
 | `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
 | `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
 | `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |

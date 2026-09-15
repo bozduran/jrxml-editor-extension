@@ -104,5 +104,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Added `jrxml.migrate.targetLanguage` (default `jsonql`), used as the migration
   target instead of a hardcoded value.
 
+- Text-check problems are now **diagnostics with quick fixes**, not only
+  formatter edits: double spaces, a missing space after `.`, unrenderable
+  characters and newline normalization are flagged inside `<text>` CDATA and
+  inside string/text-block literals (code `jrxml.textcheck`), gated by
+  `jrxml.textcheck.diagnostics`.
+
 ### Not ported (deliberately)
 - The hook's `validate`/`compile` gate — it needs the JasperReports engine.

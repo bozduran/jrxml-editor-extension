@@ -95,6 +95,11 @@ const SETTINGS_GROUPS = [
                 description: 'Replace unrenderable characters, fix period spacing, collapse double spaces and normalize newlines.',
             },
             {
+                key: 'textcheck.diagnostics', type: 'boolean', default: true,
+                label: 'Text check warnings',
+                description: 'Show warnings with quick fixes for double spaces, a missing space after \'.\', unrenderable characters and newlines in text and string literals.',
+            },
+            {
                 key: 'formatOnSave', type: 'boolean', default: false,
                 label: 'Format on save',
                 description: 'Run the format + textcheck steps when saving a .jrxml file (never the clear or sort steps).',

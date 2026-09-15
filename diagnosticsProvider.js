@@ -13,6 +13,7 @@ const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
+const { collectTextCheckIssues } = require('./textCheck');
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
@@ -159,6 +160,16 @@ function updateDiagnostics(document) {
             diagnostics.push(makeDiagnostic(
                 document, finding.offset, finding.length, finding.message,
                 vscode.DiagnosticSeverity.Warning, finding.code
+            ));
+        }
+    }
+
+    // ── 5. Text check (double spaces, period spacing, unrenderable, newlines) ─
+    if (cfg.get('textcheck.diagnostics', true)) {
+        for (const issue of collectTextCheckIssues(text)) {
+            diagnostics.push(makeDiagnostic(
+                document, issue.offset, issue.length, issue.message,
+                vscode.DiagnosticSeverity.Warning, issue.code
             ));
         }
     }

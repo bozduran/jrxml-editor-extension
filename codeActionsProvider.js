@@ -15,6 +15,7 @@ const { fixForFinding } = require('./xmlLintFixes');
 const { scanXml } = require('./xmlspan');
 const { removalSpan } = require('./xmlClear');
 const { decodeXml } = require('./xmlRules');
+const { fixForTextCheck } = require('./textCheck');
 
 // ── Lint rule quick fixes ─────────────────────────────────────────────────────
 
@@ -159,6 +160,28 @@ const provider = vscode.languages.registerCodeActionsProvider(
                     // Removing a constant expression is a convenience; setting the
                     // attribute is the expected fix, so prefer it.
                     action.isPreferred = diag.code !== 'jrxml.lint.constantPrintWhen';
+
+                    const edit = new vscode.WorkspaceEdit();
+                    edit.replace(
+                        document.uri,
+                        new vscode.Range(
+                            document.positionAt(fix.edit.start),
+                            document.positionAt(fix.edit.end)
+                        ),
+                        fix.edit.replacement
+                    );
+                    action.edit = edit;
+                    actions.push(action);
+                }
+
+                // ── Text check ────────────────────────────────────────────────
+                if (diag.code === 'jrxml.textcheck') {
+                    const fix = fixForTextCheck(document.getText(), document.offsetAt(diag.range.start));
+                    if (!fix) continue;
+
+                    const action = new vscode.CodeAction(fix.title, vscode.CodeActionKind.QuickFix);
+                    action.diagnostics = [diag];
+                    action.isPreferred = true;
 
                     const edit = new vscode.WorkspaceEdit();
                     edit.replace(

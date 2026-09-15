@@ -48,7 +48,7 @@ function occurrences(n) {
 }
 
 /** Replace unrenderable characters; one finding per distinct character. */
-function applyUnrenderable(text, findings) {
+function applyUnrenderable(text, findings, changes) {
     let out = '';
     const seen = new Set();
 
@@ -56,6 +56,8 @@ function applyUnrenderable(text, findings) {
         const cp = text.codePointAt(i);
         const rule = UNRENDERABLE.get(cp);
         if (rule) {
+            const length = cp > 0xFFFF ? 2 : 1;
+            changes?.push({ offset: i, length });
             if (!seen.has(cp)) {
                 seen.add(cp);
                 const hex = cp.toString(16).toUpperCase().padStart(4, '0');
@@ -72,10 +74,11 @@ function applyUnrenderable(text, findings) {
 }
 
 /** Add a space after a '.' directly followed by an uppercase letter. */
-function applyPeriodSpace(text, findings) {
+function applyPeriodSpace(text, findings, changes) {
     let count = 0;
-    const out = text.replace(/\.([A-Z])/g, (_, letter) => {
+    const out = text.replace(/\.([A-Z])/g, (match, letter, offset) => {
         count++;
+        changes?.push({ offset, length: 2 });
         return '. ' + letter;
     });
     if (count > 0) findings.push(`add space after '.' (${occurrences(count)})`);
@@ -83,10 +86,11 @@ function applyPeriodSpace(text, findings) {
 }
 
 /** Collapse runs of two or more spaces to one. */
-function applyDoubleSpace(text, findings) {
+function applyDoubleSpace(text, findings, changes) {
     let count = 0;
-    const out = text.replace(/ {2,}/g, () => {
+    const out = text.replace(/ {2,}/g, (match, offset) => {
         count++;
+        changes?.push({ offset, length: match.length });
         return ' ';
     });
     if (count > 0) findings.push(`remove double space (${occurrences(count)})`);
@@ -94,28 +98,51 @@ function applyDoubleSpace(text, findings) {
 }
 
 /** Normalise newlines to the token implied by `markup`. */
-function applyNewline(text, markup) {
+function applyNewline(text, markup, changes) {
     let token;
     switch (markup || '') {
         case 'styled': token = '<br/>'; break;
         case 'html':   token = '<br>';  break;
-        case '':
+        case '': 
         case 'none':   token = '\\n';   break;
         default:       return text;
     }
-    return text.split('<br/>').join(token)
-               .split('<br>').join(token)
-               .split('\\n').join(token);
+
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        if (text.startsWith('<br/>', i)) {
+            changes?.push({ offset: i, length: 5 });
+            out += token;
+            i += 5;
+            continue;
+        }
+        if (text.startsWith('<br>', i)) {
+            changes?.push({ offset: i, length: 4 });
+            out += token;
+            i += 4;
+            continue;
+        }
+        if (text.startsWith('\\n', i)) {
+            changes?.push({ offset: i, length: 2 });
+            out += token;
+            i += 2;
+            continue;
+        }
+        out += text[i];
+        i++;
+    }
+    return out;
 }
 
 /** Full chain applied to rendered text content. */
-function transformText(content, markup, findings) {
+function transformText(content, markup, findings, changes) {
     let out = content;
-    out = applyUnrenderable(out, findings);
-    out = applyPeriodSpace(out, findings);
-    out = applyDoubleSpace(out, findings);
+    out = applyUnrenderable(out, findings, changes);
+    out = applyPeriodSpace(out, findings, changes);
+    out = applyDoubleSpace(out, findings, changes);
 
-    const normalized = applyNewline(out, markup);
+    const normalized = applyNewline(out, markup, changes);
     if (normalized !== out) {
         findings.push('normalize newline');
         out = normalized;
@@ -124,10 +151,10 @@ function transformText(content, markup, findings) {
 }
 
 /** Literal-safe subset: no period rule, no newline rule. */
-function transformLiteral(content, findings) {
+function transformLiteral(content, findings, changes) {
     let out = content;
-    out = applyUnrenderable(out, findings);
-    out = applyDoubleSpace(out, findings);
+    out = applyUnrenderable(out, findings, changes);
+    out = applyDoubleSpace(out, findings, changes);
     return out;
 }
 
@@ -139,7 +166,7 @@ function transformLiteral(content, findings) {
  * scanner does not know about comments, so a quote inside a comment could be
  * rewritten; skipping comments is strictly safer.
  */
-function transformExpression(content, isText, markup, findings) {
+function transformExpression(content, isText, markup, findings, changes) {
     let out = '';
     let i = 0;
     const n = content.length;
@@ -188,7 +215,16 @@ function transformExpression(content, isText, markup, findings) {
         const literal = content.slice(innerStart, innerEnd);
 
         out += content.slice(i, innerStart);
-        out += isText ? transformText(literal, markup, findings) : transformLiteral(literal, findings);
+
+        const before = changes ? changes.length : 0;
+        out += isText
+            ? transformText(literal, markup, findings, changes)
+            : transformLiteral(literal, findings, changes);
+        // Literal-relative change offsets become content-relative.
+        if (changes) {
+            for (let k = before; k < changes.length; k++) changes[k].offset += innerStart;
+        }
+
         out += content.slice(innerEnd, end);
         i = end;
     }

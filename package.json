@@ -208,6 +208,11 @@
           "default": true,
           "description": "Text check: replace unrenderable characters, fix period spacing, collapse double spaces and normalize newlines in text and string literals."
         },
+        "jrxml.textcheck.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show warnings with quick fixes for text-check problems (double spaces, missing space after '.', unrenderable characters, newlines) in <text> CDATA and string literals."
+        },
         "jrxml.formatOnSave": {
           "type": "boolean",
           "default": false,
