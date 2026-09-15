@@ -1,6 +1,9 @@
 import globals from "globals";
 
 export default [{
+    // The Extension Host suite downloads VS Code here; never lint it.
+    ignores: [".vscode-test/**"],
+}, {
     files: ["**/*.js"],
     languageOptions: {
         globals: {
@@ -25,5 +28,13 @@ export default [{
         }],
         "constructor-super": "warn",
         "valid-typeof": "warn",
+    },
+}, {
+    // Extension Host tests run under mocha (suite/test/suiteSetup/…).
+    files: ["integration/**/*.js"],
+    languageOptions: {
+        globals: {
+            ...globals.mocha,
+        },
     },
 }];

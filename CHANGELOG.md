@@ -110,5 +110,24 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   inside string/text-block literals (code `jrxml.textcheck`), gated by
   `jrxml.textcheck.diagnostics`.
 
+### Fixed
+- Destructive commands (sort, clear, SQL migration) now **refuse to apply** edits
+  discovered before the diff preview and confirmation if the document changed in
+  the meantime, instead of overwriting the newer content. A `WorkspaceEdit`
+  applies its ranges to the current text, so the previous behaviour could
+  corrupt the file or silently drop edits made while the preview was open.
+- A rule that throws no longer blanks every diagnostic: the linter isolates each
+  rule and the diagnostics provider isolates each section, logging the failure
+  and carrying on.
+- Deeply nested input can no longer overflow the call stack: the Java expression
+  parser has a depth cap (over-deep expressions are skipped, as with any
+  unparseable input), and the XML walk and sort walk are now iterative.
+
+### Added
+- Extension Host smoke suite via `@vscode/test-cli`
+  (`npm run test:integration`): activates the extension, asserts every
+  contributed command is registered, and exercises diagnostics, the sort and
+  clear commands (preview disabled), document formatting and the settings panel.
+
 ### Not ported (deliberately)
 - The hook's `validate`/`compile` gate — it needs the JasperReports engine.

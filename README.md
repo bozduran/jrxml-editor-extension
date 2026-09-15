@@ -163,9 +163,14 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 ### Tests and linting
 ```
-npm test     # node:test unit suite (parser, formatter, utilities, webview HTML, builtins)
-npm run lint # eslint
+npm test                 # node:test unit suite (parser, formatter, rules, webview HTML)
+npm run test:integration # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
+npm run lint             # eslint
 ```
+The unit suite runs on plain Node with no VS Code needed. The integration suite
+activates the extension for real and covers command registration, diagnostics,
+the sort/clear commands (preview disabled), document formatting and the settings
+panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
 
 ---
 
