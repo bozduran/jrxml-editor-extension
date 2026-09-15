@@ -29,6 +29,24 @@ const BUILTIN_PARAM_DOCS = {
 };
 
 /**
+ * Sanitize file-derived text before appending it to a MarkdownString.
+ * Escapes markdown structural characters and collapses newlines so a crafted
+ * `<description>` cannot inject links, code spans, tables or raw HTML.
+ */
+function mdSafe(text) {
+    return String(text ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
+        .replace(/\r?\n+/g, ' ')
+        .trim();
+}
+
+/** Escape text that will be placed inside a markdown code span. */
+function mdCode(text) {
+    return String(text ?? '').replace(/`/g, '\\`');
+}
+
+/**
  * Given a document and position, detect whether the cursor is on a $F/$P/$V
  * reference and return { sigil, name } or null.
  */
@@ -83,8 +101,9 @@ const provider = vscode.languages.registerHoverProvider(
             const refCount = parsed.references.filter(r => r.sigil === ref.sigil && r.name === ref.name).length;
 
             // Build markdown tooltip
+            // Rendered as UNtrusted markdown: file-derived text (descriptions,
+            // class names) must not be able to inject command: links or HTML.
             const md = new vscode.MarkdownString('', true);
-            md.isTrusted = true;
 
             if (decl) {
                 const badge  = isBuiltin ? ' *(built-in)*' : '';
@@ -93,9 +112,9 @@ const provider = vscode.languages.registerHoverProvider(
                 md.appendMarkdown(`### ${sigStr}\n\n`);
                 md.appendMarkdown(`| | |\n|---|---|\n`);
                 md.appendMarkdown(`| **Kind** | ${kind}${badge} |\n`);
-                md.appendMarkdown(`| **Type** | \`${decl.fullType || decl.type}\` |\n`);
+                md.appendMarkdown(`| **Type** | \`${mdCode(decl.fullType || decl.type)}\` |\n`);
                 if (decl.description) {
-                    md.appendMarkdown(`| **Info** | ${decl.description.replace(/\n/g, ' ')} |\n`);
+                    md.appendMarkdown(`| **Info** | ${mdSafe(decl.description)} |\n`);
                 }
                 md.appendMarkdown(`| **Used** | ${refCount} time${refCount !== 1 ? 's' : ''} in this file |\n`);
             } else {
