@@ -391,25 +391,4 @@ function splitTopLevelCommas(str) {
     return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// On-save lightweight cleanup (comma/operator spacing only — no line breaks)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function normalizeCommaSpacing(expr) {
-    if (!expr || !expr.trim()) return expr;
-    try {
-        const parts = splitRespectingStrings(expr);
-        return parts.map((p, i) => {
-            if (i % 2 !== 0) return p; // inside string — untouched
-            return p
-                .replace(/\s*,\s*/g, ', ')
-                .replace(/\s*;\s*/g, '; ')
-                .replace(/([^!<>=])\s*(==|!=|<=|>=|&&|\|\|)\s*/g, '$1 $2 ')
-                .replace(/([^ \t\n]) {2,}/g, '$1 ');
-        }).join('');
-    } catch (_) {
-        return expr;
-    }
-}
-
-module.exports = { formatExpression, normalizeCommaSpacing };
+module.exports = { formatExpression };
