@@ -3,22 +3,28 @@
 
 const vscode = require('vscode');
 const ExpressionEditorPanel  = require('./expressionEditorPanel');
-const { findExpressionAtCursor, EXPRESSION_TAGS } = require('./expressionUtils');
-const { formatExpression }   = require('./expressionFormatter');
-const { provider: completionProvider } = require('./completionProvider');
+const { findExpressionAtCursor } = require('./expressionUtils');
+const { provider: completionProvider, clearCustomJavaCache } = require('./completionProvider');
 const { provider: hoverProvider }      = require('./hoverProvider');
 const { provider: definitionProvider } = require('./definitionProvider');
 const { provider: outlineProvider }    = require('./outlineProvider');
 const { register: registerDiagnostics } = require('./diagnosticsProvider');
-const { parseDeclarations } = require('./jrxmlParser');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
 const { register: registerBestPractices } = require('./bestPracticesProvider');
+const {
+    provider: documentFormatter,
+    fixAllProvider,
+    registerFormatOnSave,
+} = require('./documentFormatter');
+const { register: registerSort } = require('./sortProvider');
+const { register: registerClear } = require('./clearProvider');
+const { register: registerSettingsPanel } = require('./settingsPanel');
+const { register: registerIncludeChain } = require('./includeChainView');
+const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-    console.log('JRXML Expression Editor activated');
-
     // ── Command: open expression editor ──────────────────────────────────────
     const openEditorCmd = vscode.commands.registerCommand(
         'jrxml.openExpressionEditor',
@@ -40,38 +46,70 @@ function activate(context) {
         }
     );
 
-    // ── On-Save full formatting ───────────────────────────────────────────────
-    const onSaveListener = vscode.workspace.onWillSaveTextDocument((e) => {
-        if (!e.document.fileName.endsWith('.jrxml')) return;
-        const cfg = vscode.workspace.getConfiguration('jrxml');
-        if (cfg.get('formatOnSave') === false) return;
-        return;
-        e.waitUntil(applyOnSaveFormatting(e.document));
-    });
-
     // ── Language feature providers ────────────────────────────────────────────
-    context.subscriptions.push(completionProvider);
-    context.subscriptions.push(hoverProvider);
-    context.subscriptions.push(definitionProvider);
-    context.subscriptions.push(outlineProvider);
+    context.subscriptions.push(
+        completionProvider,
+        hoverProvider,
+        definitionProvider,
+        outlineProvider,
+        codeActionsProvider,
+        documentFormatter,
+        fixAllProvider,
+    );
+
+    // ── Opt-in format on save (format + textcheck only) ───────────────────────
+    registerFormatOnSave(context);
+
+    // ── Explicit geometry sort (whole-file, previewed) ────────────────────────
+    registerSort(context);
+
+    // ── Clear fixes + SQL migration (destructive, previewed) ─────────────────
+    registerClear(context);
+
+    // ── Dedicated settings panel ─────────────────────────────────────────────
+    registerSettingsPanel(context);
+
+    // ── Include-chain view (where the open report is called from) ─────────────
+    registerIncludeChain(context);
+
+    // Diff previews for whole-file rewrites
+    context.subscriptions.push(previewProvider);
+
+    // The Java helper scan is cached; invalidate it when sources change.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => clearCustomJavaCache()),
+        vscode.workspace.onDidSaveTextDocument(doc => {
+            if (doc.fileName.endsWith('.java')) clearCustomJavaCache();
+        }),
+        vscode.workspace.onDidCreateFiles(e => {
+            if (e.files.some(f => f.fsPath.endsWith('.java'))) clearCustomJavaCache();
+        }),
+        vscode.workspace.onDidDeleteFiles(e => {
+            if (e.files.some(f => f.fsPath.endsWith('.java'))) clearCustomJavaCache();
+        }),
+        vscode.workspace.onDidRenameFiles(e => {
+            if (e.files.some(f => f.newUri.fsPath.endsWith('.java') || f.oldUri.fsPath.endsWith('.java'))) {
+                clearCustomJavaCache();
+            }
+        })
+    );
+
+    // ── Best practices + diagnostics ──────────────────────────────────────────
     registerBestPractices(context);
-    // ── Diagnostics (unused + validation) ────────────────────────────────────
     registerDiagnostics(context);
 
-    // ── Code actions (quick fixes) ────────────────────────────────────────────
-    context.subscriptions.push(codeActionsProvider);
-
-    // Internal command used by the "Go to declaration" quick fix
+    // Internal command used by the "Go to declaration" quick fix. Uses
+    // openTextDocument so it also works for files that are not currently open.
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.goToDeclaration', (uri, position) => {
-            const parsed = parseDeclarations(
-                vscode.workspace.textDocuments.find(d => d.uri.toString() === uri.toString())
-            );
-            if (!parsed) return;
-            vscode.window.showTextDocument(uri).then(editor => {
-                editor.selection = new vscode.Selection(position, position);
-                editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
-            });
+        vscode.commands.registerCommand('jrxml.goToDeclaration', async (uri, position) => {
+            const document = await vscode.workspace.openTextDocument(uri);
+            const target = (position && typeof position.line === 'number')
+                ? new vscode.Position(position.line, position.character)
+                : document.positionAt(typeof position === 'number' ? position : 0);
+
+            const editor = await vscode.window.showTextDocument(document);
+            editor.selection = new vscode.Selection(target, target);
+            editor.revealRange(new vscode.Range(target, target), vscode.TextEditorRevealType.InCenter);
         })
     );
 
@@ -97,55 +135,7 @@ function activate(context) {
         if (result) ExpressionEditorPanel.createOrShow(context.extensionUri, result, e.textEditor);
     }, null, context.subscriptions);
 
-
-    //context.subscriptions.push(openEditorCmd, statusBarItem)
-    context.subscriptions.push(openEditorCmd, statusBarItem, onSaveListener);
-}
-
-// ── On-save formatter ─────────────────────────────────────────────────────────
-
-async function applyOnSaveFormatting(document) {
-    const text  = document.getText();
-    const edits = [];
-
-    const tagPattern = new RegExp(
-        `(<(?:${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/(?:${EXPRESSION_TAGS.join('|')})>)`,
-        'g'
-    );
-
-    let match;
-    while ((match = tagPattern.exec(text)) !== null) {
-        const openTag  = match[1];
-        const inner    = match[2];
-        const closeTag = match[3];
-
-        const hasCdata = /^\s*<!\[CDATA\[/.test(inner);
-        const rawExpr  = inner.replace(/^\s*<!\[CDATA\[/, '').replace(/\]\]>\s*$/, '');
-
-        let formatted;
-        try {
-            const cfg      = vscode.workspace.getConfiguration('jrxml');
-            const indentSize = cfg.get('indentSize', 4);
-            formatted = formatExpression(rawExpr, indentSize);
-        } catch (_) {
-            continue;
-        }
-
-        if (formatted === rawExpr) continue;
-
-        const newInner = hasCdata ? `<![CDATA[${formatted}]]>` : formatted;
-        if (newInner === inner) continue;
-
-        const innerStart = match.index + openTag.length;
-        const innerEnd   = innerStart + inner.length;
-
-        edits.push(vscode.TextEdit.replace(
-            new vscode.Range(document.positionAt(innerStart), document.positionAt(innerEnd)),
-            newInner
-        ));
-    }
-
-    return edits;
+    context.subscriptions.push(openEditorCmd, statusBarItem);
 }
 
 function deactivate() {}

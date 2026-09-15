@@ -12,25 +12,35 @@ const fs = require('fs');
 const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations } = require('./jrxmlParser');
+const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('./jasperBuiltins');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
 let cachedCustomJavaMethods = null;
+
+/** Drop the cached Java scan (call when .java files or workspace folders change). */
+function clearCustomJavaCache() {
+    cachedCustomJavaMethods = null;
+}
 
 function getCustomJavaMethods() {
     // Return cached results if we already scanned the project
     if (cachedCustomJavaMethods) return cachedCustomJavaMethods;
 
     cachedCustomJavaMethods = [];
-    
+
     // Get the current workspace folders
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders) return cachedCustomJavaMethods;
 
     for (const folder of workspaceFolders) {
         const javaSrcPath = path.join(folder.uri.fsPath, 'src', 'main', 'java');
-        if (fs.existsSync(javaSrcPath)) {
-            scanDirectoryForJavaMethods(javaSrcPath, cachedCustomJavaMethods);
+        try {
+            if (fs.existsSync(javaSrcPath)) {
+                scanDirectoryForJavaMethods(javaSrcPath, cachedCustomJavaMethods);
+            }
+        } catch (err) {
+            console.error(`Error scanning ${javaSrcPath}:`, err);
         }
     }
 
@@ -38,10 +48,22 @@ function getCustomJavaMethods() {
 }
 
 function scanDirectoryForJavaMethods(dir, results) {
-    const files = fs.readdirSync(dir);
+    let files;
+    try {
+        files = fs.readdirSync(dir);
+    } catch (_) {
+        return; // unreadable/unavailable directory — skip silently
+    }
+
     for (const file of files) {
         const fullPath = path.join(dir, file);
-        if (fs.statSync(fullPath).isDirectory()) {
+        let stat;
+        try {
+            stat = fs.statSync(fullPath);
+        } catch (_) {
+            continue; // entry disappeared mid-scan
+        }
+        if (stat.isDirectory()) {
             scanDirectoryForJavaMethods(fullPath, results); // Recursive call
         } else if (fullPath.endsWith('.java')) {
             extractStaticMethods(fullPath, results);
@@ -139,34 +161,6 @@ const JASPER_FUNCTIONS = [
     { label: 'VAR',         detail: 'VAR(value)',                     doc: 'Calculates variance.',                                                        snippet: 'VAR(${1:value})' },
 ];
 
-// ── Built-in Jasper system variables ─────────────────────────────────────────
-const BUILTIN_VARIABLES = [
-    { name: 'PAGE_NUMBER',        type: 'Integer', description: 'Current page number' },
-    { name: 'PAGE_COUNT',         type: 'Integer', description: 'Total number of pages' },
-    { name: 'REPORT_COUNT',       type: 'Integer', description: 'Total records processed' },
-    { name: 'COLUMN_NUMBER',      type: 'Integer', description: 'Current column number' },
-    { name: 'COLUMN_COUNT',       type: 'Integer', description: 'Total number of columns' },
-    { name: 'PAGE_VARIABLE_COUNT',type: 'Integer', description: 'Number of variables reset per page' },
-    { name: 'MASTER_CURRENT_PAGE',type: 'Integer', description: 'Current page in master report' },
-    { name: 'MASTER_TOTAL_PAGES', type: 'Integer', description: 'Total pages in master report' },
-];
-
-// ── Built-in Jasper system parameters ────────────────────────────────────────
-const BUILTIN_PARAMETERS = [
-    { name: 'REPORT_CONNECTION',        type: 'java.sql.Connection',          description: 'JDBC database connection' },
-    { name: 'REPORT_DATA_SOURCE',       type: 'JRDataSource',                 description: 'The JRDataSource object' },
-    { name: 'REPORT_PARAMETERS_MAP',    type: 'java.util.Map',                description: 'Map of all report parameters' },
-    { name: 'IS_IGNORE_PAGINATION',     type: 'Boolean',                      description: 'Disable pagination when true' },
-    { name: 'REPORT_LOCALE',            type: 'java.util.Locale',             description: 'Report locale' },
-    { name: 'REPORT_TIME_ZONE',         type: 'java.util.TimeZone',           description: 'Report time zone' },
-    { name: 'REPORT_FORMAT_FACTORY',    type: 'JRFormatFactory',              description: 'Format factory for dates/numbers' },
-    { name: 'REPORT_CLASS_LOADER',      type: 'ClassLoader',                  description: 'Class loader for the report' },
-    { name: 'REPORT_URL_HANDLER_FACTORY',type:'java.net.URLStreamHandlerFactory', description: 'URL handler factory' },
-    { name: 'REPORT_VIRTUALIZER',       type: 'JRVirtualizer',                description: 'Virtualizer for large reports' },
-    { name: 'REPORT_MAX_COUNT',         type: 'Integer',                      description: 'Max number of records' },
-    { name: 'REPORT_TEMPLATES',         type: 'java.util.Collection',         description: 'Additional report templates' },
-];
-
 // ── Java types ────────────────────────────────────────────────────────────────
 const JAVA_TYPES = [
     { label: 'String',               snippet: 'String' },
@@ -248,7 +242,7 @@ function makeDeclarationItems(declarations, sigil, kind, alreadyInsideBrace, sor
         const snippet = alreadyInsideBrace ? decl.name : `\\$${sigil}{${decl.name}}`;
         const doc     = [
             `**${decl.type}**`,
-            decl.fullType !== decl.type ? `\`${decl.fullType}\`` : '',
+            decl.fullType && decl.fullType !== decl.type ? `\`${decl.fullType}\`` : '',
             decl.description ? `\n\n${decl.description}` : ''
         ].filter(Boolean).join('  \n');
 
@@ -356,4 +350,4 @@ const provider = vscode.languages.registerCompletionItemProvider(
     '$', '{', ' ', '.', '('
 );
 
-module.exports = { provider };
+module.exports = { provider, clearCustomJavaCache };

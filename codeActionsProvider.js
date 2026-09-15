@@ -11,7 +11,19 @@
 //    → "Add <variable name='x' ...> declaration"
 
 const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
+const { fixForFinding } = require('./xmlLintFixes');
+const { scanXml } = require('./xmlspan');
+const { removalSpan } = require('./xmlClear');
+const { decodeXml } = require('./xmlRules');
+const { fixForTextCheck } = require('./textCheck');
+
+// ── Lint rule quick fixes ─────────────────────────────────────────────────────
+
+const LINT_CODES = new Set([
+    'jrxml.lint.constantPrintWhen',
+    'jrxml.lint.removeLineWhenBlank',
+    'jrxml.lint.markupTagWithoutMarkup',
+]);
 
 // ── Insertion point helpers ───────────────────────────────────────────────────
 
@@ -74,7 +86,7 @@ const provider = vscode.languages.registerCodeActionsProvider(
                     const kind = diag.code === 'jrxml.unusedField'     ? 'field'
                                : diag.code === 'jrxml.unusedParameter' ? 'parameter'
                                :                                          'variable';
-                    const name = document.getText(diag.range);
+                    const name = decodeXml(document.getText(diag.range));
 
                     // Action 1: Jump to the declaration
                     const jumpAction = new vscode.CodeAction(
@@ -134,6 +146,55 @@ const provider = vscode.languages.registerCodeActionsProvider(
                     addAction.edit = edit;
                     actions.push(addAction);
                 }
+
+                // ── Structural lint rules ─────────────────────────────────────
+                if (LINT_CODES.has(diag.code)) {
+                    const fix = fixForFinding(document.getText(), {
+                        code:   diag.code,
+                        offset: document.offsetAt(diag.range.start),
+                    });
+                    if (!fix) continue;
+
+                    const action = new vscode.CodeAction(fix.title, vscode.CodeActionKind.QuickFix);
+                    action.diagnostics = [diag];
+                    // Removing a constant expression is a convenience; setting the
+                    // attribute is the expected fix, so prefer it.
+                    action.isPreferred = diag.code !== 'jrxml.lint.constantPrintWhen';
+
+                    const edit = new vscode.WorkspaceEdit();
+                    edit.replace(
+                        document.uri,
+                        new vscode.Range(
+                            document.positionAt(fix.edit.start),
+                            document.positionAt(fix.edit.end)
+                        ),
+                        fix.edit.replacement
+                    );
+                    action.edit = edit;
+                    actions.push(action);
+                }
+
+                // ── Text check ────────────────────────────────────────────────
+                if (diag.code === 'jrxml.textcheck') {
+                    const fix = fixForTextCheck(document.getText(), document.offsetAt(diag.range.start));
+                    if (!fix) continue;
+
+                    const action = new vscode.CodeAction(fix.title, vscode.CodeActionKind.QuickFix);
+                    action.diagnostics = [diag];
+                    action.isPreferred = true;
+
+                    const edit = new vscode.WorkspaceEdit();
+                    edit.replace(
+                        document.uri,
+                        new vscode.Range(
+                            document.positionAt(fix.edit.start),
+                            document.positionAt(fix.edit.end)
+                        ),
+                        fix.edit.replacement
+                    );
+                    action.edit = edit;
+                    actions.push(action);
+                }
             }
 
             return actions;
@@ -148,26 +209,24 @@ const provider = vscode.languages.registerCodeActionsProvider(
 
 /**
  * Build a WorkspaceEdit that removes the full declaration tag for the given
- * kind and name, including any surrounding blank lines.
+ * kind and name. The span is line-aware, so an element alone on its line takes
+ * its indentation and line break with it, while a shared line (a comment, say)
+ * keeps its layout.
  */
 function buildRemovalEdit(document, text, kind, name) {
-    // Build a regex that matches the full tag (self-closing or with children)
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const tagRe = new RegExp(
-        `\\n?[ \\t]*<${kind}\\s[^>]*name\\s*=\\s*["']${escapedName}["'][^>]*(?:\\/>|>[\\s\\S]*?<\\/${kind}>)[ \\t]*`,
-        'g'
+    const scan = scanXml(text);
+    if (scan.error) return null;
+
+    const node = scan.doc.root.children.find(
+        child => child.tag === kind && decodeXml(child.attrValue('name') || '') === name
     );
+    if (!node) return null;
 
-    const m = tagRe.exec(text);
-    if (!m) return null;
-
+    const span = removalSpan(text, node.startTag, node.end);
     const edit = new vscode.WorkspaceEdit();
     edit.delete(
         document.uri,
-        new vscode.Range(
-            document.positionAt(m.index),
-            document.positionAt(m.index + m[0].length)
-        )
+        new vscode.Range(document.positionAt(span.start), document.positionAt(span.end))
     );
     return edit;
 }

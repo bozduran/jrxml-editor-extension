@@ -3,30 +3,30 @@
 
 const vscode = require('vscode');
 const { parseDeclarations } = require('./jrxmlParser');
+const {
+    BUILTIN_VARIABLES,
+    BUILTIN_PARAMETERS,
+    BUILTIN_VARIABLE_NAMES,
+    BUILTIN_PARAMETER_NAMES,
+} = require('./jasperBuiltins');
 
-// Built-in variable/parameter descriptions for system ones
-const BUILTIN_VAR_DOCS = {
-    PAGE_NUMBER:         { type: 'Integer', desc: 'Current page number' },
-    PAGE_COUNT:          { type: 'Integer', desc: 'Total number of pages' },
-    REPORT_COUNT:        { type: 'Integer', desc: 'Total records processed across the whole report' },
-    COLUMN_NUMBER:       { type: 'Integer', desc: 'Current column number' },
-    COLUMN_COUNT:        { type: 'Integer', desc: 'Total number of columns' },
-    MASTER_CURRENT_PAGE: { type: 'Integer', desc: 'Current page in the master report' },
-    MASTER_TOTAL_PAGES:  { type: 'Integer', desc: 'Total pages in the master report' },
-};
+/**
+ * Sanitize file-derived text before appending it to a MarkdownString.
+ * Escapes markdown structural characters and collapses newlines so a crafted
+ * `<description>` cannot inject links, code spans, tables or raw HTML.
+ */
+function mdSafe(text) {
+    return String(text ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
+        .replace(/\r?\n+/g, ' ')
+        .trim();
+}
 
-const BUILTIN_PARAM_DOCS = {
-    REPORT_CONNECTION:         { type: 'java.sql.Connection',              desc: 'JDBC database connection' },
-    REPORT_DATA_SOURCE:        { type: 'JRDataSource',                     desc: 'The JRDataSource object' },
-    REPORT_PARAMETERS_MAP:     { type: 'java.util.Map',                    desc: 'Map of all report parameters' },
-    IS_IGNORE_PAGINATION:      { type: 'Boolean',                          desc: 'Disables pagination when true' },
-    REPORT_LOCALE:             { type: 'java.util.Locale',                 desc: 'Report locale' },
-    REPORT_TIME_ZONE:          { type: 'java.util.TimeZone',               desc: 'Report time zone' },
-    REPORT_FORMAT_FACTORY:     { type: 'JRFormatFactory',                  desc: 'Format factory for dates/numbers' },
-    REPORT_CLASS_LOADER:       { type: 'ClassLoader',                      desc: 'Class loader for the report' },
-    REPORT_MAX_COUNT:          { type: 'Integer',                          desc: 'Maximum number of records to process' },
-    REPORT_VIRTUALIZER:        { type: 'JRVirtualizer',                    desc: 'Virtualizer for large reports' },
-};
+/** Escape text that will be placed inside a markdown code span. */
+function mdCode(text) {
+    return String(text ?? '').replace(/`/g, '\\`');
+}
 
 /**
  * Given a document and position, detect whether the cursor is on a $F/$P/$V
@@ -65,15 +65,17 @@ const provider = vscode.languages.registerHoverProvider(
                 kind = 'Field';
             } else if (ref.sigil === 'P') {
                 decl = parsed.parameters.find(p => p.name === ref.name);
-                if (!decl && BUILTIN_PARAM_DOCS[ref.name]) {
-                    decl = { ...BUILTIN_PARAM_DOCS[ref.name], name: ref.name, type: BUILTIN_PARAM_DOCS[ref.name].type, description: BUILTIN_PARAM_DOCS[ref.name].desc };
+                if (!decl && BUILTIN_PARAMETER_NAMES.has(ref.name)) {
+                    const b = BUILTIN_PARAMETERS.find(p => p.name === ref.name);
+                    decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
                     isBuiltin = true;
                 }
                 kind = 'Parameter';
             } else if (ref.sigil === 'V') {
                 decl = parsed.variables.find(v => v.name === ref.name);
-                if (!decl && BUILTIN_VAR_DOCS[ref.name]) {
-                    decl = { ...BUILTIN_VAR_DOCS[ref.name], name: ref.name, type: BUILTIN_VAR_DOCS[ref.name].type, description: BUILTIN_VAR_DOCS[ref.name].desc };
+                if (!decl && BUILTIN_VARIABLE_NAMES.has(ref.name)) {
+                    const b = BUILTIN_VARIABLES.find(v => v.name === ref.name);
+                    decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
                     isBuiltin = true;
                 }
                 kind = 'Variable';
@@ -83,8 +85,9 @@ const provider = vscode.languages.registerHoverProvider(
             const refCount = parsed.references.filter(r => r.sigil === ref.sigil && r.name === ref.name).length;
 
             // Build markdown tooltip
+            // Rendered as UNtrusted markdown: file-derived text (descriptions,
+            // class names) must not be able to inject command: links or HTML.
             const md = new vscode.MarkdownString('', true);
-            md.isTrusted = true;
 
             if (decl) {
                 const badge  = isBuiltin ? ' *(built-in)*' : '';
@@ -93,9 +96,9 @@ const provider = vscode.languages.registerHoverProvider(
                 md.appendMarkdown(`### ${sigStr}\n\n`);
                 md.appendMarkdown(`| | |\n|---|---|\n`);
                 md.appendMarkdown(`| **Kind** | ${kind}${badge} |\n`);
-                md.appendMarkdown(`| **Type** | \`${decl.fullType || decl.type}\` |\n`);
+                md.appendMarkdown(`| **Type** | \`${mdCode(decl.fullType || decl.type)}\` |\n`);
                 if (decl.description) {
-                    md.appendMarkdown(`| **Info** | ${decl.description.replace(/\n/g, ' ')} |\n`);
+                    md.appendMarkdown(`| **Info** | ${mdSafe(decl.description)} |\n`);
                 }
                 md.appendMarkdown(`| **Used** | ${refCount} time${refCount !== 1 ? 's' : ''} in this file |\n`);
             } else {

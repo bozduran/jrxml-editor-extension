@@ -1,0 +1,19 @@
+<!-- Derived from examples/TableReport.jrxml band/frame structure, with children out of order and a comment/property between elements. -->
+<jasperReport name="SortEdgeReport" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="dddddddd-0000-0000-0000-000000000001">
+	<detail>
+		<band height="200">
+			<element kind="textField" uuid="dddddddd-0000-0000-0000-000000000002" x="0" y="40" width="100" height="20">
+				<expression><![CDATA["b"]]></expression>
+			</element>
+			<!-- belongs to the early image -->
+			<property name="com.example.belongs-to-a" value="true"/>
+			<element kind="image" uuid="dddddddd-0000-0000-0000-000000000003" x="0" y="10" width="100" height="20"/>
+			<element kind="frame" uuid="dddddddd-0000-0000-0000-000000000004" x="0" y="60" width="100" height="60">
+				<element kind="textField" uuid="dddddddd-0000-0000-0000-000000000005" x="0" y="30" width="50" height="10">
+					<expression><![CDATA["late"]]></expression>
+				</element>
+				<element kind="image" uuid="dddddddd-0000-0000-0000-000000000006" x="0" y="0" width="50" height="10"/>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

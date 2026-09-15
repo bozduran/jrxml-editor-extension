@@ -1,0 +1,5 @@
+<jasperReport name="DetailReport">
+	<detail>
+		<band height="20"/>
+	</detail>
+</jasperReport>

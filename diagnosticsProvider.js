@@ -4,22 +4,16 @@
 //   ERROR    — $F/$P/$V reference to a name that isn't declared
 //   ERROR    — unbalanced parentheses inside an expression tag
 //   WARNING  — unclosed string literal inside an expression tag
+//   WARNING  — structural lint rules (constant printWhenExpression,
+//              removeLineWhenBlank, markup tags without markup)
 
 const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
+const { parseDeclarations, clearCache } = require('./jrxmlParser');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
-
-// Built-in names that should never be flagged as "undeclared"
-const BUILTIN_VARS = new Set([
-    'PAGE_NUMBER','PAGE_COUNT','REPORT_COUNT','COLUMN_NUMBER','COLUMN_COUNT',
-    'MASTER_CURRENT_PAGE','MASTER_TOTAL_PAGES','PAGE_VARIABLE_COUNT',
-]);
-const BUILTIN_PARAMS = new Set([
-    'REPORT_CONNECTION','REPORT_DATA_SOURCE','REPORT_PARAMETERS_MAP',
-    'IS_IGNORE_PAGINATION','REPORT_LOCALE','REPORT_TIME_ZONE',
-    'REPORT_FORMAT_FACTORY','REPORT_CLASS_LOADER','REPORT_MAX_COUNT',
-    'REPORT_VIRTUALIZER','REPORT_TEMPLATES','REPORT_URL_HANDLER_FACTORY',
-]);
+const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
+const { lintXml } = require('./xmlLint');
+const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
+const { collectTextCheckIssues } = require('./textCheck');
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
@@ -35,113 +29,170 @@ function updateDiagnostics(document) {
 
     const diagnostics = [];
     const text   = document.getText();
-    const parsed = parseDeclarations(document);
+
+    // Sections are isolated: a failure in one must not blank the others.
+    let parsed;
+    try {
+        parsed = parseDeclarations(document);
+    } catch (err) {
+        console.error('[JRXML] declaration parsing failed:', err);
+        parsed = { fields: [], parameters: [], variables: [], groups: [], references: [], outline: [] };
+    }
+
+    const cfg = vscode.workspace.getConfiguration('jrxml');
+    const checkUnused = cfg.get('showUnusedWarnings', true);
+    const checkExpr   = cfg.get('validateExpressions', true);
+    const lintEnabled = {
+        constantPrintWhen:      cfg.get('lint.constantPrintWhen', true),
+        removeLineWhenBlank:    cfg.get('lint.removeLineWhenBlank', true),
+        markupTagWithoutMarkup: cfg.get('lint.markupTagWithoutMarkup', true),
+    };
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
-    const usedFields  = new Set(parsed.references.filter(r => r.sigil === 'F').map(r => r.name));
-    const usedParams  = new Set(parsed.references.filter(r => r.sigil === 'P').map(r => r.name));
-    const usedVars    = new Set(parsed.references.filter(r => r.sigil === 'V').map(r => r.name));
+    if (checkUnused) {
+        // References are collected from expression elements (plus query and
+        // subreport pass-throughs), matching the hook's ground-truth model.
+        let used;
+        try {
+            used = collectUsedNames(text);
+        } catch (err) {
+            console.error('[JRXML] reference collection failed:', err);
+            used = new Set();
+        }
 
-    for (const f of parsed.fields) {
-        if (!usedFields.has(f.name)) {
-            diagnostics.push(makeDiagnostic(
-                document, f.nameOffset, f.name.length,
-                `Field '${f.name}' is declared but never used in any expression.`,
-                vscode.DiagnosticSeverity.Warning,
-                'jrxml.unusedField'
-            ));
+        for (const f of parsed.fields) {
+            if (!used.has('FIELD:' + f.name)) {
+                diagnostics.push(makeDiagnostic(
+                    document, f.nameOffset, f.name.length,
+                    `Field '${f.name}' is declared but never used in any expression.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.unusedField'
+                ));
+            }
+        }
+
+        for (const p of parsed.parameters) {
+            if (p.isSystem || BUILTIN_PARAMETERS.has(p.name)) continue;
+            if (!used.has('PARAMETER:' + p.name)) {
+                diagnostics.push(makeDiagnostic(
+                    document, p.nameOffset, p.name.length,
+                    `Parameter '${p.name}' is declared but never used in any expression.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.unusedParameter'
+                ));
+            }
+        }
+
+        for (const v of parsed.variables) {
+            if (!used.has('VARIABLE:' + v.name)) {
+                diagnostics.push(makeDiagnostic(
+                    document, v.nameOffset, v.name.length,
+                    `Variable '${v.name}' is declared but never used in any expression.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.unusedVariable'
+                ));
+            }
         }
     }
 
-    for (const p of parsed.parameters) {
-        if (p.isSystem) continue; // skip built-in system params
-        if (!usedParams.has(p.name)) {
-            diagnostics.push(makeDiagnostic(
-                document, p.nameOffset, p.name.length,
-                `Parameter '${p.name}' is declared but never used in any expression.`,
-                vscode.DiagnosticSeverity.Warning,
-                'jrxml.unusedParameter'
-            ));
+    // ── 2. Undeclared references + 3. expression validation ───────────────────
+    if (checkExpr) {
+        const declaredFields = new Set(parsed.fields.map(f => f.name));
+        const declaredParams = new Set([...parsed.parameters.map(p => p.name), ...BUILTIN_PARAMETER_NAMES]);
+        const declaredVars   = new Set([...parsed.variables.map(v => v.name), ...BUILTIN_VARIABLE_NAMES]);
+
+        for (const ref of parsed.references) {
+            let isDeclared = false;
+            if (ref.sigil === 'F') isDeclared = declaredFields.has(ref.name);
+            else if (ref.sigil === 'P') isDeclared = declaredParams.has(ref.name);
+            else if (ref.sigil === 'V') isDeclared = declaredVars.has(ref.name);
+
+            if (!isDeclared) {
+                const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
+                // The full token is $X{name} — length = 4 + name.length
+                const tokenLen = 3 + ref.name.length + 1; // $F{ + name + }
+                diagnostics.push(makeDiagnostic(
+                    document, ref.offset, tokenLen,
+                    `${kindName} '${ref.name}' is not declared in this report.`,
+                    vscode.DiagnosticSeverity.Error,
+                    'jrxml.undeclaredReference'
+                ));
+            }
+        }
+
+        // ── Expression syntax validation ──────────────────────────────────────
+        const exprTagRe = new RegExp(
+            `(<(?<tag>${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)<\\/\\k<tag>>`,
+            'g'
+        );
+
+        let em;
+        while ((em = exprTagRe.exec(text)) !== null) {
+            const openTag    = em[1];
+            const inner      = em[3];
+            const exprOffset = em.index + openTag.length;
+
+            // Strip CDATA
+            const rawExpr = inner
+                .replace(/^\s*<!\[CDATA\[/, '')
+                .replace(/\]\]>\s*$/, '')
+                .trim();
+
+            if (!rawExpr) continue;
+
+            // Check unbalanced parens
+            const parenError = checkParens(rawExpr);
+            if (parenError) {
+                const errOffset = exprOffset + inner.indexOf(rawExpr) + parenError.index;
+                diagnostics.push(makeDiagnostic(
+                    document, errOffset, 1,
+                    parenError.message,
+                    vscode.DiagnosticSeverity.Error,
+                    'jrxml.unbalancedParen'
+                ));
+            }
+
+            // Check unclosed strings
+            const strError = checkUnclosedString(rawExpr);
+            if (strError) {
+                const errOffset = exprOffset + inner.indexOf(rawExpr) + strError.index;
+                diagnostics.push(makeDiagnostic(
+                    document, errOffset, rawExpr.length - strError.index,
+                    strError.message,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.unclosedString'
+                ));
+            }
         }
     }
 
-    for (const v of parsed.variables) {
-        if (!usedVars.has(v.name)) {
-            diagnostics.push(makeDiagnostic(
-                document, v.nameOffset, v.name.length,
-                `Variable '${v.name}' is declared but never used in any expression.`,
-                vscode.DiagnosticSeverity.Warning,
-                'jrxml.unusedVariable'
-            ));
+    // ── 4. Structural lint rules (ported from the commit-time hook) ───────────
+    // Malformed XML is skipped rather than guessed at.
+    try {
+        const lint = lintXml(text, lintEnabled);
+        if (!lint.error) {
+            for (const finding of lint.findings) {
+                diagnostics.push(makeDiagnostic(
+                    document, finding.offset, finding.length, finding.message,
+                    vscode.DiagnosticSeverity.Warning, finding.code
+                ));
+            }
         }
+    } catch (err) {
+        console.error('[JRXML] lint rules failed:', err);
     }
 
-    // ── 2. Undeclared references ──────────────────────────────────────────────
-    const declaredFields  = new Set(parsed.fields.map(f => f.name));
-    const declaredParams  = new Set([...parsed.parameters.map(p => p.name), ...BUILTIN_PARAMS]);
-    const declaredVars    = new Set([...parsed.variables.map(v => v.name), ...BUILTIN_VARS]);
-
-    for (const ref of parsed.references) {
-        let isDeclared = false;
-        if (ref.sigil === 'F') isDeclared = declaredFields.has(ref.name);
-        else if (ref.sigil === 'P') isDeclared = declaredParams.has(ref.name);
-        else if (ref.sigil === 'V') isDeclared = declaredVars.has(ref.name);
-
-        if (!isDeclared) {
-            const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
-            // The full token is $X{name} — length = 4 + name.length
-            const tokenLen = 3 + ref.name.length + 1; // $F{ + name + }
-            diagnostics.push(makeDiagnostic(
-                document, ref.offset, tokenLen,
-                `${kindName} '${ref.name}' is not declared in this report.`,
-                vscode.DiagnosticSeverity.Error,
-                'jrxml.undeclaredReference'
-            ));
-        }
-    }
-
-    // ── 3. Expression syntax validation ──────────────────────────────────────
-    const exprTagRe = new RegExp(
-        `(<(?:${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/(?:${EXPRESSION_TAGS.join('|')})>)`,
-        'g'
-    );
-
-    let em;
-    while ((em = exprTagRe.exec(text)) !== null) {
-        const openTag    = em[1];
-        const inner      = em[2];
-        const exprOffset = em.index + openTag.length;
-
-        // Strip CDATA
-        const rawExpr = inner
-            .replace(/^\s*<!\[CDATA\[/, '')
-            .replace(/\]\]>\s*$/, '')
-            .trim();
-
-        if (!rawExpr) continue;
-
-        // Check unbalanced parens
-        const parenError = checkParens(rawExpr);
-        if (parenError) {
-            const errOffset = exprOffset + inner.indexOf(rawExpr) + parenError.index;
-            diagnostics.push(makeDiagnostic(
-                document, errOffset, 1,
-                parenError.message,
-                vscode.DiagnosticSeverity.Error,
-                'jrxml.unbalancedParen'
-            ));
-        }
-
-        // Check unclosed strings
-        const strError = checkUnclosedString(rawExpr);
-        if (strError) {
-            const errOffset = exprOffset + inner.indexOf(rawExpr) + strError.index;
-            diagnostics.push(makeDiagnostic(
-                document, errOffset, rawExpr.length - strError.index,
-                strError.message,
-                vscode.DiagnosticSeverity.Warning,
-                'jrxml.unclosedString'
-            ));
+    // ── 5. Text check (double spaces, period spacing, unrenderable, newlines) ─
+    if (cfg.get('textcheck.diagnostics', true)) {
+        try {
+            for (const issue of collectTextCheckIssues(text)) {
+                diagnostics.push(makeDiagnostic(
+                    document, issue.offset, issue.length, issue.message,
+                    vscode.DiagnosticSeverity.Warning, issue.code
+                ));
+            }
+        } catch (err) {
+            console.error('[JRXML] text check failed:', err);
         }
     }
 
@@ -285,7 +336,10 @@ function register(context) {
     context.subscriptions.push(
         vscode.workspace.onDidCloseTextDocument(doc => {
             diagnosticCollection.delete(doc.uri);
-        })
+            clearCache(doc.uri);
+        }),
+        // Cancel a pending debounce when the extension deactivates
+        { dispose: () => clearTimeout(debounceTimer) }
     );
 }
 

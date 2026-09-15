@@ -19,7 +19,7 @@ const EXPRESSION_TAGS = [
 ];
 
 const TAG_PATTERN = new RegExp(
-    `<(${EXPRESSION_TAGS.join('|')})(\\s[^>]*)?>([\\s\\S]*?)<\\/(?:${EXPRESSION_TAGS.join('|')})>`,
+    `<(${EXPRESSION_TAGS.join('|')})(\\s[^>]*)?>([\\s\\S]*?)<\\/\\1>`,
     'g'
 );
 

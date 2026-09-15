@@ -2,13 +2,12 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
   },
   "publisher": "BozNtouranLabs",
-  "pricing": "Free",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -23,9 +22,6 @@
     "jasper",
     "java",
     "expression"
-  ],
-  "activationEvents": [
-    "onLanguage:jrxml"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -74,35 +70,39 @@
       },
       {
         "command": "jrxml.bp.suppressFromTree",
-        "title": "Suppress",
+        "title": "JRXML: Suppress Best Practice (hide squiggles)",
         "icon": "$(eye-closed)"
       },
       {
         "command": "jrxml.bp.unsuppressFromTree",
-        "title": "Re-enable",
-        "icon": "$(eye)"
-      },
-      {
-        "command": "jrxml.bp.suppressFromTree",
-        "title": "Suppress (hide squiggles)",
-        "icon": "$(eye-closed)"
-      },
-      {
-        "command": "jrxml.bp.unsuppressFromTree",
-        "title": "Re-enable squiggles",
+        "title": "JRXML: Re-enable Best Practice squiggles",
         "icon": "$(eye)"
       },
       {
         "command": "jrxml.bp.jumpToHit",
-        "title": "Jump to issue"
+        "title": "JRXML: Jump to Issue"
       },
       {
-        "command": "jrxml.bp.suppressRule",
-        "title": "Suppress rule"
+        "command": "jrxml.sortElements",
+        "title": "JRXML: Sort Band/Frame Elements by Position"
       },
       {
-        "command": "jrxml.bp.unsuppressRule",
-        "title": "Re-enable rule"
+        "command": "jrxml.applyClearFixes",
+        "title": "JRXML: Apply Clear Fixes (unused declarations, descriptions, jsonql)"
+      },
+      {
+        "command": "jrxml.migrateSqlQuery",
+        "title": "JRXML: Migrate SQL Query to jsonql"
+      },
+      {
+        "command": "jrxml.openSettingsPanel",
+        "title": "JRXML: Open Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "jrxml.refreshIncludeChain",
+        "title": "JRXML: Refresh Include Chain",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -118,6 +118,11 @@
           "command": "jrxml.refreshBestPractices",
           "when": "view == jrxmlBestPractices",
           "group": "navigation"
+        },
+        {
+          "command": "jrxml.refreshIncludeChain",
+          "when": "view == jrxmlIncludeChain",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -130,6 +135,16 @@
           "command": "jrxml.bp.unsuppressFromTree",
           "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressed",
           "group": "inline"
+        },
+        {
+          "command": "jrxml.sortElements",
+          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-sort",
+          "group": "inline"
+        },
+        {
+          "command": "jrxml.migrateSqlQuery",
+          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-query",
+          "group": "inline"
         }
       ]
     },
@@ -139,6 +154,8 @@
         "jrxml.indentSize": {
           "type": "number",
           "default": 4,
+          "minimum": 1,
+          "maximum": 8,
           "description": "Indent size for expression formatting"
         },
         "jrxml.autoOpenEditor": {
@@ -155,6 +172,76 @@
           "type": "boolean",
           "default": true,
           "description": "Show errors for unbalanced parentheses, unclosed strings, and undeclared $F/$P/$V references."
+        },
+        "jrxml.lint.constantPrintWhen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a <printWhenExpression> is a constant 'true' or 'false'."
+        },
+        "jrxml.lint.removeLineWhenBlank": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a textField or subreport element is missing removeLineWhenBlank=\"true\"."
+        },
+        "jrxml.lint.markupTagWithoutMarkup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a textField expression contains markup tags but markup is not \"styled\", \"html\" or \"rtf\"."
+        },
+        "jrxml.lint.nullDereference": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a $F/$P/$V reference is used as a method-call receiver without a dominating null check."
+        },
+        "jrxml.format.reportName": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: set jasperReport/@name to the file base name."
+        },
+        "jrxml.format.positionType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: add/set positionType=\"Float\" on textField and subreport elements."
+        },
+        "jrxml.format.textAdjust": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: add/set textAdjust=\"StretchHeight\" on textField elements."
+        },
+        "jrxml.format.expression": {
+          "type": "boolean",
+          "default": true,
+          "description": "Formatting: normalise operator, ternary, comma and cast spacing inside expressions."
+        },
+        "jrxml.textcheck.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Text check: replace unrenderable characters, fix period spacing, collapse double spaces and normalize newlines in text and string literals."
+        },
+        "jrxml.textcheck.diagnostics": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show warnings with quick fixes for text-check problems (double spaces, missing space after '.', unrenderable characters, newlines) in <text> CDATA and string literals."
+        },
+        "jrxml.formatOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run the format + textcheck steps when saving a .jrxml file (never the clear or sort steps)."
+        },
+        "jrxml.sort.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a diff and ask for confirmation before applying the geometry sort (the sort rewrites the whole file)."
+        },
+        "jrxml.clear.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a diff and ask for confirmation before applying clear fixes or a SQL->jsonql migration."
+        },
+        "jrxml.migrate.targetLanguage": {
+          "type": "string",
+          "default": "jsonql",
+          "description": "Language written to <query language=\"...\"> when migrating a SQL query."
         },
         "jrxml.suppressedBestPractices": {
           "type": "array",
@@ -173,14 +260,29 @@
           "name": "Best Practices (JRXML)",
           "icon": "$(lightbulb)",
           "contextualTitle": "JRXML Best Practices"
+        },
+        {
+          "id": "jrxmlIncludeChain",
+          "name": "Include Chain (JRXML)",
+          "icon": "$(references)",
+          "contextualTitle": "JRXML Include Chain"
         }
       ]
     }
   },
   "scripts": {
+    "test": "node --test test/",
+    "test:integration": "vscode-test",
+    "lint": "eslint .",
     "package": "vsce package --no-dependencies"
   },
   "devDependencies": {
-    "@vscode/vsce": "^3.3.2"
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^3.3.2",
+    "eslint": "^9.0.0",
+    "globals": "^15.0.0"
   }
 }

@@ -1,0 +1,9 @@
+<jasperReport name="ProductReport">
+	<detail>
+		<band height="20">
+			<element kind="subreport" x="0" y="0" width="200" height="20">
+				<expression><![CDATA["DetailReport"]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

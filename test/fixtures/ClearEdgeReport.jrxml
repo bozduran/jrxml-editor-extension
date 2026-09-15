@@ -1,0 +1,22 @@
+<!-- café -->
+<!-- Derived from examples/TextReport.jrxml declarations, with an unused parameter/variable/field and an entity-encoded used field. -->
+<jasperReport name="ClearEdgeReport" language="java" pageWidth="595" pageHeight="842" columnWidth="555" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20" uuid="cccccccc-0000-0000-0000-000000000001">
+	<parameter name="ReportTitle" class="java.lang.String"/>
+	<parameter name="UnusedParam" class="java.lang.String"/>
+	<field name="Total&amp;Tax" class="java.lang.String">
+		<description>a &amp; b</description>
+	</field>
+	<field name="UnusedField" class="java.lang.String"/>
+	<variable name="UnusedVar" class="java.lang.Integer"/>
+	<title height="60">
+		<element kind="textField" uuid="cccccccc-0000-0000-0000-000000000002" x="0" y="0" width="200" height="20">
+			<expression><![CDATA[$F{Total&Tax}]]></expression>
+		</element>
+		<element kind="textField" uuid="cccccccc-0000-0000-0000-000000000003" x="0" y="20" width="200" height="20">
+			<expression><![CDATA[$P{ReportTitle}]]></expression>
+		</element>
+	</title>
+	<detail>
+		<band height="20"/>
+	</detail>
+</jasperReport>

@@ -1,70 +1,130 @@
 # JRXML Editor
 
-A VS Code extension for working with JasperReports `.jrxml` files — focused on making expressions readable and editable.
+A VS Code extension for working with JasperReports `.jrxml` files — focused on making expressions readable, editable and safer.
 
 ---
 
 ## Features
 
-### 1. Syntax Highlighting
+### 1. Syntax highlighting
 `.jrxml` files get a dedicated language mode with:
-- **JasperReports built-in functions** (`TODAY`, `IF`, `SUM`, `MIN`, `MAX`, etc.) — highlighted in purple
-- **Java keywords** (`if`, `else`, `new`, `null`, `true`, `false`, …) — blue
-- **Java types** (`String`, `Integer`, `BigDecimal`, `Date`, …) — teal
-- **Method calls** — yellow
-- **Jasper field/param/variable references** (`$F{name}`, `$P{name}`, `$V{name}`, `$R{name}`) — cyan/blue
-- **String literals, numbers, comments** — standard colors
+- **JasperReports built-in functions** (`TODAY`, `IF`, `SUM`, `MIN`, `MAX`, …)
+- **Java keywords** (`if`, `else`, `new`, `null`, `true`, `false`, …)
+- **Java types** (`String`, `Integer`, `BigDecimal`, `Date`, …)
+- **Method calls** and static calls
+- **Jasper field/param/variable references** (`$F{name}`, `$P{name}`, `$V{name}`, `$R{name}`)
+- **String literals, numbers, comments** and colorized brackets
 
-### 2. Expression Editor Panel
+### 2. Expression editor panel
 Open any expression in a dedicated side panel:
 - **Edit** pane — editable text area
 - **Preview** pane — live syntax-highlighted view with bracket colorization
-- **Format** button — auto-formats Java expressions into readable multi-line form
-  - Ternary chains → indented `? / :` layout
-  - Method chains → one call per line
-  - Long `&&` / `||` / `+` lines → broken at operators
-  - Long argument lists → one arg per line
-- **Apply to File** — writes the edited expression back into the `.jrxml` file
-- **Copy** — copies expression to clipboard
-- **Reset** — reverts to the original expression
-- **Auto-format** checkbox — formats while you type
+- **Format** button — auto-formats Java expressions into readable multi-line form:
+  - ternary chains → indented `? / :` layout
+  - method chains → one call per line
+  - long `&&` / `||` expressions → broken at operators
+  - long argument lists → one argument per line
+- **Apply to File** — writes the edited expression back into the `.jrxml` file (CDATA preserved)
+- **Copy** / **Reset** — clipboard and revert to the original expression
+- **Auto-format on change** checkbox
 
-### 3. Bracket / Parenthesis Colorization
-Inside the expression preview, brackets are colored by depth:
-- Level 1: **Gold**
-- Level 2: **Orchid**
-- Level 3: **Sky blue**
+### 3. Bracket / parenthesis colorization
+Inside the expression preview, brackets are colored by depth (level 1 gold, level 2 orchid, level 3 sky blue).
 
-🔧 Updated Features section (add this)
+### 4. Diagnostics
+- Unused fields, parameters and variables
+- Undeclared `$F`/`$P`/`$V` references
+- Unbalanced parentheses and unclosed string literals
+- **Structural lint rules** ported from the project's commit-time `myhooks` hook:
+  - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
+  - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing `removeLineWhenBlank="true"` (or with another value)
+  - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField expression while `markup` is not `styled`, `html` or `rtf`
+  - `jrxml.lint.uncheckedNullDereference` — a `$F`/`$P`/`$V` reference used as a method-call receiver without a dominating null check (short-circuit aware: `!= null &&`, `== null ||`, ternaries, `EQUALS(x, null)`, `Objects.nonNull`/`isNull`/`equals`)
 
-### 4. Best Practices & Null Safety Recommendations
+  The first three have quick fixes and can be switched off individually. The hook's structural
+  `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
+- **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
+- Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
 
-The editor provides inline recommendations to improve expression quality:
+### 5. Document formatting and text check
+The hook's `format` + `textcheck` steps run through **Format Document** and the
+`source.fixAll.jrxml` action **"Fix all JRXML format and text issues"**:
 
-Suggests null-safe patterns (e.g., avoiding direct .toString() on nullable values)
-Encourages defensive checks ($F{field} != null)
-Highlights risky constructs that may cause runtime exceptions in JasperReports
-Promotes cleaner, more maintainable expressions
+- **report name** — `jasperReport/@name` set to the file base name
+- **positionType** — add/set `positionType="Float"` on `textField` and `subreport`
+- **textAdjust** — add/set `textAdjust="StretchHeight"` on `textField`
+- **expression spacing** — `==` `!=` `<` `>` `>=` `<=` `&&` `||`, ternaries, commas and
+  uppercase-reference casts. Generic type arguments, string/char/text-block literals and
+  `$F{}`/`$P{}`/`$V{}`/`$P!{}` references are left byte-for-byte untouched
+- **text check** — replaces unrenderable characters, adds a space after `.` before a capital,
+  collapses double spaces, and normalizes newlines to the element's `markup` token
 
-### 5. Smart Autocomplete (Experimental)
+Formatting only runs when you ask for it (Format Document, the fix-all action, or opt-in
+`jrxml.formatOnSave`) and never reorders elements or deletes declarations.
 
-Autocomplete is enhanced with JRXML-aware intelligence:
+### 6. Best practices
+| Rule | What it flags |
+|------|---------------|
+| `jrxml.bp001.booleanEquals` | `==`/`!=` on Boolean values → use `EQUALS(...)` / `NOT(EQUALS(...))` |
 
-Suggests fields, parameters, and variables ($F, $P, $V)
-Includes jaspersoft native functions
-Detects and includes user-defined helper functions
-Scans project files to provide custom function suggestions
-Improves discoverability of reusable logic
+Warnings can be suppressed per rule from the **Best Practices (JRXML)** view or the lightbulb menu; quick fixes remain available while suppressed. The former `bp002`/`bp003` null-safety rules were retired in favour of the more precise `jrxml.lint.uncheckedNullDereference` diagnostic.
+
+The view also lists **file-level issues**, each with an inline action:
+
+- *Elements are not sorted by position* → opens the sort diff preview
+- *SQL query can be migrated to …* → runs the SQL→jsonql migration
+
+### 7. Clear fixes and geometry sort
+Two destructive steps are opt-in commands, always previewed as a diff before applying:
+
+- **Clear fixes** (`JRXML: Apply Clear Fixes`) — delete unused declarations (never the
+  built-in parameters), sync field descriptions with their jsonql property, and fix the
+  legacy/jsonql property. Unused detection collects references from expressions only, so a
+  `$F{x}` inside a comment or description does not count as usage.
+- **SQL → jsonql** (`JRXML: Migrate SQL Query to jsonql`) — asks for the jsonql expression
+  and rewrites the `<query>` language and body; an empty answer applies nothing.
+- **Sort** (`JRXML: Sort Band/Frame Elements by Position`) — reorders each band/frame's
+  direct `<element>` children by y then x, moving each element's comment/property trivia
+  with it; missing coordinates and overlaps are reported as warnings.
+
+### 8. Smart autocomplete
+Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
+
+### 9. Settings panel
+**JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
+
+### 10. Include chain view
+The **Include Chain (JRXML)** view sits below Best Practices and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
+
+A file *calls* another when it contains a double-quoted token equal to that file's base name (the commit-hook rule), so subreports are picked up however their expression is written. The workspace is scanned once (`**/*.jrxml`, excluding `node_modules`/`out`/`target`/`bin`), cached by file mtime, and refreshed when the active editor changes, on edits and saves, on file create/delete/rename and on workspace-folder changes — or manually via **JRXML: Refresh Include Chain**.
 
 ---
 
 ## Usage
 
 1. Open any `.jrxml` file
-2. Place your cursor **inside** an expression tag (e.g., `<textFieldExpression>`)
+2. Place your cursor **inside** an expression tag (e.g. `<textFieldExpression>`)
 3. Either:
    - Right-click → **JRXML: Open Expression Editor**
-   - Click **`$(edit) JRXML Expr`** in the status bar (bottom right)
+   - Click **`$(edit) JRXML Expr`** in the status bar (bottom right), or run **JRXML: Open Expression Editor** from the command palette
+
+---
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `JRXML: Open Expression Editor` | Open the expression under the cursor in the side panel |
+| `JRXML: Go to Declaration` | Jump from `$F{}`/`$P{}`/`$V{}` to its declaration |
+| `JRXML: Refresh Best Practices` | Re-run the best-practice rules |
+| `JRXML: Suppress Best Practice Rule` | Hide squiggles for a rule (quick fixes stay) |
+| `JRXML: Re-enable Best Practice Rule` | Restore squiggles for a rule |
+| `JRXML: Jump to Issue` | Move the cursor to a reported best-practice hit |
+| `JRXML: Sort Band/Frame Elements by Position` | Reorder band/frame elements by geometry (previewed) |
+| `JRXML: Apply Clear Fixes` | Delete unused declarations, sync descriptions, fix jsonql (previewed) |
+| `JRXML: Migrate SQL Query to jsonql` | Prompt for jsonql and rewrite the `<query>` element |
+| `JRXML: Open Settings` | Open the dedicated JRXML settings panel |
+| `JRXML: Refresh Include Chain` | Re-scan the workspace for the include-chain view |
 
 ---
 
@@ -72,28 +132,55 @@ Improves discoverability of reusable logic
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `jrxml.indentSize` | `4` | Spaces per indent level when formatting |
-| `jrxml.autoOpenEditor` | `false` | Auto-open editor when cursor enters an expression |
+| `jrxml.indentSize` | `4` | Spaces per indent level when formatting expressions |
+| `jrxml.autoOpenEditor` | `false` | Auto-open the editor when the cursor enters an expression |
+| `jrxml.showUnusedWarnings` | `true` | Warn about declared fields/parameters/variables that are never used |
+| `jrxml.validateExpressions` | `true` | Error on unbalanced parentheses, unclosed strings and undeclared `$F`/`$P`/`$V` references |
+| `jrxml.lint.constantPrintWhen` | `true` | Warn when `<printWhenExpression>` is a constant `true`/`false` |
+| `jrxml.lint.removeLineWhenBlank` | `true` | Warn when a `textField`/`subreport` is missing `removeLineWhenBlank="true"` |
+| `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
+| `jrxml.lint.nullDereference` | `true` | Warn on an unguarded `$F`/`$P`/`$V` method-call receiver |
+| `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
+| `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
+| `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
+| `jrxml.format.expression` | `true` | Normalize expression operator/ternary/comma/cast spacing |
+| `jrxml.textcheck.enabled` | `true` | Rendered-text rules in text and string literals |
+| `jrxml.textcheck.diagnostics` | `true` | Show warnings + quick fixes for text-check problems |
+| `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
+| `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
+| `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |
+| `jrxml.migrate.targetLanguage` | `jsonql` | Language written to `<query language="...">` when migrating a SQL query |
+| `jrxml.suppressedBestPractices` | `[]` | Best-practice rule IDs whose squiggles are hidden |
 
 ---
 
 ## Installation
 
-### From .vsix file
+### From a `.vsix` file
 1. Open VS Code
 2. `Ctrl+Shift+P` → **Extensions: Install from VSIX...**
-3. Select `jrxml-editor-extension-1.0.0.vsix`
+3. Select the packaged `jrxml-editor-extension-<version>.vsix` (build it with `npm run package`)
 
 ### Manual (development)
 ```
-cd jrxml-editor-extension
 npm install
 ```
 Press `F5` in VS Code to launch the Extension Development Host.
 
+### Tests and linting
+```
+npm test                 # node:test unit suite (parser, formatter, rules, webview HTML)
+npm run test:integration # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
+npm run lint             # eslint
+```
+The unit suite runs on plain Node with no VS Code needed. The integration suite
+activates the extension for real and covers command registration, diagnostics,
+the sort/clear commands (preview disabled), document formatting and the settings
+panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
+
 ---
 
-## Supported Expression Tags
+## Supported expression tags
 
 The editor activates for cursor positions inside any of these tags:
 
@@ -102,3 +189,9 @@ The editor activates for cursor positions inside any of these tags:
 `jr:expression`, `defaultValueExpression`, `hyperlinkReferenceExpression`,
 `subreportExpression`, `bucketExpression`, `keyExpression`, `valueExpression`,
 `categoryExpression`, `seriesExpression`, `labelExpression`, and more.
+
+---
+
+## Security notes
+
+The expression panel webview is rendered with a nonce-based Content-Security-Policy and no inline event handlers; expression text is escaped before being embedded, so `.jrxml` content cannot inject script into the panel. Hovers are rendered as untrusted markdown.

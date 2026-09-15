@@ -32,7 +32,7 @@ function formatExpression(expr, indentSize = 4) {
     }
 
     // 5. Expand long argument lists — using a proper paren-aware scanner
-    result = formatLongArgumentLists(result, indent);
+    result = formatLongArgumentLists(result, indent, indent);
 
     return result;
 }
@@ -249,7 +249,7 @@ function formatBinaryOperators(expr, indent) {
  * then puts each argument on its own line.
  * Uses a character-level scanner so nested parens don't confuse it.
  */
-function formatLongArgumentLists(expr, indent) {
+function formatLongArgumentLists(expr, indent, indentUnit = '    ') {
     let result = '';
     let i = 0;
 
@@ -280,9 +280,12 @@ function formatLongArgumentLists(expr, indent) {
             if (args.length >= 2) {
                 // Recursively format each argument (handles nested calls)
                 const formattedArgs = args
-                    .map(a => indent + formatLongArgumentLists(a.trim(), indent + '    '))
+                    .map(a => indent + formatLongArgumentLists(a.trim(), indent + indentUnit, indentUnit))
                     .join(',\n');
-                result += fnName + '(\n' + formattedArgs + '\n' + indent.slice(0, Math.max(0, indent.length - 4)) + ')';
+                const outdent = indent.length >= indentUnit.length
+                    ? indent.slice(0, indent.length - indentUnit.length)
+                    : '';
+                result += fnName + '(\n' + formattedArgs + '\n' + outdent + ')';
                 i = parenEnd + 1;
                 continue;
             }
@@ -391,25 +394,4 @@ function splitTopLevelCommas(str) {
     return result;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// On-save lightweight cleanup (comma/operator spacing only — no line breaks)
-// ─────────────────────────────────────────────────────────────────────────────
-
-function normalizeCommaSpacing(expr) {
-    if (!expr || !expr.trim()) return expr;
-    try {
-        const parts = splitRespectingStrings(expr);
-        return parts.map((p, i) => {
-            if (i % 2 !== 0) return p; // inside string — untouched
-            return p
-                .replace(/\s*,\s*/g, ', ')
-                .replace(/\s*;\s*/g, '; ')
-                .replace(/([^!<>=])\s*(==|!=|<=|>=|&&|\|\|)\s*/g, '$1 $2 ')
-                .replace(/([^ \t\n]) {2,}/g, '$1 ');
-        }).join('');
-    } catch (_) {
-        return expr;
-    }
-}
-
-module.exports = { formatExpression, normalizeCommaSpacing };
+module.exports = { formatExpression };
