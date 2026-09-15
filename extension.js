@@ -19,6 +19,7 @@ const {
 const { register: registerSort } = require('./sortProvider');
 const { register: registerClear } = require('./clearProvider');
 const { register: registerSettingsPanel } = require('./settingsPanel');
+const { register: registerIncludeChain } = require('./includeChainView');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -67,6 +68,9 @@ function activate(context) {
 
     // ── Dedicated settings panel ─────────────────────────────────────────────
     registerSettingsPanel(context);
+
+    // ── Include-chain view (where the open report is called from) ─────────────
+    registerIncludeChain(context);
 
     // Diff previews for whole-file rewrites
     context.subscriptions.push(previewProvider);

@@ -98,6 +98,11 @@
         "command": "jrxml.openSettingsPanel",
         "title": "JRXML: Open Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "jrxml.refreshIncludeChain",
+        "title": "JRXML: Refresh Include Chain",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -112,6 +117,11 @@
         {
           "command": "jrxml.refreshBestPractices",
           "when": "view == jrxmlBestPractices",
+          "group": "navigation"
+        },
+        {
+          "command": "jrxml.refreshIncludeChain",
+          "when": "view == jrxmlIncludeChain",
           "group": "navigation"
         }
       ],
@@ -250,6 +260,12 @@
           "name": "Best Practices (JRXML)",
           "icon": "$(lightbulb)",
           "contextualTitle": "JRXML Best Practices"
+        },
+        {
+          "id": "jrxmlIncludeChain",
+          "name": "Include Chain (JRXML)",
+          "icon": "$(references)",
+          "contextualTitle": "JRXML Include Chain"
         }
       ]
     }

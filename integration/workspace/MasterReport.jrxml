@@ -1,0 +1,12 @@
+<jasperReport name="MasterReport">
+	<detail>
+		<band height="40">
+			<element kind="subreport" x="0" y="0" width="200" height="20">
+				<expression><![CDATA["ProductReport"]]></expression>
+			</element>
+			<element kind="subreport" x="0" y="20" width="200" height="20">
+				<expression><![CDATA["DetailReport"]]></expression>
+			</element>
+		</band>
+	</detail>
+</jasperReport>

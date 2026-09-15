@@ -159,4 +159,40 @@ suite('JRXML extension smoke', () => {
         assert.ok(tab, 'JRXML Settings tab was not opened');
         await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     });
+
+    test('resolves the include chain of the open report', async () => {
+        const uri = vscode.Uri.file(path.join(__dirname, 'workspace', 'DetailReport.jrxml'));
+        await openDocument(uri);
+
+        const { computeTree } = require('../includeChainView');
+        const tree = await computeTree(uri);
+
+        assert.ok(tree.length >= 1, 'expected at least one top template');
+        assert.match(tree[0].path, /MasterReport\.jrxml$/);
+
+        const current = findNode(tree, node => node.current);
+        assert.ok(current, 'the open report should be marked current');
+        assert.match(current.path, /DetailReport\.jrxml$/);
+    });
+
+    test('marks a report nothing calls as not referenced', async () => {
+        const uri = vscode.Uri.file(path.join(__dirname, 'workspace', 'OrphanReport.jrxml'));
+        await openDocument(uri);
+
+        const { computeTree } = require('../includeChainView');
+        const tree = await computeTree(uri);
+
+        assert.strictEqual(tree.length, 1);
+        assert.strictEqual(tree[0].current, true);
+        assert.deepStrictEqual(tree[0].children, []);
+    });
 });
+
+function findNode(nodes, predicate) {
+    for (const node of nodes) {
+        if (predicate(node)) return node;
+        const found = findNode(node.children || [], predicate);
+        if (found) return found;
+    }
+    return null;
+}

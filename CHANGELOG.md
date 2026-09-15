@@ -129,5 +129,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   contributed command is registered, and exercises diagnostics, the sort and
   clear commands (preview disabled), document formatting and the settings panel.
 
+### Added
+- New Explorer view **Include Chain (JRXML)**, shown right after Best Practices.
+  For the open report it renders the chain of templates that include it,
+  **top-down** from the top template to the open file (highlighted), following
+  the hook's base-name rule: a file calls another when it contains a quoted token
+  equal to that file's base name. Nodes are workspace-relative paths that open
+  the file on click, and a report nothing calls shows `(not referenced)`.
+- The chain view scans the workspace once (`**/*.jrxml`, excluding
+  `node_modules`/`out`/`target`/`bin`), caches file text by mtime, and refreshes
+  on active-editor changes, edits, saves, file create/delete/rename and
+  workspace-folder changes, plus the `jrxml.refreshIncludeChain` command.
+
 ### Not ported (deliberately)
 - The hook's `validate`/`compile` gate — it needs the JasperReports engine.

@@ -1,0 +1,5 @@
+<jasperReport name="OrphanReport">
+	<detail>
+		<band height="20"/>
+	</detail>
+</jasperReport>

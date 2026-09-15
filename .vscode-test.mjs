@@ -5,6 +5,8 @@ import { defineConfig } from '@vscode/test-cli';
 export default defineConfig({
     files: 'integration/**/*.test.js',
     version: 'stable',
+    // Small fixture workspace so include-chain tests have real files to scan.
+    workspaceFolder: './integration/workspace',
     launchArgs: [
         '--disable-extensions',
         '--disable-workspace-trust',
