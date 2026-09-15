@@ -14,21 +14,25 @@ const KIND_MAP = {
     parameter:  vscode.SymbolKind.TypeParameter,
     variable:   vscode.SymbolKind.Variable,
     textField:  vscode.SymbolKind.String,
-    staticText: vscode.SymbolKind.Constant,
-    image:      vscode.SymbolKind.File,
 };
 
 /**
  * Convert our internal OutlineNode tree into VS Code DocumentSymbol tree.
+ *
+ * Every node carries an explicit `[offset, end]` span so that a parent's range
+ * contains its children's ranges — VS Code rejects symbol trees that violate
+ * this, and selection/breadcrumb navigation depends on it.
+ *
  * @param {import('./jrxmlParser').OutlineNode[]} nodes
  * @param {vscode.TextDocument} document
  * @returns {vscode.DocumentSymbol[]}
  */
 function nodesToSymbols(nodes, document) {
     return nodes.map(node => {
-        const pos    = document.positionAt(node.offset);
-        const range  = new vscode.Range(pos, pos);
-        const kind   = KIND_MAP[node.kind] ?? vscode.SymbolKind.Object;
+        const start = document.positionAt(node.offset);
+        const end   = document.positionAt(Math.max(node.offset, node.end ?? node.offset));
+        const range = new vscode.Range(start, end);
+        const kind  = KIND_MAP[node.kind] ?? vscode.SymbolKind.Object;
 
         const symbol = new vscode.DocumentSymbol(
             node.name,
@@ -61,4 +65,4 @@ const provider = vscode.languages.registerDocumentSymbolProvider(
     }
 );
 
-module.exports = { provider };
+module.exports = { provider, nodesToSymbols };
