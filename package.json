@@ -85,6 +85,14 @@
       {
         "command": "jrxml.sortElements",
         "title": "JRXML: Sort Band/Frame Elements by Position"
+      },
+      {
+        "command": "jrxml.applyClearFixes",
+        "title": "JRXML: Apply Clear Fixes (unused declarations, descriptions, jsonql)"
+      },
+      {
+        "command": "jrxml.migrateSqlQuery",
+        "title": "JRXML: Migrate SQL Query to jsonql"
       }
     ],
     "menus": {
@@ -189,6 +197,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show a diff and ask for confirmation before applying the geometry sort (the sort rewrites the whole file)."
+        },
+        "jrxml.clear.preview": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a diff and ask for confirmation before applying clear fixes or a SQL->jsonql migration."
         },
         "jrxml.suppressedBestPractices": {
           "type": "array",

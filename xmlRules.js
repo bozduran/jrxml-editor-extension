@@ -45,32 +45,61 @@ function withDefaults(enabled) {
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
 
+// Single-pass entity decoding: the five named entities plus numeric references.
+// Unknown or malformed references are left verbatim, matching the hook.
 function decodeXml(value) {
-    return String(value).replace(/&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/g, (m, entity) => {
-        switch (entity) {
-            case 'amp':  return '&';
-            case 'lt':   return '<';
-            case 'gt':   return '>';
-            case 'quot': return '"';
-            case 'apos': return "'";
+    const text = String(value);
+    if (!text.includes('&')) return text;
+
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        if (text[i] !== '&') { out += text[i]; i++; continue; }
+
+        const semi = text.indexOf(';', i + 1);
+        if (semi < 0 || semi - i > 12) { out += text[i]; i++; continue; }
+
+        const name = text.slice(i + 1, semi);
+        let decoded = null;
+        switch (name) {
+            case 'amp':  decoded = '&';  break;
+            case 'lt':   decoded = '<';  break;
+            case 'gt':   decoded = '>';  break;
+            case 'quot': decoded = '"';  break;
+            case 'apos': decoded = "'";  break;
             default: break;
         }
-        if (entity[0] === '#') {
-            const cp = entity[1] === 'x' || entity[1] === 'X'
-                ? parseInt(entity.slice(2), 16)
-                : parseInt(entity.slice(1), 10);
-            return Number.isFinite(cp) ? String.fromCodePoint(cp) : m;
+        if (decoded === null && name.startsWith('#')) {
+            const hex = name[1] === 'x' || name[1] === 'X';
+            const code = hex ? parseInt(name.slice(2), 16) : parseInt(name.slice(1), 10);
+            if (Number.isInteger(code) && code >= 0 && code <= 0x10FFFF) {
+                decoded = String.fromCodePoint(code);
+            }
         }
-        return m;
-    });
+        if (decoded === null) { out += text[i]; i++; continue; }
+
+        out += decoded;
+        i = semi + 1;
+    }
+    return out;
 }
 
+/** XML text encoding: the five entities. */
 function encodeXml(value) {
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+/** Encoding for a double-quoted XML attribute, including whitespace controls. */
+function encodeAttribute(value) {
+    return encodeXml(value)
+        .replace(/\n/g, '&#10;')
+        .replace(/\r/g, '&#13;')
+        .replace(/\t/g, '&#9;');
 }
 
 /** CDATA body of an element, or null when the element has none. */
@@ -343,6 +372,7 @@ module.exports = {
     beforeClose,
     decodeXml,
     encodeXml,
+    encodeAttribute,
     EXPRESSION_ELEMENTS,
     POSITION_TYPE_KINDS,
 };

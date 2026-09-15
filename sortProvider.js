@@ -3,24 +3,14 @@
 //
 // Sorting rewrites the whole file, so it is never silent: the command opens a
 // diff of the current document against the sorted result and only applies it
-// when the user confirms.
+// when the user confirms (unless jrxml.sort.preview is off).
 
 const vscode = require('vscode');
 const path   = require('path');
 const { discoverSortFix } = require('./xmlSort');
-
-const SCHEME = 'jrxml-sort-preview';
-const previews = new Map();
-
-const contentProvider = vscode.workspace.registerTextDocumentContentProvider(SCHEME, {
-    provideTextDocumentContent(uri) {
-        return previews.get(uri.toString()) || '';
-    },
-});
+const preview = require('./preview');
 
 function register(context) {
-    context.subscriptions.push(contentProvider);
-
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.sortElements', async () => {
             const editor = vscode.window.activeTextEditor;
@@ -36,13 +26,7 @@ function register(context) {
                 return;
             }
 
-            const previewUri = vscode.Uri.from({
-                scheme: SCHEME,
-                path:   '/' + path.basename(document.fileName),
-                query:  String(Date.now()),
-            });
-            previews.set(previewUri.toString(), fix.edit.replacement);
-
+            const previewUri = preview.put(path.basename(document.fileName), fix.edit.replacement);
             try {
                 await vscode.commands.executeCommand(
                     'vscode.diff',
@@ -51,8 +35,7 @@ function register(context) {
                     `Sort elements: ${path.basename(document.fileName)}`
                 );
 
-                const preview = vscode.workspace.getConfiguration('jrxml').get('sort.preview', true);
-                if (preview) {
+                if (vscode.workspace.getConfiguration('jrxml').get('sort.preview', true)) {
                     const choice = await vscode.window.showInformationMessage(
                         'Apply the geometry sort?',
                         { modal: true },
@@ -77,10 +60,10 @@ function register(context) {
                     vscode.window.showErrorMessage('Failed to apply the sort.');
                 }
             } finally {
-                previews.delete(previewUri.toString());
+                preview.drop(previewUri);
             }
         })
     );
 }
 
-module.exports = { register, SCHEME };
+module.exports = { register };

@@ -12,6 +12,9 @@
 
 const vscode = require('vscode');
 const { fixForFinding } = require('./xmlLintFixes');
+const { scanXml } = require('./xmlspan');
+const { removalSpan } = require('./xmlClear');
+const { decodeXml } = require('./xmlRules');
 
 // ── Lint rule quick fixes ─────────────────────────────────────────────────────
 
@@ -82,7 +85,7 @@ const provider = vscode.languages.registerCodeActionsProvider(
                     const kind = diag.code === 'jrxml.unusedField'     ? 'field'
                                : diag.code === 'jrxml.unusedParameter' ? 'parameter'
                                :                                          'variable';
-                    const name = document.getText(diag.range);
+                    const name = decodeXml(document.getText(diag.range));
 
                     // Action 1: Jump to the declaration
                     const jumpAction = new vscode.CodeAction(
@@ -183,26 +186,24 @@ const provider = vscode.languages.registerCodeActionsProvider(
 
 /**
  * Build a WorkspaceEdit that removes the full declaration tag for the given
- * kind and name, including any surrounding blank lines.
+ * kind and name. The span is line-aware, so an element alone on its line takes
+ * its indentation and line break with it, while a shared line (a comment, say)
+ * keeps its layout.
  */
 function buildRemovalEdit(document, text, kind, name) {
-    // Build a regex that matches the full tag (self-closing or with children)
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const tagRe = new RegExp(
-        `\\n?[ \\t]*<${kind}\\s[^>]*name\\s*=\\s*["']${escapedName}["'][^>]*(?:\\/>|>[\\s\\S]*?<\\/${kind}>)[ \\t]*`,
-        'g'
+    const scan = scanXml(text);
+    if (scan.error) return null;
+
+    const node = scan.doc.root.children.find(
+        child => child.tag === kind && decodeXml(child.attrValue('name') || '') === name
     );
+    if (!node) return null;
 
-    const m = tagRe.exec(text);
-    if (!m) return null;
-
+    const span = removalSpan(text, node.startTag, node.end);
     const edit = new vscode.WorkspaceEdit();
     edit.delete(
         document.uri,
-        new vscode.Range(
-            document.positionAt(m.index),
-            document.positionAt(m.index + m[0].length)
-        )
+        new vscode.Range(document.positionAt(span.start), document.positionAt(span.end))
     );
     return edit;
 }

@@ -12,6 +12,7 @@ const { parseDeclarations, clearCache } = require('./jrxmlParser');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
+const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
@@ -40,12 +41,12 @@ function updateDiagnostics(document) {
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
     if (checkUnused) {
-        const usedFields = new Set(parsed.references.filter(r => r.sigil === 'F').map(r => r.name));
-        const usedParams = new Set(parsed.references.filter(r => r.sigil === 'P').map(r => r.name));
-        const usedVars   = new Set(parsed.references.filter(r => r.sigil === 'V').map(r => r.name));
+        // References are collected from expression elements (plus query and
+        // subreport pass-throughs), matching the hook's ground-truth model.
+        const used = collectUsedNames(text);
 
         for (const f of parsed.fields) {
-            if (!usedFields.has(f.name)) {
+            if (!used.has('FIELD:' + f.name)) {
                 diagnostics.push(makeDiagnostic(
                     document, f.nameOffset, f.name.length,
                     `Field '${f.name}' is declared but never used in any expression.`,
@@ -56,8 +57,8 @@ function updateDiagnostics(document) {
         }
 
         for (const p of parsed.parameters) {
-            if (p.isSystem) continue; // skip built-in system params
-            if (!usedParams.has(p.name)) {
+            if (p.isSystem || BUILTIN_PARAMETERS.has(p.name)) continue;
+            if (!used.has('PARAMETER:' + p.name)) {
                 diagnostics.push(makeDiagnostic(
                     document, p.nameOffset, p.name.length,
                     `Parameter '${p.name}' is declared but never used in any expression.`,
@@ -68,7 +69,7 @@ function updateDiagnostics(document) {
         }
 
         for (const v of parsed.variables) {
-            if (!usedVars.has(v.name)) {
+            if (!used.has('VARIABLE:' + v.name)) {
                 diagnostics.push(makeDiagnostic(
                     document, v.nameOffset, v.name.length,
                     `Variable '${v.name}' is declared but never used in any expression.`,
