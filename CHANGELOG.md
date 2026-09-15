@@ -74,8 +74,25 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   textcheck. `jrxml.formatOnSave` returns as an explicit opt-in backed by a
   `WorkspaceEdit`.
 
+- Ported the hook's `clear` step: expression-scoped unused-declaration deletion
+  with the hook's built-in parameter exemptions and line-aware removal,
+  description/jsonql synchronization, the legacy→jsonql rename/remove/add fixes,
+  and SQL→jsonql query migration. `jrxml.applyClearFixes` and
+  `jrxml.migrateSqlQuery` preview the change first.
+- Ported the hook's `sort` step: band/frame direct element children ordered by
+  y then x, moving each element's preceding trivia, with missing-coordinate and
+  overlap warnings; `jrxml.sortElements` shows a diff before applying.
+- Added `jrxml.lint.uncheckedNullDereference`, backed by a scoped Java
+  expression parser (`javaParser.js`): short-circuit-aware null-check analysis
+  recognising `!= null` / `== null` (either operand order), `!(...)`,
+  `EQUALS(ref, null)` and `Objects.equals`/`nonNull`/`isNull`. The former
+  `jrxml.bp002.nullSafeString` and `jrxml.bp003.optionalNullable` best practices
+  are retired in its favour.
+- The unused-declaration diagnostics and their "Remove unused…" quick fix now
+  use the same expression-scoped reference collection and line-aware removal as
+  the clear step.
+- Shared diff-preview provider (`preview.js`), and XML entity decoding/encoding
+  aligned with the hook (single-pass named+numeric decode, attribute encoder).
+
 ### Not ported (deliberately)
 - The hook's `validate`/`compile` gate — it needs the JasperReports engine.
-- The null-dereference lint rule — it overlaps the existing null-safety best
-  practices and needs a Java expression parser.
-- The mutating `clear` and `sort` steps.

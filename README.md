@@ -39,8 +39,9 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
   - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing `removeLineWhenBlank="true"` (or with another value)
   - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField expression while `markup` is not `styled`, `html` or `rtf`
+  - `jrxml.lint.uncheckedNullDereference` — a `$F`/`$P`/`$V` reference used as a method-call receiver without a dominating null check (short-circuit aware: `!= null &&`, `== null ||`, ternaries, `EQUALS(x, null)`, `Objects.nonNull`/`isNull`/`equals`)
 
-  Each has a quick fix and can be switched off individually. The hook's structural
+  The first three have quick fixes and can be switched off individually. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
 
@@ -60,18 +61,27 @@ The hook's `format` + `textcheck` steps run through **Format Document** and the
 Formatting only runs when you ask for it (Format Document, the fix-all action, or opt-in
 `jrxml.formatOnSave`) and never reorders elements or deletes declarations.
 
-### 6. Best practices & null-safety recommendations
-An extensible rules engine surfaces inline recommendations and quick fixes:
-
+### 6. Best practices
 | Rule | What it flags |
 |------|---------------|
 | `jrxml.bp001.booleanEquals` | `==`/`!=` on Boolean values → use `EQUALS(...)` / `NOT(EQUALS(...))` |
-| `jrxml.bp002.nullSafeString` | `$F{x}.equals("literal")` → flip to `"literal".equals($F{x})` |
-| `jrxml.bp003.optionalNullable` | bare nullable references → `Optional.ofNullable($F{x}).orElse(<default>)` |
 
-Warnings can be suppressed per rule from the **Best Practices (JRXML)** view or the lightbulb menu; quick fixes remain available while suppressed.
+Warnings can be suppressed per rule from the **Best Practices (JRXML)** view or the lightbulb menu; quick fixes remain available while suppressed. The former `bp002`/`bp003` null-safety rules were retired in favour of the more precise `jrxml.lint.uncheckedNullDereference` diagnostic.
 
-### 7. Smart autocomplete
+### 7. Clear fixes and geometry sort
+Two destructive steps are opt-in commands, always previewed as a diff before applying:
+
+- **Clear fixes** (`JRXML: Apply Clear Fixes`) — delete unused declarations (never the
+  built-in parameters), sync field descriptions with their jsonql property, and fix the
+  legacy/jsonql property. Unused detection collects references from expressions only, so a
+  `$F{x}` inside a comment or description does not count as usage.
+- **SQL → jsonql** (`JRXML: Migrate SQL Query to jsonql`) — asks for the jsonql expression
+  and rewrites the `<query>` language and body; an empty answer applies nothing.
+- **Sort** (`JRXML: Sort Band/Frame Elements by Position`) — reorders each band/frame's
+  direct `<element>` children by y then x, moving each element's comment/property trivia
+  with it; missing coordinates and overlaps are reported as warnings.
+
+### 8. Smart autocomplete
 Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
 
 ---
@@ -96,6 +106,9 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `JRXML: Suppress Best Practice Rule` | Hide squiggles for a rule (quick fixes stay) |
 | `JRXML: Re-enable Best Practice Rule` | Restore squiggles for a rule |
 | `JRXML: Jump to Issue` | Move the cursor to a reported best-practice hit |
+| `JRXML: Sort Band/Frame Elements by Position` | Reorder band/frame elements by geometry (previewed) |
+| `JRXML: Apply Clear Fixes` | Delete unused declarations, sync descriptions, fix jsonql (previewed) |
+| `JRXML: Migrate SQL Query to jsonql` | Prompt for jsonql and rewrite the `<query>` element |
 
 ---
 
@@ -110,12 +123,15 @@ Context-aware completion for fields, parameters and variables, JasperReports bui
 | `jrxml.lint.constantPrintWhen` | `true` | Warn when `<printWhenExpression>` is a constant `true`/`false` |
 | `jrxml.lint.removeLineWhenBlank` | `true` | Warn when a `textField`/`subreport` is missing `removeLineWhenBlank="true"` |
 | `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
+| `jrxml.lint.nullDereference` | `true` | Warn on an unguarded `$F`/`$P`/`$V` method-call receiver |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
 | `jrxml.format.expression` | `true` | Normalize expression operator/ternary/comma/cast spacing |
 | `jrxml.textcheck.enabled` | `true` | Rendered-text rules in text and string literals |
 | `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
+| `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
+| `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |
 | `jrxml.suppressedBestPractices` | `[]` | Best-practice rule IDs whose squiggles are hidden |
 
 ---
