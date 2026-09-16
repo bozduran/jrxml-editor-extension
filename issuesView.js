@@ -142,7 +142,22 @@ class IssuesProvider {
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
-async function jumpToHit(issue) {
+/** Tree-item commands receive the TreeItem; item.command passes the issue. */
+function toIssue(arg) {
+    return arg && arg.issue ? arg.issue : arg;
+}
+
+function rangeOf(issue) {
+    return new vscode.Range(
+        issue.line,
+        issue.character,
+        issue.endLine ?? issue.line,
+        issue.endCharacter ?? issue.character
+    );
+}
+
+async function jumpToHit(arg) {
+    const issue = toIssue(arg);
     if (!issue || !issue.uri) return;
 
     const document = await vscode.workspace.openTextDocument(issue.uri);
@@ -155,6 +170,100 @@ async function jumpToHit(issue) {
     );
     editor.selection = new vscode.Selection(start, start);
     editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+}
+
+/** Quick-fix actions offered for one diagnostic range. */
+async function quickFixesFor(uri, range) {
+    const actions = await vscode.commands.executeCommand(
+        'vscode.executeCodeActionProvider',
+        uri,
+        range,
+        vscode.CodeActionKind.QuickFix
+    );
+    return (actions || []).filter(action => action && action.edit);
+}
+
+/** The lightbulb's preferred fix, else the first edit-bearing one. */
+function pickFix(actions, { preferredOnly = false } = {}) {
+    const withEdit = (actions || []).filter(action => action && action.edit);
+    const preferred = withEdit.find(action => action.isPreferred);
+    if (preferred) return preferred;
+    return preferredOnly ? null : (withEdit[0] || null);
+}
+
+async function applyFix(arg) {
+    const issue = toIssue(arg);
+    if (!issue || !issue.uri) return;
+
+    const fixes = await quickFixesFor(issue.uri, rangeOf(issue));
+    const fix   = pickFix(fixes);
+    if (!fix) {
+        vscode.window.showInformationMessage('No quick fix is available for this issue.');
+        return;
+    }
+    if (await vscode.workspace.applyEdit(fix.edit)) {
+        vscode.window.showInformationMessage(fix.title || 'Issue fixed.');
+    }
+}
+
+function overlaps(a, b) {
+    return a.start.isBeforeOrEqual(b.end) && b.start.isBeforeOrEqual(a.end);
+}
+
+/**
+ * Apply every preferred quick fix in the file in one undoable edit.
+ *
+ * Only the preferred action is used, so "remove unused declaration" (not
+ * preferred) and constant-expression removal stay opt-in via the lightbulb.
+ * Edits that overlap an already-collected one are skipped.
+ */
+async function fixAll() {
+    const editor = vscode.window.activeTextEditor;
+    if (!isJrxml(editor?.document)) {
+        vscode.window.showWarningMessage('Open a .jrxml file first.');
+        return;
+    }
+
+    const uri      = editor.document.uri;
+    const diags    = vscode.languages.getDiagnostics(uri).filter(d => d.source === JRMXL_SOURCE);
+    const merged   = new vscode.WorkspaceEdit();
+    const accepted = [];
+    let fixed = 0;
+
+    for (const diagnostic of diags) {
+        const fix = pickFix(await quickFixesFor(uri, diagnostic.range), { preferredOnly: true });
+        if (!fix) continue;
+
+        let used = false;
+        for (const [editUri, edits] of fix.edit.entries()) {
+            for (const textEdit of edits) {
+                if (accepted.some(other => other.uri === editUri && overlaps(other.range, textEdit.range))) continue;
+
+                merged.replace(editUri, textEdit.range, textEdit.newText);
+                accepted.push({ uri: editUri, range: textEdit.range });
+                used = true;
+            }
+        }
+        if (used) fixed++;
+    }
+
+    if (merged.size === 0) {
+        vscode.window.showInformationMessage('No automatic fixes are available for this file.');
+        return;
+    }
+    if (await vscode.workspace.applyEdit(merged)) {
+        vscode.window.showInformationMessage(`Fixed ${fixed} issue${fixed === 1 ? '' : 's'}.`);
+    }
+}
+
+async function copyMessage(arg) {
+    const issue = toIssue(arg);
+    if (issue?.message) await vscode.env.clipboard.writeText(issue.message);
+}
+
+async function copyCode(arg) {
+    const issue = toIssue(arg);
+    if (issue?.code) await vscode.env.clipboard.writeText(issue.code);
 }
 
 function updateBadge(view, count) {
@@ -182,6 +291,10 @@ function register(context) {
 
         vscode.commands.registerCommand('jrxml.refreshIssues', refresh),
         vscode.commands.registerCommand('jrxml.issues.jumpToHit', jumpToHit),
+        vscode.commands.registerCommand('jrxml.issues.applyFix', applyFix),
+        vscode.commands.registerCommand('jrxml.issues.fixAll', fixAll),
+        vscode.commands.registerCommand('jrxml.issues.copyMessage', copyMessage),
+        vscode.commands.registerCommand('jrxml.issues.copyCode', copyCode),
 
         // Diagnostics are pushed by diagnosticsProvider; this keeps us in sync.
         vscode.languages.onDidChangeDiagnostics(() => refresh()),
@@ -198,4 +311,4 @@ function register(context) {
     refresh();
 }
 
-module.exports = { register, collectIssueItems, VIEW_ID };
+module.exports = { register, collectIssueItems, pickFix, overlaps, VIEW_ID };

@@ -81,6 +81,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   newlines) — plus the SQL→jsonql migration action, grouped into
   Errors / Warnings / Actions with a count badge. Clicking an item jumps to it.
   The geometry sort stays in Best Practices.
+- Act on Issues (JRXML) items in place: an inline **Fix** runs the lightbulb's
+  quick fix, **Fix All Issues in File** applies every preferred fix as one
+  undoable edit (skipping overlapping ranges; non-preferred fixes such as
+  "remove unused declaration" stay opt-in), and the item context menu offers
+  Go to Issue · Fix · Copy Message · Copy Rule ID.
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally

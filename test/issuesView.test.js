@@ -18,7 +18,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { collectIssueItems } = require('../issuesView');
+const { collectIssueItems, pickFix, overlaps } = require('../issuesView');
 
 const URI = { toString: () => 'file:///test/report.jrxml' };
 
@@ -59,4 +59,40 @@ test('adds the SQL migration action and not the sort action', () => {
 test('a file with neither diagnostics nor actions yields no items', () => {
     diagnostics = [];
     assert.deepStrictEqual(collectIssueItems(doc('<jasperReport name="R"/>')), []);
+});
+
+// ── fix selection / overlap ───────────────────────────────────────────────────
+
+test('pickFix prefers the preferred action', () => {
+    const plain    = { title: 'plain', edit: {} };
+    const preferred = { title: 'preferred', edit: {}, isPreferred: true };
+    assert.strictEqual(pickFix([plain, preferred]), preferred);
+});
+
+test('pickFix falls back to the first edit-bearing action', () => {
+    const plain = { title: 'plain', edit: {} };
+    assert.strictEqual(pickFix([{ title: 'no edit' }, plain]), plain);
+});
+
+test('pickFix with preferredOnly ignores non-preferred and edit-less actions', () => {
+    assert.strictEqual(pickFix([{ edit: {} }], { preferredOnly: true }), null);
+    assert.strictEqual(pickFix([{ isPreferred: true }], { preferredOnly: true }), null);
+    assert.strictEqual(pickFix(undefined), null);
+});
+
+const pos = (line, character) => ({
+    line,
+    character,
+    isBeforeOrEqual(other) {
+        return line < other.line || (line === other.line && character <= other.character);
+    },
+});
+const range = (sl, sc, el, ec) => ({ start: pos(sl, sc), end: pos(el, ec) });
+
+test('overlaps detects overlapping and touching ranges', () => {
+    assert.strictEqual(overlaps(range(0, 0, 0, 5), range(0, 3, 0, 8)), true);
+    assert.strictEqual(overlaps(range(0, 0, 0, 5), range(0, 5, 0, 9)), true, 'touching endpoints');
+    assert.strictEqual(overlaps(range(0, 0, 0, 5), range(0, 6, 0, 9)), false);
+    assert.strictEqual(overlaps(range(0, 0, 1, 0), range(1, 0, 2, 0)), true);
+    assert.strictEqual(overlaps(range(0, 0, 1, 0), range(1, 1, 2, 0)), false);
 });

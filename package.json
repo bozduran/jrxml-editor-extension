@@ -70,6 +70,24 @@
         "title": "JRXML: Go to Issue"
       },
       {
+        "command": "jrxml.issues.applyFix",
+        "title": "JRXML: Fix Issue",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "jrxml.issues.fixAll",
+        "title": "JRXML: Fix All Issues in File",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "jrxml.issues.copyMessage",
+        "title": "JRXML: Copy Issue Message"
+      },
+      {
+        "command": "jrxml.issues.copyCode",
+        "title": "JRXML: Copy Rule ID"
+      },
+      {
         "command": "jrxml.bp.suppressRule",
         "title": "JRXML: Suppress Best Practice Rule"
       },
@@ -124,6 +142,11 @@
       ],
       "view/title": [
         {
+          "command": "jrxml.issues.fixAll",
+          "when": "view == jrxmlIssues",
+          "group": "navigation"
+        },
+        {
           "command": "jrxml.refreshIssues",
           "when": "view == jrxmlIssues",
           "group": "navigation"
@@ -141,6 +164,31 @@
       ],
       "view/item/context": [
         {
+          "command": "jrxml.issues.applyFix",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "inline"
+        },
+        {
+          "command": "jrxml.issues.jumpToHit",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "1_open"
+        },
+        {
+          "command": "jrxml.issues.applyFix",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "1_open"
+        },
+        {
+          "command": "jrxml.issues.copyMessage",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "9_copy"
+        },
+        {
+          "command": "jrxml.issues.copyCode",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "9_copy"
+        },
+        {
           "command": "jrxml.bp.suppressFromTree",
           "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressible",
           "group": "inline"
@@ -153,11 +201,6 @@
         {
           "command": "jrxml.sortElements",
           "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-sort",
-          "group": "inline"
-        },
-        {
-          "command": "jrxml.migrateSqlQuery",
-          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-query",
           "group": "inline"
         }
       ]
