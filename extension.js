@@ -12,10 +12,12 @@ const { register: registerDiagnostics } = require('./diagnosticsProvider');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
 const { register: registerBestPractices } = require('./bestPracticesProvider');
 const { register: registerIssuesView } = require('./issuesView');
+const { register: registerContextKeys } = require('./contextKeys');
 const {
     provider: documentFormatter,
     fixAllProvider,
     registerFormatOnSave,
+    registerFixAllCommand,
 } = require('./documentFormatter');
 const { register: registerSort } = require('./sortProvider');
 const { register: registerClear } = require('./clearProvider');
@@ -60,6 +62,12 @@ function activate(context) {
 
     // ── Opt-in format on save (format + textcheck only) ───────────────────────
     registerFormatOnSave(context);
+
+    // ── "Fix all format and text issues" command (context menu) ──────────────
+    registerFixAllCommand(context);
+
+    // ── Context keys that gate Clear/Sort/SQL in the JRXML menu ──────────────
+    registerContextKeys(context);
 
     // ── Explicit geometry sort (whole-file, previewed) ────────────────────────
     registerSort(context);

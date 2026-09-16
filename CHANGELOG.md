@@ -86,6 +86,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   undoable edit (skipping overlapping ranges; non-preferred fixes such as
   "remove unused declaration" stay opt-in), and the item context menu offers
   Go to Issue · Fix · Copy Message · Copy Rule ID.
+- A **JRXML** submenu in the editor context menu, on the editor tab and on
+  `.jrxml` files in the Explorer: Open Expression Editor · Fix All Issues in
+  File · Fix All (Format and Text) · Format Document · Apply Clear Fixes ·
+  Sort Elements by Position · Migrate SQL Query · Open Settings. The
+  destructive entries only appear when the open file actually has that work
+  (`jrxml.hasClearFixes` / `jrxml.hasSortIssue` / `jrxml.hasSqlMigration`).
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally

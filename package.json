@@ -122,6 +122,10 @@
         "title": "JRXML: Migrate SQL Query to jsonql"
       },
       {
+        "command": "jrxml.fixAllFormat",
+        "title": "JRXML: Fix All (Format and Text)"
+      },
+      {
         "command": "jrxml.openSettingsPanel",
         "title": "JRXML: Open Settings",
         "icon": "$(settings-gear)"
@@ -132,12 +136,69 @@
         "icon": "$(refresh)"
       }
     ],
+    "submenus": [
+      {
+        "id": "jrxml",
+        "label": "JRXML"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
-          "command": "jrxml.openExpressionEditor",
+          "submenu": "jrxml",
           "when": "resourceExtname == .jrxml",
-          "group": "jrxml"
+          "group": "jrxml@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "submenu": "jrxml",
+          "when": "resourceExtname == .jrxml",
+          "group": "jrxml@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "jrxml",
+          "when": "resourceExtname == .jrxml",
+          "group": "jrxml@1"
+        }
+      ],
+      "jrxml": [
+        {
+          "command": "jrxml.openExpressionEditor",
+          "group": "1_open@1"
+        },
+        {
+          "command": "jrxml.issues.fixAll",
+          "group": "2_fix@1"
+        },
+        {
+          "command": "jrxml.fixAllFormat",
+          "group": "2_fix@2"
+        },
+        {
+          "command": "editor.action.formatDocument",
+          "group": "2_fix@3"
+        },
+        {
+          "command": "jrxml.applyClearFixes",
+          "when": "jrxml.hasClearFixes",
+          "group": "3_cleanup@1"
+        },
+        {
+          "command": "jrxml.sortElements",
+          "when": "jrxml.hasSortIssue",
+          "group": "3_cleanup@2"
+        },
+        {
+          "command": "jrxml.migrateSqlQuery",
+          "when": "jrxml.hasSqlMigration",
+          "group": "3_cleanup@3"
+        },
+        {
+          "command": "jrxml.openSettingsPanel",
+          "group": "9_settings@1"
         }
       ],
       "view/title": [
