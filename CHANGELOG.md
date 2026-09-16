@@ -96,6 +96,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   (`Ctrl+Alt+Down` / `Ctrl+Alt+Up` in a `.jrxml` editor) wraps around the file,
   and the status bar shows the current issue count with a click-through to the
   Issues (JRXML) view. Both are also in the JRXML context submenu.
+- New **`jrxml.lint.variableOrder`** warning (default on, toggle in Settings):
+  a variable that references another variable declared *later* in the same
+  scope, which JasperReports evaluates in declaration order. Self-references
+  (accumulators), built-in variables and cross-scope (report vs dataset)
+  references are not flagged. Warning only — declarations are never reordered.
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally
