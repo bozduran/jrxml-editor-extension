@@ -46,6 +46,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-16
+
 ### Fixed
 - **Undeclared references:** a `<subreportParameter name="…">` or a `<parameter>`
   nested in a subreport names the *subreport's* parameter, so it is no longer
