@@ -18,7 +18,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { collectIssueItems, pickFix, overlaps } = require('../issuesView');
+const { collectIssueItems, pickFix, overlaps, pickNavigationTarget } = require('../issuesView');
 
 const URI = { toString: () => 'file:///test/report.jrxml' };
 
@@ -95,4 +95,28 @@ test('overlaps detects overlapping and touching ranges', () => {
     assert.strictEqual(overlaps(range(0, 0, 0, 5), range(0, 6, 0, 9)), false);
     assert.strictEqual(overlaps(range(0, 0, 1, 0), range(1, 0, 2, 0)), true);
     assert.strictEqual(overlaps(range(0, 0, 1, 0), range(1, 1, 2, 0)), false);
+});
+
+// ── navigation ────────────────────────────────────────────────────────────────
+
+const at = (line, character) => ({ line, character });
+const startOf = target => [target.start.line, target.start.character];
+
+test('pickNavigationTarget returns null without issues', () => {
+    assert.strictEqual(pickNavigationTarget([], at(0, 0), 1), null);
+    assert.strictEqual(pickNavigationTarget(undefined, at(0, 0), 1), null);
+});
+
+test('next goes to the following issue, wrapping at the end', () => {
+    const ranges = [range(1, 0, 1, 1), range(5, 0, 5, 1), range(9, 0, 9, 1)];
+    assert.deepStrictEqual(startOf(pickNavigationTarget(ranges, at(0, 0), 1)), [1, 0]);
+    assert.deepStrictEqual(startOf(pickNavigationTarget(ranges, at(1, 0), 1)), [5, 0]);
+    assert.deepStrictEqual(startOf(pickNavigationTarget(ranges, at(9, 5), 1)), [1, 0]);
+});
+
+test('previous goes to the preceding issue, wrapping at the start', () => {
+    const ranges = [range(1, 0, 1, 1), range(5, 0, 5, 1), range(9, 0, 9, 1)];
+    assert.deepStrictEqual(startOf(pickNavigationTarget(ranges, at(10, 0), -1)), [9, 0]);
+    assert.deepStrictEqual(startOf(pickNavigationTarget(ranges, at(5, 0), -1)), [1, 0]);
+    assert.deepStrictEqual(startOf(pickNavigationTarget(ranges, at(0, 0), -1)), [9, 0]);
 });

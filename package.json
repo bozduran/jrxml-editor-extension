@@ -88,6 +88,14 @@
         "title": "JRXML: Copy Rule ID"
       },
       {
+        "command": "jrxml.nextIssue",
+        "title": "JRXML: Go to Next Issue"
+      },
+      {
+        "command": "jrxml.previousIssue",
+        "title": "JRXML: Go to Previous Issue"
+      },
+      {
         "command": "jrxml.bp.suppressRule",
         "title": "JRXML: Suppress Best Practice Rule"
       },
@@ -197,6 +205,14 @@
           "group": "3_cleanup@3"
         },
         {
+          "command": "jrxml.nextIssue",
+          "group": "4_navigate@1"
+        },
+        {
+          "command": "jrxml.previousIssue",
+          "group": "4_navigate@2"
+        },
+        {
           "command": "jrxml.openSettingsPanel",
           "group": "9_settings@1"
         }
@@ -266,6 +282,18 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "jrxml.nextIssue",
+        "key": "ctrl+alt+down",
+        "when": "editorTextFocus && resourceExtname == .jrxml"
+      },
+      {
+        "command": "jrxml.previousIssue",
+        "key": "ctrl+alt+up",
+        "when": "editorTextFocus && resourceExtname == .jrxml"
+      }
+    ],
     "configuration": {
       "title": "JRXML Expression Editor",
       "properties": {

@@ -92,6 +92,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   Sort Elements by Position · Migrate SQL Query · Open Settings. The
   destructive entries only appear when the open file actually has that work
   (`jrxml.hasClearFixes` / `jrxml.hasSortIssue` / `jrxml.hasSqlMigration`).
+- Navigate issues from the keyboard: `JRXML: Go to Next/Previous Issue`
+  (`Ctrl+Alt+Down` / `Ctrl+Alt+Up` in a `.jrxml` editor) wraps around the file,
+  and the status bar shows the current issue count with a click-through to the
+  Issues (JRXML) view. Both are also in the JRXML context submenu.
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally

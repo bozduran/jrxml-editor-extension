@@ -266,6 +266,57 @@ async function copyCode(arg) {
     if (issue?.code) await vscode.env.clipboard.writeText(issue.code);
 }
 
+// ── Issue navigation ──────────────────────────────────────────────────────────
+
+function comparePosition(a, b) {
+    if (a.line !== b.line) return a.line - b.line;
+    return a.character - b.character;
+}
+
+/** JRXML diagnostic ranges for a document, sorted by position. */
+function issueRanges(uri) {
+    return vscode.languages.getDiagnostics(uri)
+        .filter(diagnostic => diagnostic.source === JRMXL_SOURCE)
+        .map(diagnostic => ({
+            start: { line: diagnostic.range.start.line, character: diagnostic.range.start.character },
+            end:   { line: diagnostic.range.end.line,   character: diagnostic.range.end.character },
+        }))
+        .sort((a, b) => comparePosition(a.start, b.start));
+}
+
+/**
+ * The range to move to from `cursor`, or null when there are none. Wraps
+ * around the file in both directions.
+ */
+function pickNavigationTarget(ranges, cursor, direction) {
+    if (!ranges || ranges.length === 0) return null;
+
+    if (direction >= 0) {
+        return ranges.find(range => comparePosition(range.start, cursor) > 0) || ranges[0];
+    }
+    return [...ranges].reverse().find(range => comparePosition(range.start, cursor) < 0)
+        || ranges[ranges.length - 1];
+}
+
+async function navigate(direction) {
+    const editor = vscode.window.activeTextEditor;
+    if (!isJrxml(editor?.document)) {
+        vscode.window.showWarningMessage('Open a .jrxml file first.');
+        return;
+    }
+
+    const target = pickNavigationTarget(issueRanges(editor.document.uri), editor.selection.active, direction);
+    if (!target) {
+        vscode.window.showInformationMessage('No JRXML issues in this file.');
+        return;
+    }
+
+    const start = new vscode.Position(target.start.line, target.start.character);
+    const end   = new vscode.Position(target.end.line, target.end.character);
+    editor.selection = new vscode.Selection(start, start);
+    editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
+}
+
 function updateBadge(view, count) {
     view.badge = count > 0
         ? { value: count, tooltip: `${count} issue${count === 1 ? '' : 's'}` }
@@ -281,13 +332,30 @@ function register(context) {
         showCollapseAll:  true,
     });
 
+    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    statusBar.name    = 'JRXML Issues';
+    statusBar.command = `${VIEW_ID}.focus`;
+
     let timer;
-    const refresh  = () => { provider.refresh(); updateBadge(view, countIssues(provider.groups)); };
+    const refresh = () => {
+        provider.refresh();
+        const count = countIssues(provider.groups);
+        updateBadge(view, count);
+
+        if (count > 0) {
+            statusBar.text    = `$(warning) ${count}`;
+            statusBar.tooltip = `${count} JRXML issue${count === 1 ? '' : 's'} — click to open Issues (JRXML)`;
+            statusBar.show();
+        } else {
+            statusBar.hide();
+        }
+    };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, DEBOUNCE_MS); };
 
     context.subscriptions.push(
         view,
         provider,
+        statusBar,
 
         vscode.commands.registerCommand('jrxml.refreshIssues', refresh),
         vscode.commands.registerCommand('jrxml.issues.jumpToHit', jumpToHit),
@@ -295,6 +363,8 @@ function register(context) {
         vscode.commands.registerCommand('jrxml.issues.fixAll', fixAll),
         vscode.commands.registerCommand('jrxml.issues.copyMessage', copyMessage),
         vscode.commands.registerCommand('jrxml.issues.copyCode', copyCode),
+        vscode.commands.registerCommand('jrxml.nextIssue', () => navigate(1)),
+        vscode.commands.registerCommand('jrxml.previousIssue', () => navigate(-1)),
 
         // Diagnostics are pushed by diagnosticsProvider; this keeps us in sync.
         vscode.languages.onDidChangeDiagnostics(() => refresh()),
@@ -311,4 +381,4 @@ function register(context) {
     refresh();
 }
 
-module.exports = { register, collectIssueItems, pickFix, overlaps, VIEW_ID };
+module.exports = { register, collectIssueItems, pickFix, overlaps, pickNavigationTarget, VIEW_ID };
