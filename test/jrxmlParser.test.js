@@ -126,6 +126,52 @@ test('ignores <parameter> tags inside subreports when collecting declarations', 
     assert.deepStrictEqual(parseDeclarations(makeDoc(text)).parameters, []);
 });
 
+test('dataset declarations are not report-scope declarations (issue regression)', () => {
+    const text = `<jasperReport name="R">
+  <parameter name="Own" class="java.lang.String"/>
+  <field name="MainField" class="java.lang.String"/>
+  <variable name="MainVar" class="java.lang.String"/>
+  <dataset name="DS">
+    <parameter name="DSParam" class="java.lang.String"/>
+    <field name="DSField" class="java.lang.String"/>
+    <variable name="DSVar" class="java.lang.String"/>
+    <query language="jsonql"><![CDATA[x]]></query>
+  </dataset>
+</jasperReport>`;
+    const r = parseDeclarations(makeDoc(text));
+
+    assert.deepStrictEqual(r.fields.map(f => f.name), ['MainField']);
+    assert.deepStrictEqual(r.parameters.map(p => p.name), ['Own']);
+    assert.deepStrictEqual(r.variables.map(v => v.name), ['MainVar']);
+
+    assert.deepStrictEqual(r.dataset.fields.map(f => f.name), ['DSField']);
+    assert.deepStrictEqual(r.dataset.parameters.map(p => p.name), ['DSParam']);
+    assert.deepStrictEqual(r.dataset.variables.map(v => v.name), ['DSVar']);
+
+    // all* spans report + dataset scope for reference resolution
+    assert.deepStrictEqual(r.allFields.map(f => f.name).sort(), ['DSField', 'MainField']);
+    assert.deepStrictEqual(r.allParameters.map(p => p.name).sort(), ['DSParam', 'Own']);
+    assert.deepStrictEqual(r.allVariables.map(v => v.name).sort(), ['DSVar', 'MainVar']);
+});
+
+test('a parameter passed into a subreport is not a declaration of this report (issue regression)', () => {
+    const text = `<jasperReport name="R">
+  <field name="Field_1" class="java.lang.String"/>
+  <detail><band height="10">
+    <element kind="subreport" x="0" y="0" width="200" height="200">
+      <connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+      <expression><![CDATA[$F{Field_1}]]></expression>
+      <parameter name="someparameter"><expression><![CDATA["example"]]></expression></parameter>
+    </element>
+  </band></detail>
+</jasperReport>`;
+    const r = parseDeclarations(makeDoc(text));
+
+    assert.deepStrictEqual(r.parameters, []);
+    assert.deepStrictEqual(r.allParameters, []);
+    assert.deepStrictEqual(r.dataset.parameters, []);
+});
+
 test('treats returnValue toVariable as a used variable reference', () => {
     const text = `<jasperReport name="R"><returnValue toVariable="out"/></jasperReport>`;
     const refs = parseDeclarations(makeDoc(text)).references;

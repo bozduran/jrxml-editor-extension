@@ -7,17 +7,19 @@
 //   query migration, unused declarations, description sync, jsonql fixes.
 //
 // Unused detection mirrors the hook's ground truth as closely as a text tool
-// can: references are collected from expression elements (plus <query> and
-// subreport pass-throughs), never by scanning the whole document, and the
-// hook's built-in parameter names are never deleted.
+// can: references are collected from expression-bearing elements (plus
+// <query>, sort fields and subreport pass-throughs), never by scanning the
+// whole document, and the hook's built-in parameter names are never deleted.
+// Only direct children of the report root are declarations, so dataset members
+// and subreport/scoped parameters are neither reported nor deleted here.
 
 const { scanXml } = require('./xmlspan');
+const { EXPRESSION_TAGS } = require('./expressionUtils');
 const {
     cdataOf,
     decodeXml,
     encodeXml,
     encodeAttribute,
-    EXPRESSION_ELEMENTS,
 } = require('./xmlRules');
 
 const JSONQL_FIELD_PROPERTY = 'net.sf.jasperreports.jsonql.field.expression';
@@ -35,7 +37,18 @@ const BUILTIN_PARAMETERS = new Set([
     'JSON_LOCALE', 'JSON_TIME_ZONE', 'JSON_DATE_PATTERN', 'JSON_NUMBER_PATTERN',
 ]);
 
-const REFERENCE_CONTAINERS = new Set([...EXPRESSION_ELEMENTS, 'query']);
+// Elements whose body can contain $F/$P/$V references. The formatting hook's
+// narrow expression set is not enough for "is this declaration used?": image,
+// subreport, filter, chart and hyperlink expressions, propertyExpression and
+// the classic subreport/dataset parameter expressions all carry real
+// references that must count as usages.
+const REFERENCE_CONTAINERS = new Set([
+    ...EXPRESSION_TAGS,
+    'query',
+    'propertyExpression',
+    'subreportParameterExpression',
+    'datasetParameterExpression',
+]);
 const REFERENCE_RE = /\$(F|P|V)!?\{([^}]*)\}/g;
 const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
 
@@ -43,12 +56,15 @@ const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
 
 /**
  * Names used anywhere an expression can appear, keyed as `KIND:name`.
- * @returns {Set<string>}
+ * Returns null when the document cannot be scanned, so callers can tell
+ * "nothing is used" apart from "usage could not be determined" and avoid
+ * flagging every declaration as unused.
+ * @returns {Set<string>|null}
  */
 function collectUsedNames(text) {
     const used = new Set();
     const scan = scanXml(text);
-    if (scan.error) return used;
+    if (scan.error) return null;
 
     const root = scan.doc.root;
 
@@ -59,8 +75,14 @@ function collectUsedNames(text) {
             addName('PARAMETER', node.attrValue('name'), used);
         } else if (node.tag === 'returnValue') {
             addName('VARIABLE', node.attrValue('toVariable'), used);
+        } else if (node.tag === 'sortField') {
+            // <sortField name="X" type="Field|Variable"/> references X by name.
+            const type = (node.attrValue('type') || 'Field').toLowerCase();
+            if (type === 'variable') addName('VARIABLE', node.attrValue('name'), used);
+            else if (type !== 'none') addName('FIELD', node.attrValue('name'), used);
         } else if (node.tag === 'parameter' && node.parent !== root) {
-            // A parameter nested in a subreport is passed in, not declared here.
+            // A parameter nested in a subreport or dataset is passed in, not
+            // declared here.
             addName('PARAMETER', node.attrValue('name'), used);
         }
     }
@@ -226,6 +248,10 @@ function discoverClearFixes(text) {
     const groups = [];
     const declarations = parseDeclarations(text);
     const used = collectUsedNames(text);
+    // `used === null` means the document could not be scanned; the top-of-
+    // function `scan.error` check already covered that, but stay defensive so
+    // a future change can never turn "unknown" into "delete everything".
+    const unusedFieldNames = new Set();
 
     // 1. SQL query migration (the edit depends on a free-form answer)
     const query = parseQuery(text);
@@ -237,18 +263,19 @@ function discoverClearFixes(text) {
     }
 
     // 2. Unused declarations
-    const unusedFieldNames = new Set();
     const unusedFixes = [];
-    for (const decl of declarations) {
-        if (decl.kind === 'PARAMETER' && BUILTIN_PARAMETERS.has(decl.name)) continue;
-        if (used.has(`${decl.kind}:${decl.name}`)) continue;
+    if (used) {
+        for (const decl of declarations) {
+            if (decl.kind === 'PARAMETER' && BUILTIN_PARAMETERS.has(decl.name)) continue;
+            if (used.has(`${decl.kind}:${decl.name}`)) continue;
 
-        if (decl.kind === 'FIELD') unusedFieldNames.add(decl.name);
-        const span = removalSpan(text, decl.start, decl.end);
-        unusedFixes.push({
-            description: `delete unused ${decl.kind.toLowerCase()} '${decl.name}'`,
-            edit: { start: span.start, end: span.end, replacement: '' },
-        });
+            if (decl.kind === 'FIELD') unusedFieldNames.add(decl.name);
+            const span = removalSpan(text, decl.start, decl.end);
+            unusedFixes.push({
+                description: `delete unused ${decl.kind.toLowerCase()} '${decl.name}'`,
+                edit: { start: span.start, end: span.end, replacement: '' },
+            });
+        }
     }
     if (unusedFixes.length) groups.push({ label: 'unused declarations', fixes: unusedFixes });
 

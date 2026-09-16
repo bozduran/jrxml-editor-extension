@@ -1,0 +1,80 @@
+<!-- Created with Jaspersoft Studio version 7.0.6.final using JasperReports Library version 7.0.6-5d2a603fdc6b3db8f842a83383e594f41891534d  -->
+<jasperReport name="getspecific" language="java" pageWidth="595" pageHeight="842" columnWidth="535" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="0" uuid="e9bb1a27-f975-4aa4-98f9-75524c5daafa">
+	<property name="com.jaspersoft.studio.data.defaultdataadapter" value="jsonql-querry-list/jsonqlquerryDataAdapter.jrdax"/>
+	<property name="net.sf.jasperreports.components.table.generate.pdf.tags" value="true"/>
+	<propertyExpression name="net.sf.jasperreports.export.pdf.tag.language" evaluationTime="Late"><![CDATA[$F{Field_1}]]></propertyExpression>
+	<template><![CDATA["/NEW_STYLE.jrtx"]]></template>
+	<style name="Title" fontName="Arial" fontSize="26.0" bold="true"/>
+	<style name="SubTitle" forecolor="#666666" fontName="Arial" fontSize="18.0"/>
+	<style name="Column header" forecolor="#FFFFFF" fontName="Arial" fontSize="12.0" bold="true"/>
+	<style name="Detail" fontName="Arial" fontSize="12.0"/>
+	<dataset name="addons" uuid="b9b1a97e-81de-41e8-97d9-baa17ee4d49e">
+		<property name="com.jaspersoft.studio.data.defaultdataadapter" value="jsonql-querry-list/jsonqlquerryDataAdapter.jrdax"/>
+		<property name="net.sf.jasperreports.data.adapter" value="jsonqlquerryDataAdapter.jrdax"/>
+		<parameter name="FIL_PARAMETER" class="java.lang.String"/>
+		<parameter name="Parameter12" class="java.lang.String"/>
+		<query language="jsonql"><![CDATA[Northwind.Customers]]></query>
+		<field name="CompanyName" class="java.lang.String">
+			<description><![CDATA[CompanyName]]></description>
+			<property name="net.sf.jasperreports.jsonql.field.expression" value="CompanyName"/>
+		</field>
+		<field name="CustomerID" class="java.lang.String">
+			<description><![CDATA[CustomerID]]></description>
+			<property name="net.sf.jasperreports.jsonql.field.expression" value="CustomerID"/>
+		</field>
+		<filterExpression><![CDATA[OR(  AND(EQUALS($P{FIL_PARAMETER},"M" ),EQUALS() ) )
+
+$P{FIL_PARAMETER}]]></filterExpression>
+		<group name="Customers">
+			<expression><![CDATA[$F{CompanyName}]]></expression>
+		</group>
+	</dataset>
+	<query language="jsonql"><![CDATA[]]></query>
+	<field name="Field_1" class="java.lang.String">
+		<description><![CDATA[field]]></description>
+		<property name="net.sf.jasperreports.jsonql.field.expression" value="field"/>
+	</field>
+	<variable name="Variable_1" class="java.lang.String"/>
+	<title height="152" splitType="Stretch"/>
+	<pageHeader splitType="Stretch"/>
+	<columnHeader height="25" splitType="Stretch"/>
+	<detail>
+		<band height="50" splitType="Stretch">
+			<element kind="component" uuid="376d5e95-c1f8-4638-90ec-8b5573ddb1cd" positionType="Float" x="0" y="0" width="475" height="50">
+				<component kind="list">
+					<datasetRun uuid="712e13a4-235c-4274-a7a4-93d798a2d723" subDataset="addons">
+						<connectionExpression><![CDATA[$P{REPORT_CONNECTION}]]></connectionExpression>
+						<parameter name="FIL_PARAMETER">
+							<expression><![CDATA[$F{Field_1}]]></expression>
+						</parameter>
+					</datasetRun>
+					<contents height="50" width="475">
+						<element kind="textField" uuid="2988860b-8ef5-47ec-b0f0-fdc885c91005" x="0" y="0" width="475" height="25" removeLineWhenBlank="true" style="Eyebrow">
+							<printWhenExpression><![CDATA[$V{COLUMN_COUNT}==1]]></printWhenExpression>
+							<expression><![CDATA["Text Field"]]></expression>
+						</element>
+						<element kind="textField" uuid="a0729fb9-a256-41e3-89f9-a711ac5de1ae" positionType="Float" x="0" y="25" width="475" height="25" textAdjust="StretchHeight" style="Subtitle">
+							<expression><![CDATA[$F{CompanyName}+ " " +$V{COLUMN_NUMBER}+ $P{FIL_PARAMETER}]]></expression>
+							<property name="com.jaspersoft.studio.unit.height" value="px"/>
+							<property name="com.jaspersoft.studio.unit.width" value="px"/>
+							<property name="com.jaspersoft.studio.unit.y" value="px"/>
+							<box style="Subtitle">
+								<bottomPen lineWidth="1.0" lineStyle="Solid"/>
+							</box>
+						</element>
+					</contents>
+				</component>
+				<property name="com.jaspersoft.studio.unit.height" value="px"/>
+				<property name="com.jaspersoft.studio.layout" value="com.jaspersoft.studio.editor.layout.VerticalRowLayout"/>
+			</element>
+			<property name="com.jaspersoft.studio.unit.height" value="px"/>
+		</band>
+	</detail>
+	<columnFooter splitType="Stretch"/>
+	<pageFooter height="100" splitType="Stretch">
+		<element kind="textField" uuid="a1e79f69-3148-4179-9c2c-3dd3ab645ccf" x="0" y="0" width="555" height="100">
+			<expression><![CDATA[$F{Field_1}]]></expression>
+		</element>
+	</pageFooter>
+	<summary splitType="Stretch"/>
+</jasperReport>

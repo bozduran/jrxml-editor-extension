@@ -36,7 +36,12 @@ function updateDiagnostics(document) {
         parsed = parseDeclarations(document);
     } catch (err) {
         console.error('[JRXML] declaration parsing failed:', err);
-        parsed = { fields: [], parameters: [], variables: [], groups: [], references: [], outline: [] };
+        parsed = {
+            fields: [], parameters: [], variables: [],
+            dataset: { fields: [], parameters: [], variables: [] },
+            allFields: [], allParameters: [], allVariables: [],
+            groups: [], references: [], outline: [],
+        };
     }
 
     const cfg = vscode.workspace.getConfiguration('jrxml');
@@ -50,58 +55,75 @@ function updateDiagnostics(document) {
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
     if (checkUnused) {
-        // References are collected from expression elements (plus query and
-        // subreport pass-throughs), matching the hook's ground-truth model.
+        // References are collected from expression elements (plus query,
+        // subreport pass-throughs and other expression-bearing attributes),
+        // matching the hook's ground-truth model. Only report-scope
+        // declarations are checked: dataset members belong to their dataset,
+        // and a parameter passed into a subreport is not declared here.
         let used;
         try {
             used = collectUsedNames(text);
         } catch (err) {
             console.error('[JRXML] reference collection failed:', err);
-            used = new Set();
+            used = null;
         }
 
-        for (const f of parsed.fields) {
-            if (!used.has('FIELD:' + f.name)) {
-                diagnostics.push(makeDiagnostic(
-                    document, f.nameOffset, f.name.length,
-                    `Field '${f.name}' is declared but never used in any expression.`,
-                    vscode.DiagnosticSeverity.Warning,
-                    'jrxml.unusedField'
-                ));
+        // null means the document could not be scanned: reporting "never
+        // used" for every declaration would be a mass false positive.
+        if (used) {
+            for (const f of parsed.fields) {
+                if (!used.has('FIELD:' + f.name)) {
+                    diagnostics.push(makeDiagnostic(
+                        document, f.nameOffset, f.name.length,
+                        `Field '${f.name}' is declared but never used in any expression.`,
+                        vscode.DiagnosticSeverity.Warning,
+                        'jrxml.unusedField'
+                    ));
+                }
             }
-        }
 
-        for (const p of parsed.parameters) {
-            if (p.isSystem || BUILTIN_PARAMETERS.has(p.name)) continue;
-            if (!used.has('PARAMETER:' + p.name)) {
-                diagnostics.push(makeDiagnostic(
-                    document, p.nameOffset, p.name.length,
-                    `Parameter '${p.name}' is declared but never used in any expression.`,
-                    vscode.DiagnosticSeverity.Warning,
-                    'jrxml.unusedParameter'
-                ));
+            for (const p of parsed.parameters) {
+                if (p.isSystem || BUILTIN_PARAMETERS.has(p.name)) continue;
+                if (!used.has('PARAMETER:' + p.name)) {
+                    diagnostics.push(makeDiagnostic(
+                        document, p.nameOffset, p.name.length,
+                        `Parameter '${p.name}' is declared but never used in any expression.`,
+                        vscode.DiagnosticSeverity.Warning,
+                        'jrxml.unusedParameter'
+                    ));
+                }
             }
-        }
 
-        for (const v of parsed.variables) {
-            if (!used.has('VARIABLE:' + v.name)) {
-                diagnostics.push(makeDiagnostic(
-                    document, v.nameOffset, v.name.length,
-                    `Variable '${v.name}' is declared but never used in any expression.`,
-                    vscode.DiagnosticSeverity.Warning,
-                    'jrxml.unusedVariable'
-                ));
+            for (const v of parsed.variables) {
+                if (!used.has('VARIABLE:' + v.name)) {
+                    diagnostics.push(makeDiagnostic(
+                        document, v.nameOffset, v.name.length,
+                        `Variable '${v.name}' is declared but never used in any expression.`,
+                        vscode.DiagnosticSeverity.Warning,
+                        'jrxml.unusedVariable'
+                    ));
+                }
             }
         }
     }
 
     // ── 2. Undeclared references + 3. expression validation ───────────────────
     if (checkExpr) {
-        const declaredFields = new Set(parsed.fields.map(f => f.name));
-        const declaredParams = new Set([...parsed.parameters.map(p => p.name), ...BUILTIN_PARAMETER_NAMES]);
-        const declaredVars   = new Set([...parsed.variables.map(v => v.name), ...BUILTIN_VARIABLE_NAMES]);
+        // A reference inside a dataset resolves against that dataset's
+        // declarations, so the declared set spans report and dataset scope.
+        const declaredFields = new Set(parsed.allFields.map(f => f.name));
+        const declaredParams = new Set([...parsed.allParameters.map(p => p.name), ...BUILTIN_PARAMETER_NAMES]);
+        const declaredVars   = new Set([...parsed.allVariables.map(v => v.name), ...BUILTIN_VARIABLE_NAMES]);
 
         for (const ref of parsed.references) {
+            // <subreportParameter name="X"> / a <parameter> nested in a
+            // subreport names the SUBREPORT's parameter, not one of this
+            // report's. It is only a usage marker for the unused check; the
+            // value expression beside it is what references this report's own
+            // symbols and is validated separately. <returnValue toVariable="V">
+            // is different: V IS a variable of this report.
+            if (ref.fromSubreport && ref.sigil === 'P') continue;
+
             let isDeclared = false;
             if (ref.sigil === 'F') isDeclared = declaredFields.has(ref.name);
             else if (ref.sigil === 'P') isDeclared = declaredParams.has(ref.name);

@@ -27,9 +27,9 @@ const provider = vscode.languages.registerDefinitionProvider(
             const parsed = parseDeclarations(document);
 
             let decl = null;
-            if (ref.sigil === 'F') decl = parsed.fields.find(f => f.name === ref.name);
-            else if (ref.sigil === 'P') decl = parsed.parameters.find(p => p.name === ref.name);
-            else if (ref.sigil === 'V') decl = parsed.variables.find(v => v.name === ref.name);
+            if (ref.sigil === 'F') decl = parsed.allFields.find(f => f.name === ref.name);
+            else if (ref.sigil === 'P') decl = parsed.allParameters.find(p => p.name === ref.name);
+            else if (ref.sigil === 'V') decl = parsed.allVariables.find(v => v.name === ref.name);
 
             if (!decl) return null;
 

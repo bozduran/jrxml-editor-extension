@@ -275,33 +275,36 @@ const provider = vscode.languages.registerCompletionItemProvider(
             try {
                 decls = parseDeclarations(document);
             } catch (_) {
-                decls = { fields: [], parameters: [], variables: [], groups: [] };
+                decls = {
+                    fields: [], parameters: [], variables: [],
+                    allFields: [], allParameters: [], allVariables: [], groups: [],
+                };
             }
 
             const items = [];
 
             if (ctx.mode === 'field') {
-                items.push(...makeDeclarationItems(decls.fields, 'F', vscode.CompletionItemKind.Field, true, '0_'));
+                items.push(...makeDeclarationItems(decls.allFields, 'F', vscode.CompletionItemKind.Field, true, '0_'));
                 return items;
             }
 
             if (ctx.mode === 'param') {
-                const allParams = [...decls.parameters, ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))];
+                const allParams = [...decls.allParameters, ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))];
                 items.push(...makeDeclarationItems(allParams, 'P', vscode.CompletionItemKind.TypeParameter, true, '0_'));
                 return items;
             }
 
             if (ctx.mode === 'variable') {
-                const allVars = [...decls.variables, ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))];
+                const allVars = [...decls.allVariables, ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))];
                 items.push(...makeDeclarationItems(allVars, 'V', vscode.CompletionItemKind.Variable, true, '0_'));
                 return items;
             }
 
             if (ctx.mode === 'dollar') {
                 const shortcuts = [
-                    { label: '$F{', detail: `Field  (${decls.fields.length} defined)`,     snippet: 'F{$1}', kind: vscode.CompletionItemKind.Field },
-                    { label: '$P{', detail: `Parameter  (${decls.parameters.length} defined)`, snippet: 'P{$1}', kind: vscode.CompletionItemKind.TypeParameter },
-                    { label: '$V{', detail: `Variable  (${decls.variables.length} defined)`,   snippet: 'V{$1}', kind: vscode.CompletionItemKind.Variable },
+                    { label: '$F{', detail: `Field  (${decls.allFields.length} defined)`,     snippet: 'F{$1}', kind: vscode.CompletionItemKind.Field },
+                    { label: '$P{', detail: `Parameter  (${decls.allParameters.length} defined)`, snippet: 'P{$1}', kind: vscode.CompletionItemKind.TypeParameter },
+                    { label: '$V{', detail: `Variable  (${decls.allVariables.length} defined)`,   snippet: 'V{$1}', kind: vscode.CompletionItemKind.Variable },
                     { label: '$R{', detail: 'Resource bundle key',                          snippet: 'R{$1}', kind: vscode.CompletionItemKind.Reference },
                 ];
                 for (const s of shortcuts) {
@@ -313,13 +316,13 @@ const provider = vscode.languages.registerCompletionItemProvider(
             // ── General context → show everything ────────────────────────────
             
             // 1. User fields
-            items.push(...makeDeclarationItems(decls.fields, 'F', vscode.CompletionItemKind.Field, false, '1_F_'));
+            items.push(...makeDeclarationItems(decls.allFields, 'F', vscode.CompletionItemKind.Field, false, '1_F_'));
 
             // 2. User parameters
-            items.push(...makeDeclarationItems(decls.parameters.filter(p => !p.isSystem), 'P', vscode.CompletionItemKind.TypeParameter, false, '1_P_'));
+            items.push(...makeDeclarationItems(decls.allParameters.filter(p => !p.isSystem), 'P', vscode.CompletionItemKind.TypeParameter, false, '1_P_'));
 
             // 3. User variables
-            items.push(...makeDeclarationItems(decls.variables, 'V', vscode.CompletionItemKind.Variable, false, '1_V_'));
+            items.push(...makeDeclarationItems(decls.allVariables, 'V', vscode.CompletionItemKind.Variable, false, '1_V_'));
 
             // 4. Jasper built-in functions
             for (const fn of JASPER_FUNCTIONS) {

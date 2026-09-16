@@ -2,13 +2,15 @@
 // Parses a .jrxml document and extracts declarations, references, and structure.
 // Results are cached per document version.
 
+const { scanXml } = require('./xmlspan');
+
 const cache = new Map();
 
 /**
  * @typedef {{ name:string, type:string, fullType:string, description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
  * @typedef {{ sigil:string, name:string, offset:number, fromSubreport?:boolean }} Reference
  * @typedef {{ kind:string, name:string, offset:number, end:number, children:OutlineNode[] }} OutlineNode
- * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
+ * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
  */
 
 const COMMON_TYPES = new Set([
@@ -23,18 +25,80 @@ function parseDeclarations(document) {
     const cached = cache.get(key);
     if (cached && cached.version === document.version) return cached.result;
 
-    const text   = document.getText();
+    const text = document.getText();
+
+    // Which <field>/<parameter>/<variable> offsets are report declarations
+    // (direct children of <jasperReport>) versus dataset declarations (inside
+    // <dataset>/<subDataset>). Everything else — a parameter passed into a
+    // subreport, a <datasetRun> parameter — is not a declaration at all.
+    // `null` when the document cannot be scanned: fall back to the old
+    // whole-document regex behaviour so a malformed file still yields
+    // declarations for the undeclared-reference check.
+    const scopes = classifyDeclarationScopes(text);
+
+    const rawFields     = extractFields(text);
+    const rawParameters = extractParameters(text, !scopes);
+    const rawVariables  = extractVariables(text);
+
+    const fields      = filterScope(rawFields,     'field',     scopes, 'report');
+    const parameters  = filterScope(rawParameters, 'parameter', scopes, 'report');
+    const variables   = filterScope(rawVariables,  'variable',  scopes, 'report');
+    const dsFields    = filterScope(rawFields,     'field',     scopes, 'dataset');
+    const dsParameters = filterScope(rawParameters, 'parameter', scopes, 'dataset');
+    const dsVariables = filterScope(rawVariables,  'variable',  scopes, 'dataset');
+
+    const byOffset = (a, b) => a.offset - b.offset;
+
     const result = {
-        fields:     extractFields(text),
-        parameters: extractParameters(text),
-        variables:  extractVariables(text),
+        fields,
+        parameters,
+        variables,
+        dataset: {
+            fields:     dsFields,
+            parameters: dsParameters,
+            variables:  dsVariables,
+        },
+        allFields:     [...fields, ...dsFields].sort(byOffset),
+        allParameters: [...parameters, ...dsParameters].sort(byOffset),
+        allVariables:  [...variables, ...dsVariables].sort(byOffset),
         groups:     extractGroups(text),
         references: extractReferences(text),
-        outline:    extractOutline(text),
+        outline:    extractOutline(text, { fields, parameters, variables }),
     };
 
     cache.set(key, { version: document.version, result });
     return result;
+}
+
+/**
+ * Map each declaration tag to the set of start-tag offsets that are direct
+ * report children or dataset children. Returns null when the document cannot
+ * be scanned.
+ */
+function classifyDeclarationScopes(text) {
+    const scan = scanXml(text);
+    if (scan.error) return null;
+
+    const report  = { field: new Set(), parameter: new Set(), variable: new Set() };
+    const dataset = { field: new Set(), parameter: new Set(), variable: new Set() };
+
+    for (const node of scan.doc.walk()) {
+        if (node.tag !== 'field' && node.tag !== 'parameter' && node.tag !== 'variable') continue;
+
+        if (node.ancestors().some(a => a.tag === 'dataset' || a.tag === 'subDataset')) {
+            dataset[node.tag].add(node.startTag);
+        } else if (node.parent === scan.doc.root) {
+            report[node.tag].add(node.startTag);
+        }
+    }
+    return { report, dataset };
+}
+
+/** Keep only declarations whose start tag belongs to `scope`. */
+function filterScope(list, tag, scopes, scope) {
+    if (!scopes) return scope === 'report' ? list : [];
+    const allowed = scopes[scope][tag];
+    return list.filter(decl => allowed.has(decl.offset));
 }
 
 /** Drop the cached parse result for a single document (call when it closes). */
@@ -77,15 +141,17 @@ function extractFields(text) {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-function extractParameters(text) {
+function extractParameters(text, skipSubreports = true) {
     const results = [];
-    const subreportRanges = buildSubreportRanges(text);
+    // Only needed on the whole-document fallback: when the scanner is
+    // available, scope classification drops every nested <parameter> instead.
+    const subreportRanges = skipSubreports ? buildSubreportRanges(text) : null;
 
     const tagRe = /<parameter(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/parameter>)/g;
     let m;
     while ((m = tagRe.exec(text)) !== null) {
         // Skip parameters that are nested inside a subreport element
-        if (inSubreportRange(m.index, subreportRanges)) continue;
+        if (subreportRanges && inSubreportRange(m.index, subreportRanges)) continue;
 
         const attrs  = m[1] || '';
         const inner  = m[2] || '';
@@ -217,8 +283,11 @@ const BANDS = [
     'pageFooter','lastPageFooter','summary','noData','background'
 ];
 
-function extractOutline(text) {
+function extractOutline(text, declarations = {}) {
     const nodes = [];
+    const fields     = declarations.fields     || [];
+    const parameters = declarations.parameters || [];
+    const variables  = declarations.variables  || [];
 
     // Report name
     const reportMatch = text.match(/<jasperReport[^>]*\sname="([^"]+)"/);
@@ -235,14 +304,14 @@ function extractOutline(text) {
     // ── Declarations group ────────────────────────────────────────────────────
     const declChildren = [];
 
-    for (const f of extractFields(text)) {
+    for (const f of fields) {
         declChildren.push({
             kind: 'field', name: `${f.name} : ${f.type}`,
             offset: f.offset, end: f.end, children: []
         });
     }
 
-    for (const p of extractParameters(text)) {
+    for (const p of parameters) {
         if (p.isSystem) continue;
         declChildren.push({
             kind: 'parameter', name: `${p.name} : ${p.type}`,
@@ -250,7 +319,7 @@ function extractOutline(text) {
         });
     }
 
-    for (const v of extractVariables(text)) {
+    for (const v of variables) {
         declChildren.push({
             kind: 'variable', name: `${v.name} : ${v.type}`,
             offset: v.offset, end: v.end, children: []

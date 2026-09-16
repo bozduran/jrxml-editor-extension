@@ -66,10 +66,24 @@ test('handles xml declaration, processing instructions and comments', () => {
     assert.strictEqual(doc.root.children.length, 1);
 });
 
-test('rejects DOCTYPE declarations', () => {
-    const { doc, error } = scanXml('<!DOCTYPE foo [<!ENTITY x "y">]><r/>');
-    assert.strictEqual(doc, null);
-    assert.match(error, /DOCTYPE/);
+test('skips DOCTYPE declarations and never resolves entities', () => {
+    const text = '<!DOCTYPE foo [<!ENTITY x "y">]><r>&x;</r>';
+    const { doc, error } = scanXml(text);
+    assert.strictEqual(error, null);
+    assert.strictEqual(doc.root.tag, 'r');
+    // The entity is left as literal text — never expanded.
+    assert.strictEqual(doc.root.textContent(), '&x;');
+});
+
+test('skips a DOCTYPE whose internal subset contains > and quotes', () => {
+    const text = '<!DOCTYPE r [<!ENTITY a "x > y">]><r/>';
+    const { doc, error } = scanXml(text);
+    assert.strictEqual(error, null);
+    assert.strictEqual(doc.root.tag, 'r');
+});
+
+test('an unterminated DOCTYPE is reported', () => {
+    assert.match(scanXml('<!DOCTYPE r [<r/>').error, /DOCTYPE/);
 });
 
 test('reports malformed documents instead of guessing', () => {

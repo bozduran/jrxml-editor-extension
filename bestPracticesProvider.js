@@ -121,9 +121,12 @@ function isBoolean(t) {
  */
 function buildTypeSet(declarations, predicate) {
     const sets = { F: new Set(), P: new Set(), V: new Set() };
-    for (const f of declarations.fields)      if (predicate(f.fullType || f.type)) sets.F.add(f.name);
-    for (const p of declarations.parameters)  if (predicate(p.fullType || p.type)) sets.P.add(p.name);
-    for (const v of declarations.variables)   if (predicate(v.fullType || v.type)) sets.V.add(v.name);
+    const fields     = declarations.allFields     || declarations.fields     || [];
+    const parameters = declarations.allParameters || declarations.parameters || [];
+    const variables  = declarations.allVariables  || declarations.variables  || [];
+    for (const f of fields)     if (predicate(f.fullType || f.type)) sets.F.add(f.name);
+    for (const p of parameters) if (predicate(p.fullType || p.type)) sets.P.add(p.name);
+    for (const v of variables)  if (predicate(v.fullType || v.type)) sets.V.add(v.name);
     return sets;
 }
 

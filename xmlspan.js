@@ -2,8 +2,10 @@
 // Offset-accurate, well-formedness-checking XML scanner for .jrxml documents.
 //
 // All offsets are CHARACTER offsets into the decoded string (never bytes).
-// DOCTYPE declarations are rejected (XXE / SSRF / billion-laughs) and entities
-// are never resolved — a .jrxml never needs them.
+// DOCTYPE declarations are skipped, never fetched and never resolved: entities
+// are left as literal text, so a DTD (internal or external) can cause neither
+// XXE/SSRF nor entity-expansion blowups, while real JasperReports files that
+// carry a DOCTYPE still scan.
 //
 // The scan returns a tree whose nodes carry the spans the rules need:
 //   startTag      offset of the '<' of the opening tag
@@ -103,10 +105,6 @@ class XmlDocument {
  * @returns {{ doc: XmlDocument|null, error: string|null }}
  */
 function scanXml(text) {
-    if (/<!\s*DOCTYPE/i.test(text)) {
-        return { doc: null, error: 'DOCTYPE declarations are not allowed' };
-    }
-
     const documentNode = new XmlNode('#document', 0, 0);
     documentNode.end = text.length;
     const stack = [documentNode];
@@ -149,6 +147,16 @@ function scanXml(text) {
             const end = text.indexOf('?>', lt + 2);
             if (end === -1) return { doc: null, error: 'unterminated processing instruction' };
             i = end + 2;
+            continue;
+        }
+
+        // DOCTYPE declaration — skipped, never fetched or resolved. Handled
+        // before the generic `<!` branch because an internal subset may contain
+        // `>` inside `[...]` and inside quoted entity values.
+        if (/^<!\s*DOCTYPE/i.test(text.slice(lt, lt + 64))) {
+            const end = skipDoctype(text, lt);
+            if (end === -1) return { doc: null, error: 'unterminated DOCTYPE declaration' };
+            i = end;
             continue;
         }
 
@@ -202,6 +210,35 @@ function scanXml(text) {
     }
     documentNode.end = text.length;
     return { doc: new XmlDocument(documentNode.children[0]), error: null };
+}
+
+/**
+ * Offset just past the `>` that closes a DOCTYPE declaration beginning at
+ * `lt`, or -1 when it is unterminated. Bracketed internal subsets and quoted
+ * values are skipped so a `>` inside them does not end the declaration early.
+ */
+function skipDoctype(text, lt) {
+    let i = lt + 2; // past '<!'
+    let bracket = 0;
+
+    while (i < text.length) {
+        const ch = text[i];
+        if (ch === '"' || ch === "'") {
+            const close = text.indexOf(ch, i + 1);
+            if (close === -1) return -1;
+            i = close + 1;
+            continue;
+        }
+        if (ch === '[') {
+            bracket++;
+        } else if (ch === ']') {
+            if (bracket > 0) bracket--;
+        } else if (ch === '>' && bracket === 0) {
+            return i + 1;
+        }
+        i++;
+    }
+    return -1;
 }
 
 /** Parse a start tag beginning at `lt`. */

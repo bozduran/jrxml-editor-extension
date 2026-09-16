@@ -61,10 +61,10 @@ const provider = vscode.languages.registerHoverProvider(
             const parsed = parseDeclarations(document);
 
             if (ref.sigil === 'F') {
-                decl = parsed.fields.find(f => f.name === ref.name);
+                decl = parsed.allFields.find(f => f.name === ref.name);
                 kind = 'Field';
             } else if (ref.sigil === 'P') {
-                decl = parsed.parameters.find(p => p.name === ref.name);
+                decl = parsed.allParameters.find(p => p.name === ref.name);
                 if (!decl && BUILTIN_PARAMETER_NAMES.has(ref.name)) {
                     const b = BUILTIN_PARAMETERS.find(p => p.name === ref.name);
                     decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
@@ -72,7 +72,7 @@ const provider = vscode.languages.registerHoverProvider(
                 }
                 kind = 'Parameter';
             } else if (ref.sigil === 'V') {
-                decl = parsed.variables.find(v => v.name === ref.name);
+                decl = parsed.allVariables.find(v => v.name === ref.name);
                 if (!decl && BUILTIN_VARIABLE_NAMES.has(ref.name)) {
                     const b = BUILTIN_VARIABLES.find(v => v.name === ref.name);
                     decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };

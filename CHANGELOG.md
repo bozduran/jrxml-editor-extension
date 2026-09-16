@@ -46,6 +46,33 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- **Undeclared references:** a `<subreportParameter name="…">` or a `<parameter>`
+  nested in a subreport names the *subreport's* parameter, so it is no longer
+  reported as `Parameter '…' is not declared in this report`. Its value
+  expression is still validated, and `<returnValue toVariable="…">` is still
+  checked because that variable does belong to this report.
+- **Unused warnings:** a field/parameter/variable used only before its
+  declaration, or only from an expression-bearing element outside the hook's
+  narrow set (`propertyExpression`, `imageExpression`, `subreportExpression`,
+  `filterExpression`, chart/hyperlink expressions,
+  `subreportParameterExpression`, `<sortField name="…">`, …), is no longer
+  flagged as unused. References are now collected from every expression
+  element.
+- **Unused warnings:** declarations are now scoped by the XML tree. Only direct
+  children of `<jasperReport>` are report declarations; `<dataset>` /
+  `<subDataset>` members are dataset scope, and a `<parameter>` passed into a
+  subreport (classic or `<element kind="subreport">`) or a `<datasetRun>` is
+  neither — so dataset fields and subreport parameters are no longer reported,
+  offered for deletion, or listed as report declarations. Dataset declarations
+  still resolve references inside their dataset.
+- **Unused warnings:** a document that cannot be scanned no longer flags every
+  declaration as unused; the check is skipped when usage cannot be determined.
+- **Scanner:** `<!DOCTYPE …>` declarations are skipped instead of rejected, so
+  real JasperReports files that carry a DTD scan again. The DTD is never
+  fetched and entities are never expanded, so XXE/SSRF/entity-expansion are
+  still impossible.
+
 ### Added
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:

@@ -89,6 +89,95 @@ test('$P!{} references inside a query count as used', () => {
     assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
 });
 
+test('a field used before its declaration in a propertyExpression is used (issue regression)', () => {
+    const text = report([
+        '  <propertyExpression name="net.sf.jasperreports.export.pdf.tag.language"><![CDATA[$F{Field_1}]]></propertyExpression>',
+        '  <field name="Field_1" class="java.lang.String"/>',
+    ].join('\n'));
+
+    assert.ok(collectUsedNames(text).has('FIELD:Field_1'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('references in image/subreport/filter/chart expressions count as used', () => {
+    const text = report([
+        '  <parameter name="Src" class="java.lang.String"/>',
+        '  <field name="Logo" class="java.lang.String"/>',
+        '  <field name="Active" class="java.lang.Boolean"/>',
+        '  <image><imageExpression><![CDATA[$F{Logo}]]></imageExpression></image>',
+        '  <filterExpression><![CDATA[$F{Active}]]></filterExpression>',
+        '  <subreport><subreportExpression><![CDATA[$P{Src}]]></subreportExpression></subreport>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used.has('FIELD:Logo'));
+    assert.ok(used.has('FIELD:Active'));
+    assert.ok(used.has('PARAMETER:Src'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('classic subreportParameterExpression counts as used', () => {
+    const text = report([
+        '  <parameter name="MainP" class="java.lang.String"/>',
+        '  <subreport>',
+        '    <subreportParameter name="SubP"><subreportParameterExpression><![CDATA[$P{MainP}]]></subreportParameterExpression></subreportParameter>',
+        '  </subreport>',
+    ].join('\n'));
+
+    assert.ok(collectUsedNames(text).has('PARAMETER:MainP'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('a sortField references its field/variable by name attribute', () => {
+    const text = report([
+        '  <field name="ByName" class="java.lang.String"/>',
+        '  <variable name="ByVar" class="java.lang.String"/>',
+        '  <group name="G">',
+        '    <groupHeader><band height="1">',
+        '      <sortField name="ByName"/>',
+        '      <sortField name="ByVar" type="Variable"/>',
+        '    </band></groupHeader>',
+        '  </group>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used.has('FIELD:ByName'));
+    assert.ok(used.has('VARIABLE:ByVar'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('collectUsedNames returns null for an unscannable document', () => {
+    assert.strictEqual(collectUsedNames('<r><a></b></r>'), null);
+});
+
+test('a declaration used before it appears in the file is not unused', () => {
+    const text = report([
+        '  <expression><![CDATA[$F{Late}+$P{LateP}+$V{LateV}]]></expression>',
+        '  <field name="Late" class="java.lang.String"/>',
+        '  <parameter name="LateP" class="java.lang.String"/>',
+        '  <variable name="LateV" class="java.lang.String"/>',
+    ].join('\n'));
+
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('golden: DatasetScopeReport keeps dataset/nested declarations out of report scope', () => {
+    const text = fs.readFileSync(path.join(__dirname, 'fixtures', 'DatasetScopeReport.jrxml'), 'utf8');
+    const used = collectUsedNames(text);
+
+    // Field_1 appears only before its declaration, inside a propertyExpression.
+    assert.ok(used.has('FIELD:Field_1'));
+    // Dataset members are referenced inside the dataset.
+    assert.ok(used.has('FIELD:CompanyName'));
+    assert.ok(used.has('PARAMETER:FIL_PARAMETER'));
+
+    // Dataset members and the subreport pass-through are never offered for
+    // deletion; only the genuinely unused report variable is.
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), [
+        "delete unused variable 'Variable_1'",
+    ]);
+});
+
 test('subreport pass-throughs and return values count as used', () => {
     const text = report([
         '  <parameter name="Passed" class="java.lang.String"/>',
