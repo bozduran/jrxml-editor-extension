@@ -2,7 +2,7 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
@@ -61,6 +61,41 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "jrxml.refreshIssues",
+        "title": "JRXML: Refresh Issues",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jrxml.issues.jumpToHit",
+        "title": "JRXML: Go to Issue"
+      },
+      {
+        "command": "jrxml.issues.applyFix",
+        "title": "JRXML: Fix Issue",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "jrxml.issues.fixAll",
+        "title": "JRXML: Fix All Issues in File",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "jrxml.issues.copyMessage",
+        "title": "JRXML: Copy Issue Message"
+      },
+      {
+        "command": "jrxml.issues.copyCode",
+        "title": "JRXML: Copy Rule ID"
+      },
+      {
+        "command": "jrxml.nextIssue",
+        "title": "JRXML: Go to Next Issue"
+      },
+      {
+        "command": "jrxml.previousIssue",
+        "title": "JRXML: Go to Previous Issue"
+      },
+      {
         "command": "jrxml.bp.suppressRule",
         "title": "JRXML: Suppress Best Practice Rule"
       },
@@ -95,6 +130,10 @@
         "title": "JRXML: Migrate SQL Query to jsonql"
       },
       {
+        "command": "jrxml.fixAllFormat",
+        "title": "JRXML: Fix All (Format and Text)"
+      },
+      {
         "command": "jrxml.openSettingsPanel",
         "title": "JRXML: Open Settings",
         "icon": "$(settings-gear)"
@@ -105,15 +144,90 @@
         "icon": "$(refresh)"
       }
     ],
+    "submenus": [
+      {
+        "id": "jrxml",
+        "label": "JRXML"
+      }
+    ],
     "menus": {
       "editor/context": [
         {
-          "command": "jrxml.openExpressionEditor",
+          "submenu": "jrxml",
           "when": "resourceExtname == .jrxml",
-          "group": "jrxml"
+          "group": "jrxml@1"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "submenu": "jrxml",
+          "when": "resourceExtname == .jrxml",
+          "group": "jrxml@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "submenu": "jrxml",
+          "when": "resourceExtname == .jrxml",
+          "group": "jrxml@1"
+        }
+      ],
+      "jrxml": [
+        {
+          "command": "jrxml.openExpressionEditor",
+          "group": "1_open@1"
+        },
+        {
+          "command": "jrxml.issues.fixAll",
+          "group": "2_fix@1"
+        },
+        {
+          "command": "jrxml.fixAllFormat",
+          "group": "2_fix@2"
+        },
+        {
+          "command": "editor.action.formatDocument",
+          "group": "2_fix@3"
+        },
+        {
+          "command": "jrxml.applyClearFixes",
+          "when": "jrxml.hasClearFixes",
+          "group": "3_cleanup@1"
+        },
+        {
+          "command": "jrxml.sortElements",
+          "when": "jrxml.hasSortIssue",
+          "group": "3_cleanup@2"
+        },
+        {
+          "command": "jrxml.migrateSqlQuery",
+          "when": "jrxml.hasSqlMigration",
+          "group": "3_cleanup@3"
+        },
+        {
+          "command": "jrxml.nextIssue",
+          "group": "4_navigate@1"
+        },
+        {
+          "command": "jrxml.previousIssue",
+          "group": "4_navigate@2"
+        },
+        {
+          "command": "jrxml.openSettingsPanel",
+          "group": "9_settings@1"
         }
       ],
       "view/title": [
+        {
+          "command": "jrxml.issues.fixAll",
+          "when": "view == jrxmlIssues",
+          "group": "navigation"
+        },
+        {
+          "command": "jrxml.refreshIssues",
+          "when": "view == jrxmlIssues",
+          "group": "navigation"
+        },
         {
           "command": "jrxml.refreshBestPractices",
           "when": "view == jrxmlBestPractices",
@@ -126,6 +240,31 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "jrxml.issues.applyFix",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "inline"
+        },
+        {
+          "command": "jrxml.issues.jumpToHit",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "1_open"
+        },
+        {
+          "command": "jrxml.issues.applyFix",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "1_open"
+        },
+        {
+          "command": "jrxml.issues.copyMessage",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "9_copy"
+        },
+        {
+          "command": "jrxml.issues.copyCode",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "9_copy"
+        },
         {
           "command": "jrxml.bp.suppressFromTree",
           "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressible",
@@ -140,14 +279,21 @@
           "command": "jrxml.sortElements",
           "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-sort",
           "group": "inline"
-        },
-        {
-          "command": "jrxml.migrateSqlQuery",
-          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-query",
-          "group": "inline"
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "jrxml.nextIssue",
+        "key": "ctrl+alt+down",
+        "when": "editorTextFocus && resourceExtname == .jrxml"
+      },
+      {
+        "command": "jrxml.previousIssue",
+        "key": "ctrl+alt+up",
+        "when": "editorTextFocus && resourceExtname == .jrxml"
+      }
+    ],
     "configuration": {
       "title": "JRXML Expression Editor",
       "properties": {
@@ -192,6 +338,11 @@
           "type": "boolean",
           "default": true,
           "description": "Warn when a $F/$P/$V reference is used as a method-call receiver without a dominating null check."
+        },
+        "jrxml.lint.variableOrder": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a variable references another variable declared later (JasperReports evaluates variables in declaration order)."
         },
         "jrxml.format.reportName": {
           "type": "boolean",
@@ -255,6 +406,12 @@
     },
     "views": {
       "explorer": [
+        {
+          "id": "jrxmlIssues",
+          "name": "Issues (JRXML)",
+          "icon": "$(warning)",
+          "contextualTitle": "JRXML Issues"
+        },
         {
           "id": "jrxmlBestPractices",
           "name": "Best Practices (JRXML)",

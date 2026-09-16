@@ -93,4 +93,37 @@ function registerFormatOnSave(context) {
     );
 }
 
-module.exports = { provider, fixAllProvider, registerFormatOnSave, computeEdits, baseNameOf };
+// ── "Fix all format and text issues" command ──────────────────────────────────
+
+function registerFixAllCommand(context) {
+    context.subscriptions.push(
+        vscode.commands.registerCommand('jrxml.fixAllFormat', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
+                vscode.window.showWarningMessage('Open a .jrxml file first.');
+                return;
+            }
+
+            const edits = computeEdits(editor.document);
+            if (!edits || edits.length === 0) {
+                vscode.window.showInformationMessage('Nothing to format.');
+                return;
+            }
+
+            const workspaceEdit = new vscode.WorkspaceEdit();
+            workspaceEdit.set(editor.document.uri, edits);
+            if (await vscode.workspace.applyEdit(workspaceEdit)) {
+                vscode.window.showInformationMessage('Applied JRXML format and text fixes.');
+            }
+        })
+    );
+}
+
+module.exports = {
+    provider,
+    fixAllProvider,
+    registerFormatOnSave,
+    registerFixAllCommand,
+    computeEdits,
+    baseNameOf,
+};

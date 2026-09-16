@@ -62,6 +62,11 @@ const SETTINGS_GROUPS = [
                 label: 'Unchecked null dereference',
                 description: 'Warn when a $F/$P/$V reference is used as a method-call receiver without a dominating null check.',
             },
+            {
+                key: 'lint.variableOrder', type: 'boolean', default: true,
+                label: 'Variable used before declaration',
+                description: 'Warn when a variable references another variable declared later (JasperReports evaluates variables in declaration order).',
+            },
         ],
     },
     {

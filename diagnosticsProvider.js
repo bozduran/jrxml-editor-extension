@@ -14,6 +14,7 @@ const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBui
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
+const { checkVariableOrder } = require('./evaluationOrder');
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
@@ -202,6 +203,20 @@ function updateDiagnostics(document) {
         }
     } catch (err) {
         console.error('[JRXML] lint rules failed:', err);
+    }
+
+    // ── 4b. Variable evaluation order (declared-later references) ─────────────
+    if (cfg.get('lint.variableOrder', true)) {
+        try {
+            for (const finding of checkVariableOrder(text)) {
+                diagnostics.push(makeDiagnostic(
+                    document, finding.offset, finding.length, finding.message,
+                    vscode.DiagnosticSeverity.Warning, finding.code
+                ));
+            }
+        } catch (err) {
+            console.error('[JRXML] variable order check failed:', err);
+        }
     }
 
     // ── 5. Text check (double spaces, period spacing, unrenderable, newlines) ─

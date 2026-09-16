@@ -17,7 +17,7 @@
 const vscode            = require('vscode');
 const { parseDeclarations } = require('./jrxmlParser');
 const { EXPRESSION_TAGS }   = require('./expressionUtils');
-const { collectFileIssues } = require('./fileIssues');
+const { collectFileIssues, SORT_KIND } = require('./fileIssues');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RULES
@@ -429,9 +429,11 @@ function register(context) {
         if (!doc || !doc.fileName.endsWith('.jrxml')) { treeProvider.refresh([], []); return; }
 
         const settings = vscode.workspace.getConfiguration('jrxml');
+        // SQL migration is presented by the Issues (JRXML) view; the best
+        // practices view keeps the geometry sort.
         const issues = collectFileIssues(doc.getText(), {
             targetLanguage: settings.get('migrate.targetLanguage', 'jsonql'),
-        });
+        }).filter(issue => issue.kind === SORT_KIND);
         treeProvider.refresh(runRules(doc), issues);
     }
 

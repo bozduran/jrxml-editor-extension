@@ -126,3 +126,15 @@ test('a field used before its declaration in propertyExpression is not unused', 
 
     assert.deepStrictEqual(unused(diagnose(text)), []);
 });
+
+test('a variable used before its declaration is reported as a warning', () => {
+    const text = `<jasperReport name="R">
+  <variable name="A" class="java.lang.String"><expression><![CDATA[$V{B}]]></expression></variable>
+  <variable name="B" class="java.lang.String"><expression><![CDATA["x"]]></expression></variable>
+</jasperReport>`;
+
+    const diags = diagnose(text).filter(d => d.code === 'jrxml.lint.variableOrder');
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 1); // Warning
+    assert.match(diags[0].message, /declared later/);
+});

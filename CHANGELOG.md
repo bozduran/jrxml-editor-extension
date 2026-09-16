@@ -46,6 +46,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-16
+
 ### Fixed
 - **Undeclared references:** a `<subreportParameter name="…">` or a `<parameter>`
   nested in a subreport names the *subreport's* parameter, so it is no longer
@@ -74,6 +76,33 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   still impossible.
 
 ### Added
+- New **Issues (JRXML)** Explorer view, declared above Best Practices. It lists
+  every `JRXML` diagnostic — undeclared references, unbalanced parentheses,
+  unclosed strings, unused declarations, the structural lint rules and
+  textcheck (missing space after `.`, double spaces, unrenderable characters,
+  newlines) — plus the SQL→jsonql migration action, grouped into
+  Errors / Warnings / Actions with a count badge. Clicking an item jumps to it.
+  The geometry sort stays in Best Practices.
+- Act on Issues (JRXML) items in place: an inline **Fix** runs the lightbulb's
+  quick fix, **Fix All Issues in File** applies every preferred fix as one
+  undoable edit (skipping overlapping ranges; non-preferred fixes such as
+  "remove unused declaration" stay opt-in), and the item context menu offers
+  Go to Issue · Fix · Copy Message · Copy Rule ID.
+- A **JRXML** submenu in the editor context menu, on the editor tab and on
+  `.jrxml` files in the Explorer: Open Expression Editor · Fix All Issues in
+  File · Fix All (Format and Text) · Format Document · Apply Clear Fixes ·
+  Sort Elements by Position · Migrate SQL Query · Open Settings. The
+  destructive entries only appear when the open file actually has that work
+  (`jrxml.hasClearFixes` / `jrxml.hasSortIssue` / `jrxml.hasSqlMigration`).
+- Navigate issues from the keyboard: `JRXML: Go to Next/Previous Issue`
+  (`Ctrl+Alt+Down` / `Ctrl+Alt+Up` in a `.jrxml` editor) wraps around the file,
+  and the status bar shows the current issue count with a click-through to the
+  Issues (JRXML) view. Both are also in the JRXML context submenu.
+- New **`jrxml.lint.variableOrder`** warning (default on, toggle in Settings):
+  a variable that references another variable declared *later* in the same
+  scope, which JasperReports evaluates in declaration order. Self-references
+  (accumulators), built-in variables and cross-scope (report vs dataset)
+  references are not flagged. Warning only — declarations are never reordered.
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally
