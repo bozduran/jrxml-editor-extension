@@ -11,6 +11,7 @@ const { provider: outlineProvider }    = require('./outlineProvider');
 const { register: registerDiagnostics } = require('./diagnosticsProvider');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
 const { register: registerBestPractices } = require('./bestPracticesProvider');
+const { register: registerIssuesView } = require('./issuesView');
 const {
     provider: documentFormatter,
     fixAllProvider,
@@ -95,6 +96,7 @@ function activate(context) {
     );
 
     // ── Best practices + diagnostics ──────────────────────────────────────────
+    registerIssuesView(context);
     registerBestPractices(context);
     registerDiagnostics(context);
 

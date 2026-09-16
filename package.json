@@ -61,6 +61,15 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "jrxml.refreshIssues",
+        "title": "JRXML: Refresh Issues",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "jrxml.issues.jumpToHit",
+        "title": "JRXML: Go to Issue"
+      },
+      {
         "command": "jrxml.bp.suppressRule",
         "title": "JRXML: Suppress Best Practice Rule"
       },
@@ -114,6 +123,11 @@
         }
       ],
       "view/title": [
+        {
+          "command": "jrxml.refreshIssues",
+          "when": "view == jrxmlIssues",
+          "group": "navigation"
+        },
         {
           "command": "jrxml.refreshBestPractices",
           "when": "view == jrxmlBestPractices",
@@ -255,6 +269,12 @@
     },
     "views": {
       "explorer": [
+        {
+          "id": "jrxmlIssues",
+          "name": "Issues (JRXML)",
+          "icon": "$(warning)",
+          "contextualTitle": "JRXML Issues"
+        },
         {
           "id": "jrxmlBestPractices",
           "name": "Best Practices (JRXML)",

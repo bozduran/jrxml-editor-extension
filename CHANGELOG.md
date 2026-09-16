@@ -74,6 +74,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   still impossible.
 
 ### Added
+- New **Issues (JRXML)** Explorer view, declared above Best Practices. It lists
+  every `JRXML` diagnostic — undeclared references, unbalanced parentheses,
+  unclosed strings, unused declarations, the structural lint rules and
+  textcheck (missing space after `.`, double spaces, unrenderable characters,
+  newlines) — plus the SQL→jsonql migration action, grouped into
+  Errors / Warnings / Actions with a count badge. Clicking an item jumps to it.
+  The geometry sort stays in Best Practices.
 - Ported the commit-time `myhooks` hook's `lint` step into the editor as three
   structural diagnostics, each with a quick fix and its own toggle:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally
