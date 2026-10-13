@@ -90,6 +90,30 @@ Two destructive steps are opt-in commands, always previewed as a diff before app
 ### 8. Smart autocomplete
 Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
 
+**Typed member completion.** Typing `.` after a field, parameter or variable completes the *Java members of its declared `class`*:
+
+| Expression | Offered |
+|---|---|
+| `$F{CustomerName}.` | `String` members — `substring(int, int)`, `toUpperCase()`, … |
+| `$P{Total}.` | `BigDecimal` members — `add(BigDecimal)`, `setScale(int, RoundingMode)`, … |
+| `$V{Count}.` | `Integer` members — `intValue()`, `compareTo(Integer)`, … |
+| `$P{REPORT_DATA_SOURCE}.` | `JRDataSource` members — `next()`, `getFieldValue(String)` |
+| `$F{Name}.trim().` | members of `trim()`'s return type, up to a few calls deep |
+
+Members are ranked with the most used first, overloads are listed with their parameter types, each item inserts a snippet with named placeholders (`substring(${1:n}, ${2:n2})`) and the documentation names the declaring type. Inherited members are offered too, marked as inherited and sorted after the type's own. Deprecated members are flagged. `String.length` on a `$F{...}` whose value can be null still triggers the *unchecked null dereference* warning — member completion does not change that rule.
+
+The member table ships with the extension (`data/jdk-members.json`, generated from `javap` by `npm run gen:jdk-index`) and covers JDK types plus a few JasperReports engine types (`data/extra-types.json`). Project classes from `src/main/java` are not indexed yet, so a parameter typed as your own class completes nothing instead of guessing.
+
+**Target Java version.** `jrxml.typeCompletion.jdkBaseline` (default `8`) hides members that do not exist on your target JDK, so a Java 8 report is never offered `String.isBlank` or `List.getFirst`. Set it to `11`, `17` or `21` when your reports compile against a newer JDK.
+
+**When a receiver cannot be typed**, completion says so instead of showing an unrelated list:
+
+- no `class` attribute on the declaration → an item explaining that the type is inferred by JasperReports, with the XML to declare it;
+- a class outside the index → an item naming the class that is not covered;
+- a short name that matches several types (`Date`) → an item listing the candidates, so you can write the full class name.
+
+`jrxml.typeCompletion.enabled` (default `true`) turns the whole thing off and restores the previous behaviour.
+
 ### 9. Settings panel
 **JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 

@@ -25,6 +25,16 @@ const SETTINGS_GROUPS = [
                 label: 'Auto-open editor',
                 description: 'Open the expression editor when the cursor enters an expression.',
             },
+            {
+                key: 'typeCompletion.enabled', type: 'boolean', default: true,
+                label: 'Typed member completion',
+                description: "Suggest the Java members of a field, parameter or variable type after a '.' (for example $F{customer}.get).",
+            },
+            {
+                key: 'typeCompletion.jdkBaseline', type: 'string', default: '8',
+                label: 'Target Java version',
+                description: 'Members added after this version (String.isBlank, List.getFirst, ...) are not suggested. 8 matches JasperReports 6.x, 11 matches 7.x.',
+            },
         ],
     },
     {
