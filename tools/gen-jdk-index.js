@@ -78,6 +78,9 @@ const CLASSES = [
     'java.sql.Statement',
     'java.sql.PreparedStatement',
     'java.sql.ResultSet',
+    // java.net (built-in parameter types)
+    'java.net.URLStreamHandlerFactory',
+    'java.net.URLStreamHandler',
     // java.text
     'java.text.SimpleDateFormat',
     'java.text.DecimalFormat',
@@ -468,7 +471,12 @@ function collectSuperEdges(rootClasses, javapBin) {
         try {
             const header = headerOf(fqn, javapBin);
             if (!header) throw new Error('no type header');
-            edges[fqn] = header.supertypes;
+            // javap omits `extends java.lang.Object` for direct subclasses, but
+            // every reference type really does have Object's members — including
+            // interfaces, where toString/getClass/wait are all callable.
+            edges[fqn] = header.supertypes.includes('java.lang.Object') || fqn === 'java.lang.Object'
+                ? header.supertypes
+                : [...header.supertypes, 'java.lang.Object'];
         } catch (err) {
             edges[fqn] = [];
             failures.push(`${fqn}: ${err.message.split('\n')[0]}`);

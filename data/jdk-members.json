@@ -11,283 +11,388 @@
    "java.lang.Comparable",
    "java.lang.CharSequence",
    "java.lang.constant.Constable",
-   "java.lang.constant.ConstantDesc"
+   "java.lang.constant.ConstantDesc",
+   "java.lang.Object"
   ],
-  "java.lang.CharSequence": [],
+  "java.lang.CharSequence": [
+   "java.lang.Object"
+  ],
   "java.lang.Number": [
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.lang.Integer": [
    "java.lang.Number",
    "java.lang.Comparable",
    "java.lang.constant.Constable",
-   "java.lang.constant.ConstantDesc"
+   "java.lang.constant.ConstantDesc",
+   "java.lang.Object"
   ],
   "java.lang.Long": [
    "java.lang.Number",
    "java.lang.Comparable",
    "java.lang.constant.Constable",
-   "java.lang.constant.ConstantDesc"
+   "java.lang.constant.ConstantDesc",
+   "java.lang.Object"
   ],
   "java.lang.Double": [
    "java.lang.Number",
    "java.lang.Comparable",
    "java.lang.constant.Constable",
-   "java.lang.constant.ConstantDesc"
+   "java.lang.constant.ConstantDesc",
+   "java.lang.Object"
   ],
   "java.lang.Float": [
    "java.lang.Number",
    "java.lang.Comparable",
    "java.lang.constant.Constable",
-   "java.lang.constant.ConstantDesc"
+   "java.lang.constant.ConstantDesc",
+   "java.lang.Object"
   ],
   "java.lang.Short": [
    "java.lang.Number",
    "java.lang.Comparable",
-   "java.lang.constant.Constable"
+   "java.lang.constant.Constable",
+   "java.lang.Object"
   ],
   "java.lang.Byte": [
    "java.lang.Number",
    "java.lang.Comparable",
-   "java.lang.constant.Constable"
+   "java.lang.constant.Constable",
+   "java.lang.Object"
   ],
   "java.lang.Boolean": [
    "java.io.Serializable",
    "java.lang.Comparable",
-   "java.lang.constant.Constable"
+   "java.lang.constant.Constable",
+   "java.lang.Object"
   ],
   "java.lang.Character": [
    "java.io.Serializable",
    "java.lang.Comparable",
-   "java.lang.constant.Constable"
+   "java.lang.constant.Constable",
+   "java.lang.Object"
   ],
   "java.lang.Enum": [
    "java.lang.constant.Constable",
    "java.lang.Comparable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
-  "java.lang.Iterable": [],
-  "java.lang.Comparable": [],
+  "java.lang.Iterable": [
+   "java.lang.Object"
+  ],
+  "java.lang.Comparable": [
+   "java.lang.Object"
+  ],
   "java.lang.StringBuilder": [
    "java.lang.AbstractStringBuilder",
    "java.lang.Appendable",
    "java.io.Serializable",
    "java.lang.Comparable",
-   "java.lang.CharSequence"
+   "java.lang.CharSequence",
+   "java.lang.Object"
   ],
-  "java.lang.ClassLoader": [],
+  "java.lang.ClassLoader": [
+   "java.lang.Object"
+  ],
   "java.math.BigDecimal": [
    "java.lang.Number",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
   "java.math.BigInteger": [
    "java.lang.Number",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
   "java.util.Date": [
    "java.io.Serializable",
    "java.lang.Cloneable",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
   "java.util.Calendar": [
    "java.io.Serializable",
    "java.lang.Cloneable",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
   "java.util.Collection": [
-   "java.lang.Iterable"
+   "java.lang.Iterable",
+   "java.lang.Object"
   ],
   "java.util.List": [
-   "java.util.SequencedCollection"
+   "java.util.SequencedCollection",
+   "java.lang.Object"
   ],
   "java.util.ArrayList": [
    "java.util.AbstractList",
    "java.util.List",
    "java.util.RandomAccess",
    "java.lang.Cloneable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.util.Set": [
-   "java.util.Collection"
+   "java.util.Collection",
+   "java.lang.Object"
   ],
   "java.util.HashSet": [
    "java.util.AbstractSet",
    "java.util.Set",
    "java.lang.Cloneable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
-  "java.util.Map": [],
+  "java.util.Map": [
+   "java.lang.Object"
+  ],
   "java.util.HashMap": [
    "java.util.AbstractMap",
    "java.util.Map",
    "java.lang.Cloneable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.util.TreeMap": [
    "java.util.AbstractMap",
    "java.util.NavigableMap",
    "java.lang.Cloneable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
-  "java.util.Iterator": [],
+  "java.util.Iterator": [
+   "java.lang.Object"
+  ],
   "java.util.Locale": [
    "java.lang.Cloneable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.util.TimeZone": [
    "java.io.Serializable",
-   "java.lang.Cloneable"
+   "java.lang.Cloneable",
+   "java.lang.Object"
   ],
   "java.util.UUID": [
    "java.io.Serializable",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
-  "java.util.Optional": [],
+  "java.util.Optional": [
+   "java.lang.Object"
+  ],
   "java.util.stream.Stream": [
-   "java.util.stream.BaseStream"
+   "java.util.stream.BaseStream",
+   "java.lang.Object"
   ],
   "java.time.LocalDate": [
    "java.time.temporal.Temporal",
    "java.time.temporal.TemporalAdjuster",
    "java.time.chrono.ChronoLocalDate",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.time.LocalDateTime": [
    "java.time.temporal.Temporal",
    "java.time.temporal.TemporalAdjuster",
    "java.time.chrono.ChronoLocalDateTime",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.time.LocalTime": [
    "java.time.temporal.Temporal",
    "java.time.temporal.TemporalAdjuster",
    "java.lang.Comparable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.time.Instant": [
    "java.time.temporal.Temporal",
    "java.time.temporal.TemporalAdjuster",
    "java.lang.Comparable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.time.Duration": [
    "java.time.temporal.TemporalAmount",
    "java.lang.Comparable",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.time.Period": [
    "java.time.chrono.ChronoPeriod",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
   "java.time.ZonedDateTime": [
    "java.time.temporal.Temporal",
    "java.time.chrono.ChronoZonedDateTime",
-   "java.io.Serializable"
+   "java.io.Serializable",
+   "java.lang.Object"
   ],
-  "java.time.format.DateTimeFormatter": [],
+  "java.time.format.DateTimeFormatter": [
+   "java.lang.Object"
+  ],
   "java.sql.Date": [
-   "java.util.Date"
+   "java.util.Date",
+   "java.lang.Object"
   ],
   "java.sql.Time": [
-   "java.util.Date"
+   "java.util.Date",
+   "java.lang.Object"
   ],
   "java.sql.Timestamp": [
-   "java.util.Date"
+   "java.util.Date",
+   "java.lang.Object"
   ],
   "java.sql.Connection": [
    "java.sql.Wrapper",
-   "java.lang.AutoCloseable"
+   "java.lang.AutoCloseable",
+   "java.lang.Object"
   ],
   "java.sql.Statement": [
    "java.sql.Wrapper",
-   "java.lang.AutoCloseable"
+   "java.lang.AutoCloseable",
+   "java.lang.Object"
   ],
   "java.sql.PreparedStatement": [
-   "java.sql.Statement"
+   "java.sql.Statement",
+   "java.lang.Object"
   ],
   "java.sql.ResultSet": [
    "java.sql.Wrapper",
-   "java.lang.AutoCloseable"
+   "java.lang.AutoCloseable",
+   "java.lang.Object"
+  ],
+  "java.net.URLStreamHandlerFactory": [
+   "java.lang.Object"
+  ],
+  "java.net.URLStreamHandler": [
+   "java.lang.Object"
   ],
   "java.text.SimpleDateFormat": [
-   "java.text.DateFormat"
+   "java.text.DateFormat",
+   "java.lang.Object"
   ],
   "java.text.DecimalFormat": [
-   "java.text.NumberFormat"
+   "java.text.NumberFormat",
+   "java.lang.Object"
   ],
   "java.text.NumberFormat": [
-   "java.text.Format"
+   "java.text.Format",
+   "java.lang.Object"
   ],
   "java.text.DateFormat": [
-   "java.text.Format"
+   "java.text.Format",
+   "java.lang.Object"
   ],
-  "java.io.Serializable": [],
-  "java.lang.constant.Constable": [],
-  "java.lang.constant.ConstantDesc": [],
+  "java.io.Serializable": [
+   "java.lang.Object"
+  ],
+  "java.lang.constant.Constable": [
+   "java.lang.Object"
+  ],
+  "java.lang.constant.ConstantDesc": [
+   "java.lang.Object"
+  ],
   "java.lang.AbstractStringBuilder": [
    "java.lang.Appendable",
-   "java.lang.CharSequence"
+   "java.lang.CharSequence",
+   "java.lang.Object"
   ],
-  "java.lang.Appendable": [],
-  "java.lang.Cloneable": [],
+  "java.lang.Appendable": [
+   "java.lang.Object"
+  ],
+  "java.lang.Cloneable": [
+   "java.lang.Object"
+  ],
   "java.util.SequencedCollection": [
-   "java.util.Collection"
+   "java.util.Collection",
+   "java.lang.Object"
   ],
   "java.util.AbstractList": [
    "java.util.AbstractCollection",
-   "java.util.List"
+   "java.util.List",
+   "java.lang.Object"
   ],
-  "java.util.RandomAccess": [],
+  "java.util.RandomAccess": [
+   "java.lang.Object"
+  ],
   "java.util.AbstractSet": [
    "java.util.AbstractCollection",
-   "java.util.Set"
+   "java.util.Set",
+   "java.lang.Object"
   ],
   "java.util.AbstractMap": [
-   "java.util.Map"
+   "java.util.Map",
+   "java.lang.Object"
   ],
   "java.util.NavigableMap": [
-   "java.util.SortedMap"
+   "java.util.SortedMap",
+   "java.lang.Object"
   ],
   "java.util.stream.BaseStream": [
-   "java.lang.AutoCloseable"
+   "java.lang.AutoCloseable",
+   "java.lang.Object"
   ],
   "java.time.temporal.Temporal": [
-   "java.time.temporal.TemporalAccessor"
+   "java.time.temporal.TemporalAccessor",
+   "java.lang.Object"
   ],
-  "java.time.temporal.TemporalAdjuster": [],
+  "java.time.temporal.TemporalAdjuster": [
+   "java.lang.Object"
+  ],
   "java.time.chrono.ChronoLocalDate": [
    "java.time.temporal.Temporal",
    "java.time.temporal.TemporalAdjuster",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
   "java.time.chrono.ChronoLocalDateTime": [
    "java.time.temporal.Temporal",
    "java.time.temporal.TemporalAdjuster",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
-  "java.time.temporal.TemporalAmount": [],
+  "java.time.temporal.TemporalAmount": [
+   "java.lang.Object"
+  ],
   "java.time.chrono.ChronoPeriod": [
-   "java.time.temporal.TemporalAmount"
+   "java.time.temporal.TemporalAmount",
+   "java.lang.Object"
   ],
   "java.time.chrono.ChronoZonedDateTime": [
    "java.time.temporal.Temporal",
-   "java.lang.Comparable"
+   "java.lang.Comparable",
+   "java.lang.Object"
   ],
-  "java.sql.Wrapper": [],
-  "java.lang.AutoCloseable": [],
+  "java.sql.Wrapper": [
+   "java.lang.Object"
+  ],
+  "java.lang.AutoCloseable": [
+   "java.lang.Object"
+  ],
   "java.text.Format": [
    "java.io.Serializable",
-   "java.lang.Cloneable"
+   "java.lang.Cloneable",
+   "java.lang.Object"
   ],
   "java.util.AbstractCollection": [
-   "java.util.Collection"
+   "java.util.Collection",
+   "java.lang.Object"
   ],
   "java.util.SortedMap": [
-   "java.util.SequencedMap"
+   "java.util.SequencedMap",
+   "java.lang.Object"
   ],
-  "java.time.temporal.TemporalAccessor": [],
+  "java.time.temporal.TemporalAccessor": [
+   "java.lang.Object"
+  ],
   "java.util.SequencedMap": [
-   "java.util.Map"
+   "java.util.Map",
+   "java.lang.Object"
   ]
  },
  "types": {
@@ -19826,6 +19931,26 @@
      "since": 8
     }
    ]
+  },
+  "java.net.URLStreamHandlerFactory": {
+   "kind": "interface",
+   "methods": [
+    {
+     "name": "createURLStreamHandler",
+     "params": [
+      "java.lang.String"
+     ],
+     "returns": "java.net.URLStreamHandler",
+     "static": false,
+     "since": 8
+    }
+   ],
+   "fields": []
+  },
+  "java.net.URLStreamHandler": {
+   "kind": "class",
+   "methods": [],
+   "fields": []
   },
   "java.text.SimpleDateFormat": {
    "kind": "class",
