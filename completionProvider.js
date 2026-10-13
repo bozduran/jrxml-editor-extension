@@ -265,7 +265,6 @@ function makeDeclarationItems(declarations, sigil, kind, alreadyInsideBrace, sor
     });
 }
 
-
 // ── Type-aware member completion ──────────────────────────────────────────────
 // `$F{CustomerName}.` offers the members of java.lang.String. The receiver, its
 // type and the candidates are computed by the vscode-free modules above; this
@@ -351,7 +350,12 @@ function provideMemberItems(context, decls, config) {
     if (resolution.resolved) {
         const members = lookup(resolution.typeKey);
         if (members.resolved) {
-            return buildMemberCandidates(members).map(candidate => toMemberItem(candidate, resolution.typeKey));
+            const candidates = buildMemberCandidates(members);
+            // A type with nothing to complete (every member filtered out) is not
+            // a reason to hide the normal list.
+            if (candidates.length > 0) {
+                return candidates.map(candidate => toMemberItem(candidate, resolution.typeKey));
+            }
         }
     }
 
