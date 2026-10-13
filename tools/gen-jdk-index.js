@@ -293,7 +293,7 @@ function typeKey(raw) {
 /** `java.util.List<java.lang.String>` → `java.util.List`, keeping the raw form for display. */
 function memberType(raw) {
     const key = typeKey(raw);
-    return { key, text: stripGenerics(raw).replace(/\.\.\.$/, '[]') };
+    return { key, raw: raw.trim(), text: stripGenerics(raw).replace(/\.\.\.$/, '[]') };
 }
 
 /** Parse one javap body line into a method, a field, or null. */
@@ -519,11 +519,15 @@ function extractType(fqn, javapBin) {
             continue;
         }
 
+        const params = member.params.map(p => p.text);
         methods.push({
             name: member.name,
-            params: member.params.map(p => p.text),
+            params,
             returns: member.returns.text,
             static: member.modifiers.includes('static'),
+            // `...` is lost when the parameter type is normalised to `[]`;
+            // keep it so overload resolution can accept a variable argument count.
+            varargs: member.params.length > 0 && /\.\.\.$/.test(member.params[member.params.length - 1].raw),
             // Kept for now: some bridges are the only public declaration of a
             // callable method (StringBuilder.charAt), so removal is decided
             // later, against the members the user can actually reach.
