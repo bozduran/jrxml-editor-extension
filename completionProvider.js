@@ -3,6 +3,7 @@
 //   - $F{...}  → fields declared in this .jrxml file
 //   - $P{...}  → parameters declared in this .jrxml file
 //   - $V{...}  → variables declared in this .jrxml file
+//   - <receiver>. → the Java members of the receiver's declared type
 //   - Jasper built-in functions
 //   - Common Java types / static methods
 //   - Custom public static methods from local src/main/java
@@ -13,6 +14,9 @@ const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations } = require('./jrxmlParser');
 const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('./jasperBuiltins');
+const { resolveReceiver } = require('./memberResolver');
+const { getMembers } = require('./jdkMemberIndex');
+const { buildMemberCandidates, buildTypeHint, documentationFor } = require('./typeCompletion');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -261,6 +265,100 @@ function makeDeclarationItems(declarations, sigil, kind, alreadyInsideBrace, sor
     });
 }
 
+
+// ── Type-aware member completion ──────────────────────────────────────────────
+// `$F{CustomerName}.` offers the members of java.lang.String. The receiver, its
+// type and the candidates are computed by the vscode-free modules above; this
+// section only turns them into CompletionItems.
+
+// How far back to look for the receiver. Expressions are single expressions, so
+// this only has to cover a long chain, not a whole file.
+const MEMBER_WINDOW = 4000;
+const MEMBER_RE = /\.\s*([A-Za-z_$][\w$]*)?$/;
+
+/**
+ * The `<receiver>.<partial>` ending at the cursor, or null when the dot is not
+ * a member access: a decimal point (`1.5`) or a range/varargs dot (`a..b`).
+ */
+function detectMemberContext(document, position) {
+    const offset = document.offsetAt(position);
+    const text   = document.getText().slice(Math.max(0, offset - MEMBER_WINDOW), offset);
+
+    const match = MEMBER_RE.exec(text);
+    if (!match) return null;
+
+    const before = text[match.index - 1];
+    if (before === undefined || before === '.' || /[0-9]/.test(before)) return null;
+
+    return { textBeforeDot: text.slice(0, match.index), partial: match[1] || '' };
+}
+
+/** Configured target JDK level: members newer than it are hidden. */
+function baselineFromConfig(config) {
+    const value = parseInt(String(config.get('typeCompletion.jdkBaseline', '8')), 10);
+    return Number.isFinite(value) && value > 0 ? value : 8;
+}
+
+/** Declarations the resolver can type, including the JasperReports built-ins. */
+function memberDeclarations(decls) {
+    return {
+        fields:     decls.allFields || [],
+        parameters: [...(decls.allParameters || []), ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))],
+        variables:  [...(decls.allVariables || []), ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))],
+    };
+}
+
+function toMemberItem(candidate, typeKey) {
+    const kind  = candidate.kind === 'field' ? vscode.CompletionItemKind.Field : vscode.CompletionItemKind.Method;
+    const label = candidate.labelDetail
+        ? { label: candidate.label, detail: candidate.labelDetail, description: candidate.labelDescription }
+        : { label: candidate.label, description: candidate.labelDescription };
+
+    const item = new vscode.CompletionItem(label, kind);
+    item.filterText    = candidate.filterText;
+    item.insertText    = new vscode.SnippetString(candidate.insertText);
+    item.detail        = candidate.detail;
+    item.documentation = new vscode.MarkdownString(documentationFor(candidate, typeKey));
+    item.sortText      = `${candidate.tier}_${String(candidate.rank).padStart(3, '0')}_${candidate.name}_${candidate.arity}`;
+    if (candidate.deprecated) item.tags = [vscode.CompletionItemTag.Deprecated];
+    return item;
+}
+
+function toHintItem(hint) {
+    const item = new vscode.CompletionItem(hint.label, vscode.CompletionItemKind.Text);
+    item.detail        = hint.detail;
+    item.documentation = new vscode.MarkdownString(hint.documentation);
+    // Accepting the hint inserts nothing, and typing a member name filters it out.
+    item.insertText    = new vscode.SnippetString(hint.insertText);
+    item.filterText    = hint.label;
+    item.sortText      = '0000_type-hint';
+    return item;
+}
+
+/**
+ * Items for a typed receiver, or null when the dot is not a member access we
+ * can describe (the caller then keeps its normal completion list).
+ */
+function provideMemberItems(context, decls, config) {
+    const baseline = baselineFromConfig(config);
+    const lookup   = typeKey => getMembers(typeKey, { baseline });
+
+    const resolution = resolveReceiver(context.textBeforeDot, {
+        declarations: memberDeclarations(decls),
+        lookup,
+    });
+
+    if (resolution.resolved) {
+        const members = lookup(resolution.typeKey);
+        if (members.resolved) {
+            return buildMemberCandidates(members).map(candidate => toMemberItem(candidate, resolution.typeKey));
+        }
+    }
+
+    const hint = buildTypeHint(resolution);
+    return hint ? [toHintItem(hint)] : null;
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 const provider = vscode.languages.registerCompletionItemProvider(
     { language: 'jrxml', scheme: 'file' },
@@ -268,8 +366,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
         provideCompletionItems(document, position) {
             if (!isInsideExpressionTag(document, position)) return [];
 
-            const linePrefix = document.lineAt(position).text.slice(0, position.character);
-            const ctx        = detectContext(linePrefix);
+            const config = vscode.workspace.getConfiguration('jrxml');
 
             let decls;
             try {
@@ -280,6 +377,23 @@ const provider = vscode.languages.registerCompletionItemProvider(
                     allFields: [], allParameters: [], allVariables: [], groups: [],
                 };
             }
+
+            // Typed member completion: `<receiver>.` → members of the receiver type.
+            if (config.get('typeCompletion.enabled', true)) {
+                const memberContext = detectMemberContext(document, position);
+                if (memberContext) {
+                    let memberItems = null;
+                    try {
+                        memberItems = provideMemberItems(memberContext, decls, config);
+                    } catch (err) {
+                        console.error('JRXML member completion failed:', err);
+                    }
+                    if (memberItems) return memberItems;
+                }
+            }
+
+            const linePrefix = document.lineAt(position).text.slice(0, position.character);
+            const ctx        = detectContext(linePrefix);
 
             const items = [];
 

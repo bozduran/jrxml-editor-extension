@@ -68,6 +68,19 @@ const PARAMETER_NAMES = {
     'java.util.function.Predicate': 'filter',
 };
 
+/**
+ * Inline code text for file-derived values: a crafted field name or class
+ * attribute must not be able to close a code span or start a new markdown block.
+ */
+function mdCode(text) {
+    return String(text ?? '').replace(/[`\r\n]/g, ' ').trim();
+}
+
+/** Plain-text display value for labels: no control characters. */
+function mdText(text) {
+    return String(text ?? '').replace(/[\r\n\t]/g, ' ').trim();
+}
+
 /** `java.lang.String` → `String`, `java.util.Map$Entry` → `Map.Entry`. */
 function shortType(type) {
     const text = String(type ?? '').trim();
@@ -216,7 +229,8 @@ function documentationFor(candidate, typeLabel) {
 function buildTypeHint(resolution) {
     if (!resolution || resolution.resolved) return null;
 
-    const reference = resolution.reference || (resolution.sigil ? `$${resolution.sigil}{${resolution.name}}` : '');
+    const reference = mdCode(resolution.reference || (resolution.sigil ? `$${resolution.sigil}{${resolution.name}}` : ''));
+    const fieldName = mdCode(resolution.name);
     const hint = {
         kind: 'info',
         insertText: '$0', // accepting the item inserts nothing
@@ -232,15 +246,15 @@ function buildTypeHint(resolution) {
             'Declare it to get member completion:',
             '',
             '```xml',
-            `<field name="${resolution.name}" class="java.lang.String"/>`,
+            `<field name="${fieldName}" class="java.lang.String"/>`,
             '```',
         ].join('\n');
         return hint;
     }
 
     if (resolution.reason === 'unknown-type') {
-        const declared = resolution.declaredType || resolution.typeKey || 'the declared class';
-        hint.label = `Type ${declared} is not in the type index — member completion unavailable`;
+        const declared = mdCode(resolution.declaredType || resolution.typeKey || 'the declared class');
+        hint.label = `Type ${mdText(declared)} is not in the type index — member completion unavailable`;
         hint.detail = 'JRXML typed completion';
         hint.documentation = [
             `Member completion currently covers JDK types and a few JasperReports engine types.`,
@@ -251,8 +265,8 @@ function buildTypeHint(resolution) {
     }
 
     if (resolution.reason === 'ambiguous') {
-        const candidates = (resolution.ambiguity && resolution.ambiguity.candidates) || [];
-        hint.label = `${resolution.name} matches ${candidates.join(' and ')} — use the full class name`;
+        const candidates = ((resolution.ambiguity && resolution.ambiguity.candidates) || []).map(mdCode);
+        hint.label = `${mdText(resolution.name)} matches ${candidates.join(' and ')} — use the full class name`;
         hint.detail = 'JRXML typed completion';
         hint.documentation = [
             `\`${resolution.name}\` is a short name for more than one indexed type:`,
@@ -268,6 +282,8 @@ function buildTypeHint(resolution) {
 }
 
 module.exports = {
+    mdCode,
+    mdText,
     buildMemberCandidates,
     buildTypeHint,
     documentationFor,
