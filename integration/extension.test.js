@@ -149,6 +149,72 @@ suite('JRXML extension smoke', () => {
         assert.ok(formatted.includes('$F{a} == null ? "-" : $F{a}'), 'expression was not formatted');
     });
 
+    test('completes typed members after a $F reference', async () => {
+        const uri = tempFile('Typed.jrxml', [
+            '<jasperReport name="Typed" uuid="22222222-2222-2222-2222-222222222222">',
+            '\t<field name="CustomerName" class="java.lang.String"/>',
+            '\t<detail>',
+            '\t\t<band height="20">',
+            '\t\t\t<textField>',
+            '\t\t\t\t<reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t\t\t<textFieldExpression><![CDATA[$F{CustomerName}.]]></textFieldExpression>',
+            '\t\t\t</textField>',
+            '\t\t</band>',
+            '\t</detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const line = document.getText().split('\n')
+            .findIndex(text => text.includes('$F{CustomerName}.'));
+        const character = document.lineAt(line).text.indexOf('$F{CustomerName}.') + '$F{CustomerName}.'.length;
+
+        const items = await vscode.commands.executeCommand(
+            'vscode.executeCompletionItemProvider',
+            uri,
+            new vscode.Position(line, character)
+        );
+
+        const upper = items.items.find(item => (item.filterText || item.label) === 'toUpperCase');
+        assert.ok(upper, `expected toUpperCase, got ${items.items.slice(0, 5).map(i => i.label).join(', ')}`);
+        assert.ok(
+            items.items.some(item => (item.filterText || item.label) === 'substring'),
+            'expected the String overloads'
+        );
+    });
+
+    test('explains a receiver whose class is not declared', async () => {
+        const uri = tempFile('Untyped.jrxml', [
+            '<jasperReport name="Untyped" uuid="33333333-3333-3333-3333-333333333333">',
+            '\t<field name="Unset"/>',
+            '\t<detail>',
+            '\t\t<band height="20">',
+            '\t\t\t<textField>',
+            '\t\t\t\t<reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t\t\t<textFieldExpression><![CDATA[$F{Unset}.]]></textFieldExpression>',
+            '\t\t\t</textField>',
+            '\t\t</band>',
+            '\t</detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const line = document.getText().split('\n')
+            .findIndex(text => text.includes('$F{Unset}.'));
+        const character = document.lineAt(line).text.indexOf('$F{Unset}.') + '$F{Unset}.'.length;
+
+        const items = await vscode.commands.executeCommand(
+            'vscode.executeCompletionItemProvider',
+            uri,
+            new vscode.Position(line, character)
+        );
+
+        assert.ok(
+            items.items.some(item => String(item.label).includes('is not declared')),
+            `expected the class hint, got ${items.items.slice(0, 5).map(i => i.label).join(', ')}`
+        );
+    });
+
     test('opens the settings panel', async () => {
         await vscode.commands.executeCommand('jrxml.openSettingsPanel');
 
