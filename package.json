@@ -431,7 +431,8 @@
     "test": "node --test test/",
     "test:integration": "vscode-test",
     "lint": "eslint .",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "gen:jdk-index": "node tools/gen-jdk-index.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
