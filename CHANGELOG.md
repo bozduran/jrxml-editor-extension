@@ -6,6 +6,51 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-03
+
+### Fixed
+- **Expression editor:** reopening the panel or switching to another expression no longer
+  discards unsaved text, cursor position or the Auto-format checkbox. Drafts are kept per
+  expression while the panel is open, the Auto-format choice is remembered through
+  `jrxml.expressionEditor.autoFormat`, and auto-open no longer steals focus.
+- **If / Else hand-off:** the **If / Else…** button in the Expression Editor could fail
+  with `IfElsePanel.createOrShow is not a function`; it now opens the builder correctly.
+
+### Added
+- **Entry points:** editor-title icons for the Expression Editor and If / Else Builder,
+  `Ctrl+Alt+E` / `Ctrl+Alt+B` keybindings, quick-start actions in the empty Issues view,
+  and a **Get started with JRXML** walkthrough.
+- **Diagnostics:** any diagnostic inside an expression now offers **Edit expression in
+  Expression Editor** and **Open expression in If / Else Builder**; the Issues view adds
+  matching context-menu actions.
+- **Navigation:** Find All References for `$F{}`, `$P{}` and `$V{}`, from a reference or
+  from a declaration.
+- **Snippets:** a JRXML snippet library (`jif`, `jternary`, `jnullsafe`, `jtext`,
+  `jdecimal`, `jdate`, …) and a **Format Expression at Cursor** command.
+- **Snippets:** date/time helpers for common report logic — today as a string,
+  today plus days, today before/after a string date, string-to-date parsing,
+  comparing two string dates, date differences, report-time-zone and report-locale
+  variants.
+- **If / Else builder:** a new `JRXML: Open If / Else Builder` webview panel that builds
+  `if / else if / else` conditions as a nested ternary or as `IF()` / `AND()` / `OR()`,
+  with null-safe guards, live output and reverse conversion of pasted expressions.
+- **If / Else builder:** reads the open `.jrxml`'s fields, parameters and variables
+  automatically (plus the JasperReports built-in variables and parameters) — no file
+  upload. The lists refresh on save and when declarations change; **Reload** and
+  **Use active file** re-attach the schema and the apply target. Names that are not
+  declared in the report are called out in the panel.
+- **If / Else builder:** **Apply to File** writes the result back into the expression
+  tag the builder was opened from (CDATA preserved, one undoable edit) and **Copy**
+  uses the VS Code clipboard. A preload from the cursor/selection and an **If / Else…**
+  button in the expression editor hand expressions over to the builder.
+- **Settings:** `jrxml.ifElse.nullSafe`, `jrxml.ifElse.multiline` and
+  `jrxml.ifElse.style` control the builder defaults; string settings with enumerated
+  options now render as a dropdown in the settings panel.
+- **Views:** the Issues, Best Practices and Include Chain views now live under a
+  dedicated **JRXML** icon in the Activity Bar instead of the Explorer, with a new
+  monochrome document/XML icon. Their view IDs, commands and view-title actions are
+  unchanged.
+
 ## [0.1.1] - 2026-11-03
 
 ### Added

@@ -58,3 +58,16 @@ test('boolean and number settings have correctly typed defaults', () => {
         if (setting.type === 'array')   assert.ok(Array.isArray(setting.default),             setting.key);
     }
 });
+
+test('enum settings expose the same options as package.json', () => {
+    for (const setting of allSettings()) {
+        if (!Array.isArray(setting.options)) continue;
+        const key = `${SECTION}.${setting.key}`;
+        const declared = pkg.contributes.configuration.properties[key];
+        assert.deepStrictEqual(
+            setting.options.map(option => option[0]).sort(),
+            [...(declared.enum || [])].sort(),
+            `${key} options`
+        );
+    }
+});

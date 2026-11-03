@@ -1,5 +1,5 @@
 // issuesView.js
-// The "Issues (JRXML)" Explorer view, shown above Best Practices.
+// The "Issues (JRXML)" JRXML Activity Bar view, shown above Best Practices.
 //
 // It is a live mirror of the JRXML diagnostics (source "JRXML": undeclared
 // references, unbalanced parens, unclosed strings, unused declarations, the
@@ -13,6 +13,7 @@
 const vscode = require('vscode');
 const { groupIssues, countIssues } = require('./issuesModel');
 const { collectFileIssues, QUERY_KIND } = require('./fileIssues');
+const { openExpressionEditorAt, openIfElseBuilderAt } = require('./expressionActions');
 
 const VIEW_ID     = 'jrxmlIssues';
 const JRMXL_SOURCE = 'JRXML';
@@ -132,7 +133,8 @@ class IssuesProvider {
 
     getChildren(element) {
         if (element) return element._groupItems ? element._groupItems.map(leafItem) : [];
-        if (!this._document) return [messageItem('Open a .jrxml file to see issues.')];
+        // No report: return no items so the viewsWelcome content shows.
+        if (!this._document) return [];
         if (this.groups.length === 0) return [messageItem('No issues found ✓', 'pass')];
         return this.groups.map(groupItem);
     }
@@ -352,6 +354,23 @@ function register(context) {
     };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, DEBOUNCE_MS); };
 
+    const editInExpressionEditor = async arg => {
+        const issue = toIssue(arg);
+        if (!issue || !issue.uri) {
+            vscode.window.showInformationMessage('Run this from an issue in the Issues (JRXML) view.');
+            return;
+        }
+        await openExpressionEditorAt(context.extensionUri, issue.uri, issue.line, issue.character);
+    };
+    const editInIfElseBuilder = async arg => {
+        const issue = toIssue(arg);
+        if (!issue || !issue.uri) {
+            vscode.window.showInformationMessage('Run this from an issue in the Issues (JRXML) view.');
+            return;
+        }
+        await openIfElseBuilderAt(context.extensionUri, issue.uri, issue.line, issue.character);
+    };
+
     context.subscriptions.push(
         view,
         provider,
@@ -363,6 +382,8 @@ function register(context) {
         vscode.commands.registerCommand('jrxml.issues.fixAll', fixAll),
         vscode.commands.registerCommand('jrxml.issues.copyMessage', copyMessage),
         vscode.commands.registerCommand('jrxml.issues.copyCode', copyCode),
+        vscode.commands.registerCommand('jrxml.issues.editInExpressionEditor', editInExpressionEditor),
+        vscode.commands.registerCommand('jrxml.issues.editInIfElseBuilder', editInIfElseBuilder),
         vscode.commands.registerCommand('jrxml.nextIssue', () => navigate(1)),
         vscode.commands.registerCommand('jrxml.previousIssue', () => navigate(-1)),
 

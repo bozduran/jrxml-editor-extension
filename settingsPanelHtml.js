@@ -123,7 +123,8 @@ function buildSettingsHtml({ groups, values, nonce, section = 'jrxml' }) {
   .setting-control { flex-shrink: 0; display: flex; align-items: center; gap: 8px; }
   .setting-control input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
   .setting-control input[type="number"],
-  .setting-control input[type="text"] {
+  .setting-control input[type="text"],
+  .setting-control select {
     background: var(--input-bg);
     color: var(--input-fg);
     border: 1px solid var(--border);
@@ -209,6 +210,22 @@ function buildControl(setting, value) {
   }
 
   if (setting.type === 'string') {
+    if (Array.isArray(setting.options) && setting.options.length > 0) {
+      const select = document.createElement('select');
+      select.id = id;
+      for (const option of setting.options) {
+        const [value, label] = Array.isArray(option) ? option : [option, option];
+        const item = document.createElement('option');
+        item.value = String(value);
+        item.textContent = String(label);
+        select.appendChild(item);
+      }
+      select.value = value === null || value === undefined ? '' : String(value);
+      select.addEventListener('change', () => send(setting.key, select.value));
+      wrap.appendChild(select);
+      return { wrap, id };
+    }
+
     const inp = document.createElement('input');
     inp.type = 'text';
     inp.id = id;

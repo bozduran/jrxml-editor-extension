@@ -26,6 +26,11 @@ const SETTINGS_GROUPS = [
                 description: 'Open the expression editor when the cursor enters an expression.',
             },
             {
+                key: 'expressionEditor.autoFormat', type: 'boolean', default: false,
+                label: 'Auto-format expressions',
+                description: 'Remember the Expression Editor\'s \u201cAuto-format on change\u201d checkbox.',
+            },
+            {
                 key: 'typeCompletion.enabled', type: 'boolean', default: true,
                 label: 'Typed member completion',
                 description: "Suggest the Java members of a field, parameter or variable type after a '.' (for example $F{customer}.get).",
@@ -34,6 +39,32 @@ const SETTINGS_GROUPS = [
                 key: 'typeCompletion.jdkBaseline', type: 'string', default: '8',
                 label: 'Target Java version',
                 description: 'Members added after this version (String.isBlank, List.getFirst, ...) are not suggested. 8 matches JasperReports 6.x, 11 matches 7.x.',
+            },
+        ],
+    },
+    {
+        id: 'ifElse',
+        title: 'If / Else builder',
+        description: 'Defaults when the If / Else builder opens',
+        settings: [
+            {
+                key: 'ifElse.nullSafe', type: 'boolean', default: true,
+                label: 'Null-safe by default',
+                description: 'Start with null guards around field, parameter and variable dereferences.',
+            },
+            {
+                key: 'ifElse.multiline', type: 'boolean', default: true,
+                label: 'Multi-line by default',
+                description: 'Start with readable multi-line output instead of one long line.',
+            },
+            {
+                key: 'ifElse.style', type: 'string', default: 'ternary',
+                label: 'Output style',
+                description: 'Ternary ( ? : ) or the Jaspersoft functions IF() / AND() / OR().',
+                options: [
+                    ['ternary', 'Ternary ( ? : )'],
+                    ['functions', 'IF() / AND() / OR()'],
+                ],
             },
         ],
     },

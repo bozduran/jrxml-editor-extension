@@ -1,5 +1,5 @@
 // includeChainView.js
-// The "Include Chain (JRXML)" Explorer view: for the open report, the top-down
+// The "Include Chain (JRXML)" JRXML Activity Bar view: for the open report, the top-down
 // chain of templates that include it, ending at the open file.
 //
 // The graph itself lives in the vscode-free includeGraph module; this file adds

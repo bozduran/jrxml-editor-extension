@@ -45,11 +45,19 @@ function getNonce() {
  * @param {string} opts.tagName             JRXML expression tag name
  * @param {string} opts.rawExpression       original expression (Reset target)
  * @param {string} opts.formattedExpression expression shown in the edit pane
+ * @param {boolean} [opts.autoFormat]       Auto-format-on-change default
  * @param {string} opts.nonce               CSP nonce for the style/script tags
  * @param {string} [opts.cspSource]         webview.cspSource (unused today, reserved)
  * @returns {string} full HTML document
  */
-function buildPanelHtml({ tagName, rawExpression, formattedExpression, nonce, cspSource }) {
+function buildPanelHtml({
+    tagName,
+    rawExpression,
+    formattedExpression,
+    nonce,
+    cspSource,
+    autoFormat = false,
+}) {
     const safeTag   = escapeHtmlText(tagName);
     const safeExpr  = escapeHtmlText(formattedExpression);
     const rawJson   = jsonForInlineScript(rawExpression);
@@ -278,7 +286,7 @@ function buildPanelHtml({ tagName, rawExpression, formattedExpression, nonce, cs
 
 <header>
   <div class="header-title">Expression Editor</div>
-  <span class="tag-label">&lt;${safeTag}&gt;</span>
+  <span class="tag-label" id="tag-label">&lt;${safeTag}&gt;</span>
 </header>
 
 <div class="toolbar">
@@ -286,6 +294,7 @@ function buildPanelHtml({ tagName, rawExpression, formattedExpression, nonce, cs
   <button id="btnApply" class="primary">✔ Apply to File</button>
   <button id="btnCopy" class="secondary">⎘ Copy</button>
   <button id="btnReset" class="secondary">↺ Reset</button>
+  <button id="btnIfElse" class="secondary" title="Build this expression with if / else branches">If / Else…</button>
   <label class="autofmt-label">
     <input type="checkbox" id="chkAutoFormat"> Auto-format on change
   </label>
@@ -313,11 +322,13 @@ function buildPanelHtml({ tagName, rawExpression, formattedExpression, nonce, cs
 
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
-const RAW    = ${rawJson};
-let autoFmt  = false;
+let RAW      = ${rawJson};
+let autoFmt  = ${autoFormat ? 'true' : 'false'};
 
 const editor  = document.getElementById('editor');
 const preview = document.getElementById('preview');
+const tagLabel = document.getElementById('tag-label');
+const chkAutoFormat = document.getElementById('chkAutoFormat');
 
 // ── Messaging ────────────────────────────────────────────────────────────────
 const warnBanner  = document.getElementById('warn-banner');
@@ -334,13 +345,33 @@ function showWarn(msg) {
   setTimeout(() => { warnBanner.classList.remove('visible'); }, 4000);
 }
 
+function saveState() {
+  try { vscode.setState({ text: editor.value, autoFmt }); } catch (_err) { /* best effort */ }
+}
+function postDraft() {
+  vscode.postMessage({ command: 'draft', text: editor.value });
+  saveState();
+}
+
 window.addEventListener('message', e => {
   const msg = e.data;
   if (msg.command === 'expressionFormatted') {
     editor.value = msg.expression;
     refreshPreview();
     updateStats();
+    postDraft();
     if (msg.warning) showWarn(msg.warning);
+  } else if (msg.command === 'loadExpression') {
+    if (typeof msg.raw === 'string') RAW = msg.raw;
+    editor.value = typeof msg.value === 'string'
+      ? msg.value
+      : (typeof msg.formatted === 'string' ? msg.formatted : RAW);
+    if (msg.tagName) tagLabel.textContent = '<' + msg.tagName + '>';
+    refreshPreview();
+    updateStats();
+    postDraft();
+  } else if (msg.command === 'updateRaw') {
+    if (typeof msg.raw === 'string') RAW = msg.raw;
   } else if (msg.command === 'editorError') {
     showError(msg.message);
   }
@@ -360,14 +391,21 @@ function doReset() {
   editor.value = RAW;
   refreshPreview();
   updateStats();
+  postDraft();
+}
+function doIfElse() {
+  vscode.postMessage({ command: 'openIfElseBuilder', expression: editor.value });
 }
 function toggleAutoFormat(checked) {
   autoFmt = checked;
+  vscode.postMessage({ command: 'autoFormat', value: autoFmt });
+  saveState();
   if (autoFmt) doFormat();
 }
 function onEditorInput() {
   refreshPreview();
   updateStats();
+  postDraft();
   if (autoFmt) doFormat();
 }
 
@@ -375,7 +413,8 @@ document.getElementById('btnFormat').addEventListener('click', doFormat);
 document.getElementById('btnApply').addEventListener('click', doApply);
 document.getElementById('btnCopy').addEventListener('click', doCopy);
 document.getElementById('btnReset').addEventListener('click', doReset);
-document.getElementById('chkAutoFormat').addEventListener('change', e => toggleAutoFormat(e.target.checked));
+document.getElementById('btnIfElse').addEventListener('click', doIfElse);
+chkAutoFormat.addEventListener('change', e => toggleAutoFormat(e.target.checked));
 editor.addEventListener('input', onEditorInput);
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
@@ -580,6 +619,16 @@ function refreshPreview() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+try {
+  const saved = vscode.getState();
+  if (saved) {
+    if (typeof saved.text === 'string') editor.value = saved.text;
+    if (typeof saved.autoFmt === 'boolean') autoFmt = saved.autoFmt;
+  }
+} catch (_err) {
+  // state restore is best effort
+}
+chkAutoFormat.checked = autoFmt;
 refreshPreview();
 updateStats();
 </script>

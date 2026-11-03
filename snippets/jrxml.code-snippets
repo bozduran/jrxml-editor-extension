@@ -1,0 +1,112 @@
+{
+  "IF conditional": {
+    "prefix": ["jif", "jr-if"],
+    "body": ["IF(${1:condition}, ${2:trueValue}, ${3:falseValue})"],
+    "description": "JasperReports IF(condition, trueValue, falseValue)"
+  },
+  "Ternary conditional": {
+    "prefix": ["jternary", "jr-ternary"],
+    "body": ["(${1:condition} ? ${2:trueValue} : ${3:falseValue})"],
+    "description": "Java ternary expression"
+  },
+  "Null-safe value": {
+    "prefix": ["jnullsafe", "jr-nullsafe"],
+    "body": ["(${1:value} != null ? ${1:value} : ${2:null})"],
+    "description": "Return a value or a fallback when it is null"
+  },
+  "AND conditions": {
+    "prefix": ["jand", "jr-and"],
+    "body": ["AND(${1:conditionA}, ${2:conditionB})"],
+    "description": "True when every condition is true"
+  },
+  "OR conditions": {
+    "prefix": ["jor", "jr-or"],
+    "body": ["OR(${1:conditionA}, ${2:conditionB})"],
+    "description": "True when at least one condition is true"
+  },
+  "NOT condition": {
+    "prefix": ["jnot", "jr-not"],
+    "body": ["NOT(${1:condition})"],
+    "description": "Negate a boolean expression"
+  },
+  "String equals": {
+    "prefix": ["jequals", "jr-equals"],
+    "body": ["${1:value}.equals(${2:\"expected\"})"],
+    "description": "String equals call; the receiver must be non-null"
+  },
+  "TEXT formatting": {
+    "prefix": ["jtext", "jr-text"],
+    "body": ["TEXT(${1:value}, \"${2:#,##0.00}\")"],
+    "description": "Format a number or date with a JasperReports pattern"
+  },
+  "String.valueOf": {
+    "prefix": ["jstring", "jr-string"],
+    "body": ["String.valueOf(${1:value})"],
+    "description": "Convert a value to a String"
+  },
+  "DecimalFormat": {
+    "prefix": ["jdecimal", "jr-decimal"],
+    "body": ["new java.text.DecimalFormat(\"${1:#,##0.00}\").format(${2:value})"],
+    "description": "Format a number with java.text.DecimalFormat"
+  },
+  "SimpleDateFormat": {
+    "prefix": ["jdate", "jr-date", "jdateformat"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").format(${2:dateValue})"],
+    "description": "Format a date value (field, parameter, TODAY() or parsed date) with java.text.SimpleDateFormat"
+  },
+  "Date today as string": {
+    "prefix": ["jdatetoday", "jtoday"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").format(TODAY())"],
+    "description": "Format TODAY() as a string"
+  },
+  "Date today plus days as string": {
+    "prefix": ["jdateadd", "jtodayadd"],
+    "body": ["java.time.LocalDate.now().plusDays(${1:1}).format(java.time.format.DateTimeFormatter.ofPattern(\"${2:yyyy-MM-dd}\"))"],
+    "description": "Today plus N days as a string using java.time (Java 8+); N may be negative"
+  },
+  "Date today plus days as Date": {
+    "prefix": ["jdateadddate", "jtodayadddate"],
+    "body": ["java.util.Date.from(java.time.LocalDate.now().plusDays(${1:1}).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant())"],
+    "description": "Today plus N days as a java.util.Date at local midnight; uses java.time (Java 8+)"
+  },
+  "Date today is before string date": {
+    "prefix": ["jdatetodaybefore", "jtodaybefore"],
+    "body": ["TODAY().before(new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").parse(\"${2:2024-01-01}\"))"],
+    "description": "True when today is before the parsed string date; malformed input fails at fill time"
+  },
+  "Date today is after string date": {
+    "prefix": ["jdatetodayafter", "jtodayafter"],
+    "body": ["TODAY().after(new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").parse(\"${2:2024-01-01}\"))"],
+    "description": "True when today is after the parsed string date; malformed input fails at fill time"
+  },
+  "String date to Date": {
+    "prefix": ["jparsedate", "jstr2date"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").parse(\"${2:2024-01-01}\")"],
+    "description": "Parse a string into a java.util.Date; malformed input fails at fill time"
+  },
+  "Compare two string dates": {
+    "prefix": ["jdatecompare", "jstrdatecompare"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").parse(\"${2:2024-01-01}\").before(new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").parse(\"${3:2024-02-01}\"))"],
+    "description": "True when the first string date is before the second; the pattern placeholder is mirrored"
+  },
+  "Now with time as string": {
+    "prefix": ["jnow", "jdatetimenow"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd HH:mm:ss}\").format(NOW())"],
+    "description": "Format NOW() as a date-and-time string"
+  },
+  "Days between two string dates": {
+    "prefix": ["jdatediff", "jstrdatediff"],
+    "body": ["java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(\"${1:2024-01-01}\"), java.time.LocalDate.parse(\"${2:2024-02-01}\"))"],
+    "description": "Days from the first date to the second (negative when reversed); uses java.time (Java 8+)"
+  },
+  "Date today in report time zone": {
+    "prefix": ["jdatetodaytz", "jtodaytz"],
+    "body": ["java.time.LocalDate.now(\\$P{REPORT_TIME_ZONE}.toZoneId()).format(java.time.format.DateTimeFormatter.ofPattern(\"${1:yyyy-MM-dd}\"))"],
+    "description": "Today in $P{REPORT_TIME_ZONE}, formatted with a pattern; uses java.time (Java 8+)"
+  },
+  "Date today with report locale": {
+    "prefix": ["jdatetodaylocale", "jtodaylocale"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:dd MMMM yyyy}\", \\$P{REPORT_LOCALE}).format(TODAY())"],
+    "description": "Format today with $P{REPORT_LOCALE}, for locale-aware month names"
+  }
+}
