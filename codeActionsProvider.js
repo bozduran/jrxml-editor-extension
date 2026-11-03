@@ -16,6 +16,7 @@ const { scanXml } = require('./xmlspan');
 const { removalSpan } = require('./xmlClear');
 const { decodeXml } = require('./xmlRules');
 const { fixForTextCheck } = require('./textCheck');
+const { findExpressionAtCursor } = require('./expressionUtils');
 
 // ── Lint rule quick fixes ─────────────────────────────────────────────────────
 
@@ -80,6 +81,33 @@ const provider = vscode.languages.registerCodeActionsProvider(
 
             for (const diag of context.diagnostics) {
                 if (diag.source !== 'JRXML') continue;
+
+                // Any diagnostic inside an expression can be inspected there.
+                if (findExpressionAtCursor(document, diag.range.start)) {
+                    const editExpression = new vscode.CodeAction(
+                        'Edit expression in Expression Editor',
+                        vscode.CodeActionKind.QuickFix
+                    );
+                    editExpression.diagnostics = [diag];
+                    editExpression.command = {
+                        command: 'jrxml.editExpressionAt',
+                        title: 'Edit expression',
+                        arguments: [document.uri, diag.range.start.line, diag.range.start.character],
+                    };
+                    actions.push(editExpression);
+
+                    const openInBuilder = new vscode.CodeAction(
+                        'Open expression in If / Else Builder',
+                        vscode.CodeActionKind.QuickFix
+                    );
+                    openInBuilder.diagnostics = [diag];
+                    openInBuilder.command = {
+                        command: 'jrxml.openIfElseBuilderAt',
+                        title: 'Open in If / Else Builder',
+                        arguments: [document.uri, diag.range.start.line, diag.range.start.character],
+                    };
+                    actions.push(openInBuilder);
+                }
 
                 // ── Unused declarations ───────────────────────────────────────
                 if (['jrxml.unusedField', 'jrxml.unusedParameter', 'jrxml.unusedVariable'].includes(diag.code)) {

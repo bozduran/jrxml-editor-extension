@@ -1,25 +1,36 @@
 // expressionEditorPanel.js
 // Manages the WebviewPanel that shows / edits a JRXML expression.
 // The HTML document itself is built by the vscode-free expressionPanelHtml module.
+//
+// The document is built once per panel. Switching expressions sends it a
+// loadExpression message instead of replacing webview.html, so the user's
+// unsaved text, cursor and scroll position survive. Drafts are kept per
+// expression while the panel is open so A -> B -> A does not lose A's edits.
 
 const vscode = require('vscode');
 const { formatExpression } = require('./expressionFormatter');
 const { buildPanelHtml, getNonce } = require('./expressionPanelHtml');
 const { applyExpressionToEditor } = require('./expressionApply');
-const IfElsePanel = require('./ifElsePanel');
+const { IfElsePanel } = require('./ifElsePanel');
 
 class ExpressionEditorPanel {
     static currentPanel = undefined;
     static viewType     = 'jrxmlExpressionEditor';
 
     constructor(panel, extensionUri, expressionResult, sourceEditor) {
-        this._panel         = panel;
-        this._extensionUri  = extensionUri;
+        this._panel            = panel;
+        this._extensionUri     = extensionUri;
         this._expressionResult = expressionResult;
-        this._sourceEditor  = sourceEditor;
-        this._disposables   = [];
+        this._sourceEditor     = sourceEditor;
+        this._disposables      = [];
+        this._drafts           = new Map();
+        this._currentKey       = this._targetKey(expressionResult, sourceEditor);
+        this._rawExpression    = expressionResult.expression;
+        this._formattedExpression = this._format(this._rawExpression);
+        this._autoFormat       = this._readAutoFormat();
+        this._autoFormatTarget = this._autoFormatUpdateTarget();
 
-        this._update();
+        this._buildHtml();
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
 
@@ -31,21 +42,20 @@ class ExpressionEditorPanel {
         );
     }
 
-    static createOrShow(extensionUri, expressionResult, sourceEditor) {
+    static createOrShow(extensionUri, expressionResult, sourceEditor, { preserveFocus = false } = {}) {
         const column = vscode.ViewColumn.Beside;
 
         if (ExpressionEditorPanel.currentPanel) {
-            ExpressionEditorPanel.currentPanel._expressionResult = expressionResult;
-            ExpressionEditorPanel.currentPanel._sourceEditor     = sourceEditor;
-            ExpressionEditorPanel.currentPanel._panel.reveal(column);
-            ExpressionEditorPanel.currentPanel._update();
+            const panel = ExpressionEditorPanel.currentPanel;
+            panel._switchTo(expressionResult, sourceEditor);
+            panel._panel.reveal(column, preserveFocus);
             return;
         }
 
         const panel = vscode.window.createWebviewPanel(
             ExpressionEditorPanel.viewType,
-            'JRXML Expression Editor',
-            column,
+            `Expression: <${expressionResult.tagName}>`,
+            { viewColumn: column, preserveFocus },
             {
                 enableScripts: true,
                 retainContextWhenHidden: true,
@@ -74,6 +84,12 @@ class ExpressionEditorPanel {
                 case 'openIfElseBuilder':
                     this._openIfElseBuilder(message.expression);
                     break;
+                case 'draft':
+                    this._drafts.set(this._currentKey, String(message.text == null ? '' : message.text));
+                    break;
+                case 'autoFormat':
+                    this._setAutoFormat(message.value === true);
+                    break;
             }
         } catch (err) {
             console.error('[JRXML Expression Editor] Error handling message:', err);
@@ -82,6 +98,90 @@ class ExpressionEditorPanel {
                 message: `Error: ${err.message || String(err)}`
             });
         }
+    }
+
+    _targetKey(expressionResult, sourceEditor) {
+        if (!expressionResult) return '';
+        if (!expressionResult.range || !sourceEditor || !sourceEditor.document) {
+            return expressionResult.tagName || '';
+        }
+
+        const document = sourceEditor.document;
+        const offset = typeof document.offsetAt === 'function'
+            ? document.offsetAt(expressionResult.range.start)
+            : -1;
+        return `${document.uri.toString()}|${expressionResult.tagName}|${offset}`;
+    }
+
+    _format(expression) {
+        try {
+            const cfg = vscode.workspace.getConfiguration('jrxml');
+            const indentSize = cfg.get('indentSize', 4);
+            return formatExpression(expression, indentSize);
+        } catch (err) {
+            console.error('[JRXML Expression Editor] Error during format — showing raw expression:', err);
+            return expression;
+        }
+    }
+
+    _readAutoFormat() {
+        try {
+            return vscode.workspace.getConfiguration('jrxml')
+                .get('expressionEditor.autoFormat', false) === true;
+        } catch (_err) {
+            return false;
+        }
+    }
+
+    _autoFormatUpdateTarget() {
+        return vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 0
+            ? vscode.ConfigurationTarget.Workspace
+            : vscode.ConfigurationTarget.Global;
+    }
+
+    _setAutoFormat(value) {
+        this._autoFormat = value;
+        this._autoFormatTarget = this._autoFormatUpdateTarget();
+        vscode.workspace.getConfiguration('jrxml')
+            .update('expressionEditor.autoFormat', value, this._autoFormatTarget)
+            .then(undefined, err => {
+                console.error('[JRXML Expression Editor] Could not persist auto-format:', err);
+                vscode.window.showWarningMessage('Could not save the Auto-format setting.');
+            });
+    }
+
+    _switchTo(expressionResult, sourceEditor) {
+        const nextKey = this._targetKey(expressionResult, sourceEditor);
+        this._expressionResult = expressionResult;
+        this._sourceEditor     = sourceEditor;
+        this._panel.title      = `Expression: <${expressionResult.tagName}>`;
+
+        if (nextKey === this._currentKey) {
+            // Same expression: keep the textarea exactly as it is. Only update
+            // Reset's target if the file changed outside the panel.
+            if (expressionResult.expression !== this._rawExpression) {
+                this._rawExpression = expressionResult.expression;
+                this._post({ command: 'updateRaw', raw: this._rawExpression });
+            }
+            return;
+        }
+
+        this._currentKey          = nextKey;
+        this._rawExpression       = expressionResult.expression;
+        this._formattedExpression = this._format(expressionResult.expression);
+
+        const draft = this._drafts.get(nextKey);
+        this._post({
+            command: 'loadExpression',
+            tagName: expressionResult.tagName,
+            raw: this._rawExpression,
+            formatted: this._formattedExpression,
+            value: typeof draft === 'string' ? draft : this._formattedExpression,
+        });
+    }
+
+    _post(message) {
+        return this._panel.webview.postMessage(message);
     }
 
     async _applyToSource(newExpression) {
@@ -138,22 +238,12 @@ class ExpressionEditorPanel {
         }
     }
 
-    _update() {
-        let formatted = this._expressionResult.expression;
-        try {
-            const cfg = vscode.workspace.getConfiguration('jrxml');
-            const indentSize = cfg.get('indentSize', 4);
-            formatted = formatExpression(this._expressionResult.expression, indentSize);
-        } catch (err) {
-            console.error('[JRXML Expression Editor] Error during initial format — showing raw expression:', err);
-            // Fall through: formatted stays as raw expression
-        }
-
+    _buildHtml() {
         this._panel.title = `Expression: <${this._expressionResult.tagName}>`;
         this._panel.webview.html = this._getHtml(
             this._expressionResult.tagName,
-            this._expressionResult.expression,
-            formatted
+            this._rawExpression,
+            this._formattedExpression
         );
     }
 
@@ -162,6 +252,7 @@ class ExpressionEditorPanel {
             tagName,
             rawExpression,
             formattedExpression,
+            autoFormat: this._autoFormat,
             nonce: getNonce(),
             cspSource: this._panel.webview.cspSource,
         });

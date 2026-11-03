@@ -6,7 +6,25 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- **Expression editor:** reopening the panel or switching to another expression no longer
+  discards unsaved text, cursor position or the Auto-format checkbox. Drafts are kept per
+  expression while the panel is open, the Auto-format choice is remembered through
+  `jrxml.expressionEditor.autoFormat`, and auto-open no longer steals focus.
+- **If / Else hand-off:** the **If / Else…** button in the Expression Editor could fail
+  with `IfElsePanel.createOrShow is not a function`; it now opens the builder correctly.
+
 ### Added
+- **Entry points:** editor-title icons for the Expression Editor and If / Else Builder,
+  `Ctrl+Alt+E` / `Ctrl+Alt+B` keybindings, quick-start actions in the empty Issues view,
+  and a **Get started with JRXML** walkthrough.
+- **Diagnostics:** any diagnostic inside an expression now offers **Edit expression in
+  Expression Editor** and **Open expression in If / Else Builder**; the Issues view adds
+  matching context-menu actions.
+- **Navigation:** Find All References for `$F{}`, `$P{}` and `$V{}`, from a reference or
+  from a declaration.
+- **Snippets:** a JRXML snippet library (`jif`, `jternary`, `jnullsafe`, `jtext`,
+  `jdecimal`, `jdate`, …) and a **Format Expression at Cursor** command.
 - **If / Else builder:** a new `JRXML: Open If / Else Builder` webview panel that builds
   `if / else if / else` conditions as a nested ternary or as `IF()` / `AND()` / `OR()`,
   with null-safe guards, live output and reverse conversion of pasted expressions.

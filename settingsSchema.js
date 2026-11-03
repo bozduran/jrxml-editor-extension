@@ -26,6 +26,11 @@ const SETTINGS_GROUPS = [
                 description: 'Open the expression editor when the cursor enters an expression.',
             },
             {
+                key: 'expressionEditor.autoFormat', type: 'boolean', default: false,
+                label: 'Auto-format expressions',
+                description: 'Remember the Expression Editor\'s \u201cAuto-format on change\u201d checkbox.',
+            },
+            {
                 key: 'typeCompletion.enabled', type: 'boolean', default: true,
                 label: 'Typed member completion',
                 description: "Suggest the Java members of a field, parameter or variable type after a '.' (for example $F{customer}.get).",

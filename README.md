@@ -26,7 +26,12 @@ Open any expression in a dedicated side panel:
   - long argument lists → one argument per line
 - **Apply to File** — writes the edited expression back into the `.jrxml` file (CDATA preserved)
 - **Copy** / **Reset** — clipboard and revert to the original expression
-- **Auto-format on change** checkbox
+- **Keeps your edits** — switching expressions or reopening the panel preserves unsaved text;
+  drafts are remembered per expression while the panel is open
+- **Auto-format on change** checkbox — remembered via `jrxml.expressionEditor.autoFormat`
+
+Open it from the pencil icon in the editor title bar, the status bar, the **JRXML** submenu,
+or with `Ctrl+Alt+E` (`Cmd+Alt+E` on macOS). `Ctrl+Alt+B` opens the If / Else builder.
 
 ### 3. If / Else expression builder
 A visual builder for conditional expressions, opened on demand:
@@ -69,9 +74,11 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   The first three have quick fixes and can be switched off individually. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
-- Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
+- Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}`
+- **Act on issues** — right-click an issue (or use its lightbulb) to open the offending
+  expression in the Expression Editor or the If / Else Builder
 
-The **Issues (JRXML)**, **Best Practices (JRXML)** and **Include Chain (JRXML)** views live under the extension's own **JRXML** icon in the Activity Bar.
+The **Issues (JRXML)**, **Best Practices (JRXML)** and **Include Chain (JRXML)** views live under the extension's own **JRXML** icon in the Activity Bar. When no report is open, the Issues view shows quick-start actions.
 
 ### 6. Document formatting and text check
 The hook's `format` + `textcheck` steps run through **Format Document** and the
@@ -141,6 +148,10 @@ The member table ships with the extension (`data/jdk-members.json`, generated fr
 
 `jrxml.typeCompletion.enabled` (default `true`) turns the whole thing off and restores the previous behaviour.
 
+**Expression snippets.** Type a snippet prefix in an expression to insert a common pattern:
+`jif` (`IF(...)`), `jternary`, `jnullsafe`, `jand`, `jor`, `jnot`, `jequals`, `jtext`,
+`jstring`, `jdecimal` and `jdate`.
+
 ### 10. Settings panel
 **JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 
@@ -157,13 +168,16 @@ A file *calls* another when it contains a double-quoted token equal to that file
 2. Place your cursor **inside** an expression tag (e.g. `<textFieldExpression>`)
 3. Either:
    - Right-click → **JRXML: Open Expression Editor**
-   - Click **`$(edit) JRXML Expr`** in the status bar (bottom right), or run **JRXML: Open Expression Editor** from the command palette
+   - Click the pencil icon in the editor title bar
+   - Click **`$(edit) JRXML Expr`** in the status bar, press `Ctrl+Alt+E`, or run **JRXML: Open Expression Editor** from the command palette
 4. To build the same expression visually, right-click → **JRXML: Open If / Else Builder**
-   (or use the **If / Else…** button inside the expression editor). The builder reads the
-   open report's fields, parameters and variables automatically; **Apply to File** writes
-   the result back into the expression tag under the cursor.
+   (or use the **If / Else…** button inside the expression editor, or `Ctrl+Alt+B`). The
+   builder reads the open report's fields, parameters and variables automatically;
+   **Apply to File** writes the result back into the expression tag under the cursor.
 5. The **JRXML** icon in the Activity Bar holds the Issues, Best Practices and Include
    Chain views for the report you have open.
+6. New here? The **Get started with JRXML** walkthrough (Welcome page) walks through the
+   editor, formatting, issue fixes and the If / Else builder.
 
 ---
 
@@ -173,6 +187,9 @@ A file *calls* another when it contains a double-quoted token equal to that file
 |---------|-------------|
 | `JRXML: Open Expression Editor` | Open the expression under the cursor in the side panel |
 | `JRXML: Open If / Else Builder` | Build the expression under the cursor as if / else-if / else branches |
+| `JRXML: Format Expression at Cursor` | Format only the expression under the cursor (CDATA preserved) |
+| `JRXML: Edit Issue in Expression Editor` | Open the expression behind an issue in the Expression Editor |
+| `JRXML: Edit Issue in If / Else Builder` | Open the expression behind an issue in the If / Else Builder |
 | `JRXML: Go to Declaration` | Jump from `$F{}`/`$P{}`/`$V{}` to its declaration |
 | `JRXML: Refresh Best Practices` | Re-run the best-practice rules |
 | `JRXML: Suppress Best Practice Rule` | Hide squiggles for a rule (quick fixes stay) |
@@ -192,6 +209,7 @@ A file *calls* another when it contains a double-quoted token equal to that file
 |---------|---------|-------------|
 | `jrxml.indentSize` | `4` | Spaces per indent level when formatting expressions |
 | `jrxml.autoOpenEditor` | `false` | Auto-open the editor when the cursor enters an expression |
+| `jrxml.expressionEditor.autoFormat` | `false` | Remember the Expression Editor's Auto-format on change setting |
 | `jrxml.ifElse.nullSafe` | `true` | Start the If / Else builder with null-safe guards |
 | `jrxml.ifElse.multiline` | `true` | Start the If / Else builder with multi-line output |
 | `jrxml.ifElse.style` | `ternary` | Default If / Else output style (`ternary` or `functions`) |

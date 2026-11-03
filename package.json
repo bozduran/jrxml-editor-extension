@@ -93,6 +93,14 @@
         "title": "JRXML: Copy Rule ID"
       },
       {
+        "command": "jrxml.issues.editInExpressionEditor",
+        "title": "JRXML: Edit Issue in Expression Editor"
+      },
+      {
+        "command": "jrxml.issues.editInIfElseBuilder",
+        "title": "JRXML: Edit Issue in If / Else Builder"
+      },
+      {
         "command": "jrxml.nextIssue",
         "title": "JRXML: Go to Next Issue"
       },
@@ -139,6 +147,11 @@
         "title": "JRXML: Fix All (Format and Text)"
       },
       {
+        "command": "jrxml.formatExpressionAtCursor",
+        "title": "JRXML: Format Expression at Cursor",
+        "icon": "$(wand)"
+      },
+      {
         "command": "jrxml.openSettingsPanel",
         "title": "JRXML: Open Settings",
         "icon": "$(settings-gear)"
@@ -161,6 +174,18 @@
           "submenu": "jrxml",
           "when": "resourceExtname == .jrxml",
           "group": "jrxml@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "jrxml.openExpressionEditor",
+          "when": "resourceExtname == .jrxml",
+          "group": "navigation@1"
+        },
+        {
+          "command": "jrxml.openIfElseBuilder",
+          "when": "resourceExtname == .jrxml",
+          "group": "navigation@2"
         }
       ],
       "editor/title/context": [
@@ -197,6 +222,10 @@
         {
           "command": "editor.action.formatDocument",
           "group": "2_fix@3"
+        },
+        {
+          "command": "jrxml.formatExpressionAtCursor",
+          "group": "2_fix@4"
         },
         {
           "command": "jrxml.applyClearFixes",
@@ -250,6 +279,16 @@
       ],
       "view/item/context": [
         {
+          "command": "jrxml.issues.editInExpressionEditor",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "1_open@1"
+        },
+        {
+          "command": "jrxml.issues.editInIfElseBuilder",
+          "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
+          "group": "1_open@2"
+        },
+        {
           "command": "jrxml.issues.applyFix",
           "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
           "group": "inline"
@@ -293,6 +332,18 @@
     },
     "keybindings": [
       {
+        "command": "jrxml.openExpressionEditor",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e",
+        "when": "editorTextFocus && resourceExtname == .jrxml"
+      },
+      {
+        "command": "jrxml.openIfElseBuilder",
+        "key": "ctrl+alt+b",
+        "mac": "cmd+alt+b",
+        "when": "editorTextFocus && resourceExtname == .jrxml"
+      },
+      {
         "command": "jrxml.nextIssue",
         "key": "ctrl+alt+down",
         "when": "editorTextFocus && resourceExtname == .jrxml"
@@ -317,6 +368,11 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically open expression editor when cursor is inside an expression"
+        },
+        "jrxml.expressionEditor.autoFormat": {
+          "type": "boolean",
+          "default": false,
+          "description": "Remember the Expression Editor's \"Auto-format on change\" setting."
         },
         "jrxml.ifElse.nullSafe": {
           "type": "boolean",
@@ -458,6 +514,12 @@
         }
       }
     },
+    "snippets": [
+      {
+        "language": "jrxml",
+        "path": "./snippets/jrxml.code-snippets"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -488,7 +550,49 @@
           "contextualTitle": "JRXML Include Chain"
         }
       ]
-    }
+    },
+    "viewsWelcome": [
+      {
+        "view": "jrxmlIssues",
+        "contents": "Open a `.jrxml` file to see diagnostics here.\n[Open Expression Editor](command:jrxml.openExpressionEditor)\n[Build an if / else expression](command:jrxml.openIfElseBuilder)\n[Open Settings](command:jrxml.openSettingsPanel)"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "jrxml.getStarted",
+        "title": "Get started with JRXML",
+        "description": "Open, format, navigate and fix JasperReports expressions.",
+        "steps": [
+          {
+            "id": "jrxml.getStarted.openExpression",
+            "title": "Open an expression",
+            "description": "Place the cursor inside an expression tag, then use **JRXML: Open Expression Editor** or click the pencil icon in the editor title bar. `Ctrl+Alt+E` works too.",
+            "media": { "markdown": "media/walkthrough/open-expression.md" },
+            "completionEvents": ["onCommand:jrxml.openExpressionEditor"]
+          },
+          {
+            "id": "jrxml.getStarted.formatExpression",
+            "title": "Format one expression",
+            "description": "Run **JRXML: Format Expression at Cursor** to format only the expression under the cursor, without touching the rest of the file.",
+            "media": { "markdown": "media/walkthrough/format-expression.md" },
+            "completionEvents": ["onCommand:jrxml.formatExpressionAtCursor"]
+          },
+          {
+            "id": "jrxml.getStarted.fixIssues",
+            "title": "Fix issues from the JRXML view",
+            "description": "The **JRXML** Activity Bar view lists issues for the open report. Open an issue's expression in the editor or builder from its context menu.",
+            "media": { "markdown": "media/walkthrough/fix-issues.md" }
+          },
+          {
+            "id": "jrxml.getStarted.buildIfElse",
+            "title": "Build if / else visually",
+            "description": "Use **JRXML: Open If / Else Builder** (`Ctrl+Alt+B`) to turn the expression under the cursor into branches, then apply it back.",
+            "media": { "markdown": "media/walkthrough/build-if-else.md" },
+            "completionEvents": ["onCommand:jrxml.openIfElseBuilder"]
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "test": "node --test test/",

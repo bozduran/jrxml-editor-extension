@@ -3,6 +3,7 @@
 
 const vscode = require('vscode');
 const { parseDeclarations } = require('./jrxmlParser');
+const { findReferenceToken } = require('./expressionUtils');
 const {
     BUILTIN_VARIABLES,
     BUILTIN_PARAMETERS,
@@ -28,30 +29,11 @@ function mdCode(text) {
     return String(text ?? '').replace(/`/g, '\\`');
 }
 
-/**
- * Given a document and position, detect whether the cursor is on a $F/$P/$V
- * reference and return { sigil, name } or null.
- */
-function detectReferenceAtPosition(document, position) {
-    const line   = document.lineAt(position).text;
-    const col    = position.character;
-
-    // Scan backwards from cursor to find the start of a $X{ token
-    const dollarRe = /\$(F|P|V)\{([\w.]+)\}/g;
-    let m;
-    while ((m = dollarRe.exec(line)) !== null) {
-        if (m.index <= col && col <= m.index + m[0].length) {
-            return { sigil: m[1], name: m[2], start: m.index, end: m.index + m[0].length };
-        }
-    }
-    return null;
-}
-
 const provider = vscode.languages.registerHoverProvider(
     { language: 'jrxml', scheme: 'file' },
     {
         provideHover(document, position) {
-            const ref = detectReferenceAtPosition(document, position);
+            const ref = findReferenceToken(document.lineAt(position).text, position.character);
             if (!ref) return null;
 
             let decl   = null;

@@ -101,6 +101,60 @@ function escapeRegExp(text) {
 }
 
 /**
+ * The `$F{name}` / `$P{name}` / `$V{name}` token under a cursor column, or null.
+ * Pure: works on a line of text, so it can be shared by hover and references.
+ *
+ * @param {string} lineText
+ * @param {number} character 0-based column
+ * @returns {{sigil:'F'|'P'|'V', name:string, start:number, end:number}|null}
+ */
+function findReferenceToken(lineText, character) {
+    const re = /\$(F|P|V)\{([\w.]+)\}/g;
+    let match;
+    while ((match = re.exec(lineText)) !== null) {
+        if (match.index <= character && character <= match.index + match[0].length) {
+            return {
+                sigil: match[1],
+                name: match[2],
+                start: match.index,
+                end: match.index + match[0].length,
+            };
+        }
+    }
+    return null;
+}
+
+/**
+ * Find a declaration whose `name` attribute contains the character offset.
+ *
+ * @param {{allFields?:Array,allParameters?:Array,allVariables?:Array,
+ *          fields?:Array,parameters?:Array,variables?:Array}|null} parsed
+ * @param {number} offset document character offset
+ * @returns {{sigil:'F'|'P'|'V', name:string, declaration:object}|null}
+ */
+function findDeclarationAtOffset(parsed, offset) {
+    if (!parsed) return null;
+
+    const groups = [
+        ['F', parsed.allFields || parsed.fields || []],
+        ['P', parsed.allParameters || parsed.parameters || []],
+        ['V', parsed.allVariables || parsed.variables || []],
+    ];
+
+    for (const [sigil, list] of groups) {
+        for (const declaration of list) {
+            if (!declaration || !declaration.name) continue;
+            if (typeof declaration.nameOffset !== 'number') continue;
+            if (offset >= declaration.nameOffset &&
+                offset <= declaration.nameOffset + declaration.name.length) {
+                return { sigil, name: declaration.name, declaration };
+            }
+        }
+    }
+    return null;
+}
+
+/**
  * Compute the replacement for the expression tag closest to `originalOffset`.
  *
  * Re-scans the live document text so a stale range from when a panel opened
@@ -148,6 +202,8 @@ function findTagReplacement(text, tagName, originalOffset, newExpression) {
 module.exports = {
     findExpressionAtCursor,
     findTagReplacement,
+    findReferenceToken,
+    findDeclarationAtOffset,
     stripCdata,
     wrapExpression,
     hasCdata,

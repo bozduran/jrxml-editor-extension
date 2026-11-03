@@ -357,6 +357,174 @@ suite('JRXML extension smoke', () => {
         // The workbench command generated for a contributed view container.
         await vscode.commands.executeCommand('workbench.view.extension.jrxmlViews');
     });
+
+    test('keeps expression panel edits and drafts when switching expressions', async () => {
+        const uri = tempFile('ExpressionPanel.jrxml', [
+            '<jasperReport name="ExpressionPanel" uuid="66666666-6666-6666-6666-666666666666">',
+            '\t<field name="status" class="java.lang.String"/>',
+            '\t<detail>',
+            '\t\t<band height="40">',
+            '\t\t\t<textField><reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t\t<textFieldExpression><![CDATA[$F{status}]]></textFieldExpression></textField>',
+            '\t\t\t<textField><reportElement x="0" y="20" width="100" height="20"/>',
+            '\t\t\t<textFieldExpression><![CDATA[$F{status} + "!"]]></textFieldExpression></textField>',
+            '\t\t</band>',
+            '\t</detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const editor = vscode.window.activeTextEditor;
+        assert.ok(editor, 'expected an active editor');
+
+        const text = document.getText();
+        const first = text.indexOf('$F{status}');
+        const second = text.lastIndexOf('$F{status}');
+        const { findExpressionAtCursor } = require('../expressionUtils');
+        const targetOne = findExpressionAtCursor(document, document.positionAt(first + 2));
+        const targetTwo = findExpressionAtCursor(document, document.positionAt(second + 2));
+        assert.ok(targetOne && targetTwo, 'expected two expression targets');
+        assert.notStrictEqual(
+            document.offsetAt(targetOne.range.start),
+            document.offsetAt(targetTwo.range.start)
+        );
+
+        const ExpressionEditorPanel = require('../expressionEditorPanel');
+
+        await setConfig('expressionEditor.autoFormat', true);
+        try {
+            ExpressionEditorPanel.createOrShow(extension.extensionUri, targetOne, editor);
+            const panel = ExpressionEditorPanel.currentPanel;
+            assert.ok(panel, 'expression panel was not created');
+            assert.match(panel._panel.webview.html, /let autoFmt\s*=\s*true;/);
+
+            const html = panel._panel.webview.html;
+            const firstKey = panel._currentKey;
+            const messages = [];
+            const post = panel._post.bind(panel);
+            panel._post = message => { messages.push(message); return post(message); };
+
+            // Re-opening the same expression must not rebuild the webview.
+            ExpressionEditorPanel.createOrShow(extension.extensionUri, targetOne, editor);
+            assert.strictEqual(panel._panel.webview.html, html);
+            assert.strictEqual(panel._currentKey, firstKey);
+            assert.strictEqual(messages.length, 0);
+
+            // A draft typed for the first expression survives a switch.
+            panel._handleMessage({ command: 'draft', text: 'draft for one' });
+
+            ExpressionEditorPanel.createOrShow(extension.extensionUri, targetTwo, editor);
+            assert.strictEqual(panel._panel.webview.html, html);
+            assert.notStrictEqual(panel._currentKey, firstKey);
+            const switched = messages.find(message => message.command === 'loadExpression');
+            assert.ok(switched, 'expected loadExpression when switching targets');
+            assert.strictEqual(switched.tagName, 'textFieldExpression');
+
+            messages.length = 0;
+            ExpressionEditorPanel.createOrShow(extension.extensionUri, targetOne, editor);
+            const restored = messages.find(message => message.command === 'loadExpression');
+            assert.ok(restored, 'expected loadExpression when switching back');
+            assert.strictEqual(restored.value, 'draft for one');
+        } finally {
+            await setConfig('expressionEditor.autoFormat', false);
+            if (ExpressionEditorPanel.currentPanel) {
+                ExpressionEditorPanel.currentPanel.dispose();
+            }
+        }
+    });
+
+    test('opens an issue expression in the editor and the builder', async () => {
+        const uri = tempFile('IssueTarget.jrxml', [
+            '<jasperReport name="IssueTarget" uuid="77777777-7777-7777-7777-777777777777">',
+            '\t<field name="status" class="java.lang.String"/>',
+            '\t<detail><band height="20">',
+            '\t\t<textField><reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t<textFieldExpression><![CDATA[$F{status}.length()]]></textFieldExpression></textField>',
+            '\t</band></detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const offset = document.getText().indexOf('$F{status}');
+        const position = document.positionAt(offset + 2);
+        const issue = { uri, line: position.line, character: position.character };
+
+        await vscode.commands.executeCommand('jrxml.issues.editInExpressionEditor', issue);
+        const ExpressionEditorPanel = require('../expressionEditorPanel');
+        const editorPanel = ExpressionEditorPanel.currentPanel;
+        assert.ok(editorPanel, 'the expression editor did not open');
+        assert.strictEqual(editorPanel._expressionResult.tagName, 'textFieldExpression');
+        editorPanel.dispose();
+
+        await vscode.commands.executeCommand('jrxml.issues.editInIfElseBuilder', issue);
+        const { IfElsePanel } = require('../ifElsePanel');
+        assert.ok(IfElsePanel.currentPanel, 'the If / Else builder did not open');
+        IfElsePanel.currentPanel.dispose();
+    });
+
+    test('finds references for a field from a use and from its declaration', async () => {
+        const uri = tempFile('References.jrxml', [
+            '<jasperReport name="References" uuid="88888888-8888-8888-8888-888888888888">',
+            '\t<field name="status" class="java.lang.String"/>',
+            '\t<detail><band height="40">',
+            '\t\t<textField><reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t<textFieldExpression><![CDATA[$F{status}]]></textFieldExpression></textField>',
+            '\t\t<textField><reportElement x="0" y="20" width="100" height="20"/>',
+            '\t\t<textFieldExpression><![CDATA[$F{status} + "!"]]></textFieldExpression></textField>',
+            '\t</band></detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const text = document.getText();
+
+        const useOffset = text.indexOf('$F{status}') + 2;
+        const fromUse = await vscode.commands.executeCommand(
+            'vscode.executeReferenceProvider',
+            uri,
+            document.positionAt(useOffset)
+        );
+        assert.ok(Array.isArray(fromUse), 'expected reference locations');
+        assert.ok(fromUse.length >= 2, `expected at least the two uses, got ${fromUse.length}`);
+        assert.ok(fromUse.every(location => location.uri.toString() === uri.toString()));
+
+        const declarationOffset = text.indexOf('name="status"') + 'name="'.length + 1;
+        const fromDeclaration = await vscode.commands.executeCommand(
+            'vscode.executeReferenceProvider',
+            uri,
+            document.positionAt(declarationOffset)
+        );
+        assert.ok(Array.isArray(fromDeclaration), 'expected reference locations from the declaration');
+        assert.ok(fromDeclaration.length >= 2);
+    });
+
+    test('formats only the expression under the cursor', async () => {
+        const uri = tempFile('FormatExpression.jrxml', [
+            '<jasperReport name="FormatExpression" uuid="99999999-9999-9999-9999-999999999999">',
+            '\t<field name="a" class="java.lang.String"/>',
+            '\t<expression><![CDATA[$F{a}==null?"-":$F{a}]]></expression>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const text = document.getText();
+        const offset = text.indexOf('$F{a}') + 2;
+        const editor = vscode.window.activeTextEditor;
+        assert.ok(editor, 'expected an active editor');
+        const position = document.positionAt(offset);
+        editor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('jrxml.formatExpressionAtCursor');
+
+        const updated = document.getText();
+        assert.ok(updated.includes('$F{a}==null'), 'the expression was not formatted');
+        assert.ok(updated.includes('\n    ? "-"'), 'expected the ternary layout');
+        assert.ok(updated.includes('<![CDATA['), 'CDATA was not preserved');
+        assert.ok(
+            updated.includes('<field name="a" class="java.lang.String"/>'),
+            'the rest of the file was modified'
+        );
+    });
 });
 
 function findNode(nodes, predicate) {

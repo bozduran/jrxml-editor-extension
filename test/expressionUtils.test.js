@@ -21,6 +21,8 @@ Module._load = function (request, ...rest) {
 const {
     findExpressionAtCursor,
     findTagReplacement,
+    findReferenceToken,
+    findDeclarationAtOffset,
     stripCdata,
     wrapExpression,
     hasCdata,
@@ -150,4 +152,38 @@ test('findTagReplacement keeps the opening tag attributes', () => {
         replacement.newTag,
         '<expression class="java.lang.String">$F{b}</expression>'
     );
+});
+
+// ── Reference / declaration lookup ─────────────────────────────────────────
+
+test('findReferenceToken finds the token under the cursor', () => {
+    const line = 'IF($F{status} == null, $P{fallback}, $V{PAGE_NUMBER})';
+    const field = findReferenceToken(line, line.indexOf('$F{status}') + 3);
+    assert.deepStrictEqual(field, {
+        sigil: 'F', name: 'status', start: line.indexOf('$F{status}'), end: line.indexOf('$F{status}') + '$F{status}'.length,
+    });
+    assert.strictEqual(findReferenceToken(line, line.indexOf('$P{fallback}') + 2).sigil, 'P');
+    assert.strictEqual(findReferenceToken(line, 0), null);
+    assert.strictEqual(findReferenceToken('plain text', 4), null);
+});
+
+test('findReferenceToken supports dotted names', () => {
+    const line = 'X.equals($F{customer.name})';
+    const token = findReferenceToken(line, line.indexOf('$F{customer.name}') + 4);
+    assert.strictEqual(token.name, 'customer.name');
+});
+
+test('findDeclarationAtOffset finds declaration name attributes', () => {
+    const text = '<field name="status"/><parameter name="limit"/><variable name="total"/>';
+    const parsed = {
+        allFields:     [{ name: 'status', nameOffset: text.indexOf('"status"') + 1 }],
+        allParameters: [{ name: 'limit',  nameOffset: text.indexOf('"limit"') + 1 }],
+        allVariables:  [{ name: 'total',  nameOffset: text.indexOf('"total"') + 1 }],
+    };
+
+    assert.strictEqual(findDeclarationAtOffset(parsed, text.indexOf('status') + 2).name, 'status');
+    assert.strictEqual(findDeclarationAtOffset(parsed, text.indexOf('limit') + 2).sigil, 'P');
+    assert.strictEqual(findDeclarationAtOffset(parsed, text.indexOf('total') + 2).sigil, 'V');
+    assert.strictEqual(findDeclarationAtOffset(parsed, 0), null);
+    assert.strictEqual(findDeclarationAtOffset(null, 5), null);
 });

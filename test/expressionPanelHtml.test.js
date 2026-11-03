@@ -48,6 +48,27 @@ test('offers the If / Else builder hand-off', () => {
     assert.ok(html.includes('openIfElseBuilder'), 'missing the builder message');
 });
 
+test('embeds the persisted Auto-format default', () => {
+    const off = build();
+    const on  = build({ autoFormat: true });
+    assert.match(off, /let autoFmt\s*=\s*false;/);
+    assert.match(on,  /let autoFmt\s*=\s*true;/);
+});
+
+test('supports the panel state message protocol', () => {
+    const html = build();
+    for (const command of ['loadExpression', 'updateRaw', 'draft', 'autoFormat']) {
+        assert.ok(html.includes(`'${command}'`), `missing the ${command} message`);
+    }
+    assert.ok(html.includes('id="tag-label"'), 'missing the switchable tag label');
+});
+
+test('restores the editor text from webview state', () => {
+    const html = build();
+    assert.ok(html.includes('vscode.getState()'));
+    assert.ok(html.includes('vscode.setState'));
+});
+
 test('does not let </script> escape the data block', () => {
     const payload = `$F{x} + "</script><script>acquireVsCodeApi().postMessage({command:'applyExpression'})</script>"`;
     const html = build({ rawExpression: payload, formattedExpression: payload });
@@ -80,4 +101,11 @@ test('getNonce returns distinct hex strings', () => {
     const b = getNonce();
     assert.match(a, /^[0-9a-f]{32}$/);
     assert.notStrictEqual(a, b);
+});
+
+test('the webview script parses as JavaScript', () => {
+    const html = build();
+    const match = /<script nonce="[^"]+">([\s\S]*?)<\/script>/.exec(html);
+    assert.ok(match, 'expected the nonce script block');
+    assert.doesNotThrow(() => new Function(match[1]));
 });

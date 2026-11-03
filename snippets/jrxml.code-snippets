@@ -1,0 +1,57 @@
+{
+  "IF conditional": {
+    "prefix": ["jif", "jr-if"],
+    "body": ["IF(${1:condition}, ${2:trueValue}, ${3:falseValue})"],
+    "description": "JasperReports IF(condition, trueValue, falseValue)"
+  },
+  "Ternary conditional": {
+    "prefix": ["jternary", "jr-ternary"],
+    "body": ["(${1:condition} ? ${2:trueValue} : ${3:falseValue})"],
+    "description": "Java ternary expression"
+  },
+  "Null-safe value": {
+    "prefix": ["jnullsafe", "jr-nullsafe"],
+    "body": ["(${1:value} != null ? ${1:value} : ${2:null})"],
+    "description": "Return a value or a fallback when it is null"
+  },
+  "AND conditions": {
+    "prefix": ["jand", "jr-and"],
+    "body": ["AND(${1:conditionA}, ${2:conditionB})"],
+    "description": "True when every condition is true"
+  },
+  "OR conditions": {
+    "prefix": ["jor", "jr-or"],
+    "body": ["OR(${1:conditionA}, ${2:conditionB})"],
+    "description": "True when at least one condition is true"
+  },
+  "NOT condition": {
+    "prefix": ["jnot", "jr-not"],
+    "body": ["NOT(${1:condition})"],
+    "description": "Negate a boolean expression"
+  },
+  "String equals": {
+    "prefix": ["jequals", "jr-equals"],
+    "body": ["${1:value}.equals(${2:\"expected\"})"],
+    "description": "String equals call; the receiver must be non-null"
+  },
+  "TEXT formatting": {
+    "prefix": ["jtext", "jr-text"],
+    "body": ["TEXT(${1:value}, \"${2:#,##0.00}\")"],
+    "description": "Format a number or date with a JasperReports pattern"
+  },
+  "String.valueOf": {
+    "prefix": ["jstring", "jr-string"],
+    "body": ["String.valueOf(${1:value})"],
+    "description": "Convert a value to a String"
+  },
+  "DecimalFormat": {
+    "prefix": ["jdecimal", "jr-decimal"],
+    "body": ["new java.text.DecimalFormat(\"${1:#,##0.00}\").format(${2:value})"],
+    "description": "Format a number with java.text.DecimalFormat"
+  },
+  "SimpleDateFormat": {
+    "prefix": ["jdate", "jr-date"],
+    "body": ["new java.text.SimpleDateFormat(\"${1:yyyy-MM-dd}\").format(${2:value})"],
+    "description": "Format a date with java.text.SimpleDateFormat"
+  }
+}

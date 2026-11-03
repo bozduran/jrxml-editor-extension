@@ -7,6 +7,7 @@ const { findExpressionAtCursor } = require('./expressionUtils');
 const { provider: completionProvider, clearCustomJavaCache } = require('./completionProvider');
 const { provider: hoverProvider }      = require('./hoverProvider');
 const { provider: definitionProvider } = require('./definitionProvider');
+const { provider: referenceProvider }    = require('./referenceProvider');
 const { provider: outlineProvider }    = require('./outlineProvider');
 const { register: registerDiagnostics } = require('./diagnosticsProvider');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
@@ -24,6 +25,7 @@ const { register: registerClear } = require('./clearProvider');
 const { register: registerSettingsPanel } = require('./settingsPanel');
 const { register: registerIncludeChain } = require('./includeChainView');
 const { register: registerIfElsePanel } = require('./ifElsePanel');
+const { register: registerExpressionActions } = require('./expressionActions');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -55,6 +57,7 @@ function activate(context) {
         completionProvider,
         hoverProvider,
         definitionProvider,
+        referenceProvider,
         outlineProvider,
         codeActionsProvider,
         documentFormatter,
@@ -81,6 +84,9 @@ function activate(context) {
 
     // ── If / Else expression builder panel (reads the open .jrxml schema) ────
     registerIfElsePanel(context);
+
+    // ── Shared "open the expression here" actions (issues + code actions) ────
+    registerExpressionActions(context);
 
     // ── Include-chain view (where the open report is called from) ─────────────
     registerIncludeChain(context);
@@ -146,7 +152,7 @@ function activate(context) {
         if (!cfg.get('autoOpenEditor')) return;
         if (!e.textEditor.document.fileName.endsWith('.jrxml')) return;
         const result = findExpressionAtCursor(e.textEditor.document, e.selections[0].active);
-        if (result) ExpressionEditorPanel.createOrShow(context.extensionUri, result, e.textEditor);
+        if (result) ExpressionEditorPanel.createOrShow(context.extensionUri, result, e.textEditor, { preserveFocus: true });
     }, null, context.subscriptions);
 
     context.subscriptions.push(openEditorCmd, statusBarItem);
