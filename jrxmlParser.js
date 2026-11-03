@@ -7,7 +7,7 @@ const { scanXml } = require('./xmlspan');
 const cache = new Map();
 
 /**
- * @typedef {{ name:string, type:string, fullType:string, description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
+ * @typedef {{ name:string, type:string, fullType:string, typeSource:'declared'|'inferred', description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
  * @typedef {{ sigil:string, name:string, offset:number, fromSubreport?:boolean }} Reference
  * @typedef {{ kind:string, name:string, offset:number, end:number, children:OutlineNode[] }} OutlineNode
  * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
@@ -130,6 +130,9 @@ function extractFields(text) {
             name:        named.name,
             type:        shortType(type),
             fullType:    type,
+            // Without a `class` attribute JasperReports infers the type from the
+            // data source, so `java.lang.Object` here means "unknown", not Object.
+            typeSource:  cls && cls.value ? 'declared' : 'inferred',
             description: extractTagContent(inner, 'description').trim(),
             offset:      m.index,
             end:         m.index + m[0].length,
@@ -169,6 +172,7 @@ function extractParameters(text, skipSubreports = true) {
             name:        named.name,
             type:        shortType(type),
             fullType:    type,
+            typeSource:  cls && cls.value ? 'declared' : 'inferred',
             description: defVal ? `Default: ${defVal}`
                                 : (isSystem ? 'System parameter' : 'User parameter'),
             isSystem,
@@ -203,6 +207,7 @@ function extractVariables(text) {
             name:        named.name,
             type:        shortType(type),
             fullType:    type,
+            typeSource:  cls && cls.value ? 'declared' : 'inferred',
             description: `${calculation} / reset: ${resetType}${expr ? `\n\nExpr: \`${expr}\`` : ''}`,
             offset:      m.index,
             end:         m.index + m[0].length,

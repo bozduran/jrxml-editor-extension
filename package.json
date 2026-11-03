@@ -309,6 +309,28 @@
           "default": false,
           "description": "Automatically open expression editor when cursor is inside an expression"
         },
+        "jrxml.typeCompletion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Suggest the Java members of a field, parameter or variable type after a '.' (for example $F{customer}.get)."
+        },
+        "jrxml.typeCompletion.jdkBaseline": {
+          "type": "string",
+          "enum": [
+            "8",
+            "11",
+            "17",
+            "21"
+          ],
+          "enumDescriptions": [
+            "Java 8 — JasperReports 6.x default",
+            "Java 11 — JasperReports 7.x default",
+            "Java 17",
+            "Java 21"
+          ],
+          "default": "8",
+          "description": "Java version the reports are compiled against. Members added later (String.isBlank, List.getFirst, ...) are not suggested."
+        },
         "jrxml.showUnusedWarnings": {
           "type": "boolean",
           "default": true,
@@ -431,7 +453,8 @@
     "test": "node --test test/",
     "test:integration": "vscode-test",
     "lint": "eslint .",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "gen:jdk-index": "node tools/gen-jdk-index.js"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

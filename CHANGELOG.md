@@ -4,6 +4,24 @@ All notable changes to the "jrxml-editor" extension will be documented in this f
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [Unreleased]
+
+### Added
+- **Completion:** typed member completion. After `$F{...}`, `$P{...}` or `$V{...}`, a `.` now completes the
+  Java members of the declaration's `class`, including overloads with snippets, inherited members,
+  deprecation flags and method chains (`$F{Name}.trim().`). Works for the JasperReports built-in
+  parameters (`$P{REPORT_DATA_SOURCE}.` → `next()`, `getFieldValue(String)`).
+- **Completion:** `jrxml.typeCompletion.jdkBaseline` (default `8`) hides members newer than the target
+  JDK, so a Java 8 report is never offered `String.isBlank` or `List.getFirst`.
+- **Completion:** when a receiver cannot be typed, one explanation is offered instead of an unrelated
+  list — an undeclared `class` attribute, a class outside the index, or an ambiguous short name.
+- **Data:** `data/jdk-members.json`, generated from `javap` by `npm run gen:jdk-index`, plus the
+  hand-curated `data/extra-types.json` for JasperReports engine types.
+
+### Changed
+- **Completion:** the parser now records whether a declaration's `class` was written or has to be
+  inferred from the data source, so "unknown type" is no longer reported as `java.lang.Object`.
+
 ## [0.0.2]
 
 ### Fixed

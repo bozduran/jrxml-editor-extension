@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "source": "hand-curated",
+  "note": "Members for types javap cannot provide here: the JasperReports engine interfaces that built-in parameters are typed as. Keep this file small and only list signatures that are certain — a type that is missing is reported as 'not indexed', which beats offering a method that does not exist. Shape matches the entries generated into data/jdk-members.json by tools/gen-jdk-index.js. `since` 8 means 'available in every supported baseline'.",
+  "types": {
+    "net.sf.jasperreports.engine.JRDataSource": {
+      "kind": "interface",
+      "methods": [
+        { "name": "next", "params": [], "returns": "boolean", "static": false, "since": 8 },
+        { "name": "getFieldValue", "params": ["java.lang.String"], "returns": "java.lang.Object", "static": false, "since": 8 }
+      ],
+      "fields": []
+    },
+    "net.sf.jasperreports.engine.JRRewindableDataSource": {
+      "kind": "interface",
+      "super": ["net.sf.jasperreports.engine.JRDataSource"],
+      "methods": [
+        { "name": "moveBeforeFirst", "params": [], "returns": "void", "static": false, "since": 8 }
+      ],
+      "fields": []
+    }
+  }
+}

@@ -50,6 +50,28 @@ const SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
   </subreport>
 </jasperReport>`;
 
+test('records whether a declaration class was declared or must be inferred', () => {
+    const text = `<jasperReport name="R">
+  <field name="declared" class="java.lang.String"/>
+  <field name="inferred"/>
+  <parameter name="pDeclared" class="java.math.BigDecimal"/>
+  <parameter name="pInferred"/>
+  <variable name="vDeclared" class="java.lang.Integer"/>
+  <variable name="vInferred"/>
+</jasperReport>`;
+    const r = parseDeclarations(makeDoc(text));
+
+    assert.strictEqual(r.fields[0].typeSource, 'declared');
+    assert.strictEqual(r.fields[1].typeSource, 'inferred');
+    assert.strictEqual(r.parameters[0].typeSource, 'declared');
+    assert.strictEqual(r.parameters[1].typeSource, 'inferred');
+    assert.strictEqual(r.variables[0].typeSource, 'declared');
+    assert.strictEqual(r.variables[1].typeSource, 'inferred');
+
+    // The type stays Object so existing consumers keep working.
+    assert.strictEqual(r.fields[1].fullType, 'java.lang.Object');
+});
+
 test('extracts fields, parameters, variables and groups', () => {
     const r = parseDeclarations(makeDoc(SAMPLE));
 
