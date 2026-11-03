@@ -204,6 +204,33 @@ panel. On a headless Linux box run it under `xvfb-run -a npm run test:integratio
 
 ---
 
+## Releasing
+
+The **Build VSIX** workflow can bump the version for you:
+
+1. In GitHub, open **Actions → Build VSIX → Run workflow**.
+2. Pick the default branch (`master`) and a bump: `patch`, `minor`, `major`, or `none`.
+3. Run it.
+
+A bump run on the default branch:
+- updates `package.json`, `package-lock.json` and the `CHANGELOG.md` heading through `npm version`,
+- commits `chore(release): <version>` and tags `v<version>`,
+- packages the VSIX, uploads the artifact and creates the GitHub release with the VSIX attached.
+
+`none` rebuilds the current version without a commit, tag, or release. Normal pushes
+to `master`/`main` and `v*` tags keep packaging only; a tag build also attaches the
+VSIX to the release and fails if the tag does not match `package.json`.
+
+The bump is pushed with the workflow's `GITHUB_TOKEN`, so it does not trigger a
+second run, and the repository must allow GitHub Actions to push to the default
+branch. If that push fails, no tag is created and the VSIX is still available as a
+workflow artifact.
+
+Locally, `npm version patch` performs the same version + changelog update, commit,
+and tag; push with `git push --follow-tags`.
+
+---
+
 ## Supported expression tags
 
 The editor activates for cursor positions inside any of these tags:

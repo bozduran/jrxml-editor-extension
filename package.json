@@ -454,6 +454,7 @@
     "test:integration": "vscode-test",
     "lint": "eslint .",
     "package": "vsce package --no-dependencies",
+    "version": "node tools/update-changelog.js && git add CHANGELOG.md",
     "gen:jdk-index": "node tools/gen-jdk-index.js"
   },
   "devDependencies": {
