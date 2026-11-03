@@ -47,3 +47,27 @@ test('snippet prefixes are unique', () => {
         }
     }
 });
+
+test('ships the common date helpers', () => {
+    const snippets = JSON.parse(fs.readFileSync(snippetFile, 'utf8'));
+    const byPrefix = new Map();
+
+    for (const snippet of Object.values(snippets)) {
+        const body = Array.isArray(snippet.body) ? snippet.body.join('\n') : String(snippet.body);
+        const prefixes = Array.isArray(snippet.prefix) ? snippet.prefix : [snippet.prefix];
+        for (const prefix of prefixes) byPrefix.set(prefix, { body });
+    }
+
+    for (const prefix of [
+        'jdatetoday', 'jdateadd', 'jdateadddate', 'jdatetodaybefore', 'jdatetodayafter',
+        'jparsedate', 'jdatecompare', 'jnow', 'jdatediff', 'jdatetodaytz', 'jdatetodaylocale',
+    ]) {
+        assert.ok(byPrefix.has(prefix), `missing date snippet ${prefix}`);
+    }
+
+    assert.match(byPrefix.get('jdatetoday').body, /TODAY\(\)/);
+    assert.match(byPrefix.get('jparsedate').body, /\.parse\(/);
+    assert.match(byPrefix.get('jdatecompare').body, /\.before\(/);
+    assert.match(byPrefix.get('jdatetodaytz').body, /REPORT_TIME_ZONE/);
+    assert.match(byPrefix.get('jdatetodaylocale').body, /REPORT_LOCALE/);
+});

@@ -152,6 +152,11 @@ The member table ships with the extension (`data/jdk-members.json`, generated fr
 `jif` (`IF(...)`), `jternary`, `jnullsafe`, `jand`, `jor`, `jnot`, `jequals`, `jtext`,
 `jstring`, `jdecimal` and `jdate`.
 
+Date/time helpers: `jdatetoday` (format `TODAY()`), `jdateadd` (`TODAY()` + N days),
+`jdateadddate`, `jdatetodaybefore` / `jdatetodayafter`, `jparsedate` (string → `Date`),
+`jdatecompare` (two string dates), `jnow`, `jdatediff`, `jdatetodaytz` (report time zone)
+and `jdatetodaylocale` (report locale).
+
 ### 10. Settings panel
 **JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 

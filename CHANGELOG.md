@@ -25,6 +25,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   from a declaration.
 - **Snippets:** a JRXML snippet library (`jif`, `jternary`, `jnullsafe`, `jtext`,
   `jdecimal`, `jdate`, …) and a **Format Expression at Cursor** command.
+- **Snippets:** date/time helpers for common report logic — today as a string,
+  today plus days, today before/after a string date, string-to-date parsing,
+  comparing two string dates, date differences, report-time-zone and report-locale
+  variants.
 - **If / Else builder:** a new `JRXML: Open If / Else Builder` webview panel that builds
   `if / else if / else` conditions as a nested ternary or as `IF()` / `AND()` / `OR()`,
   with null-safe guards, live output and reverse conversion of pasted expressions.
