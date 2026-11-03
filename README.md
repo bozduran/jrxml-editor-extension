@@ -71,6 +71,8 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
 - Outline, hover and go-to-definition for `$F{}` / `$P{}` / `$V{}`
 
+The **Issues (JRXML)**, **Best Practices (JRXML)** and **Include Chain (JRXML)** views live under the extension's own **JRXML** icon in the Activity Bar.
+
 ### 6. Document formatting and text check
 The hook's `format` + `textcheck` steps run through **Format Document** and the
 `source.fixAll.jrxml` action **"Fix all JRXML format and text issues"**:
@@ -143,7 +145,7 @@ The member table ships with the extension (`data/jdk-members.json`, generated fr
 **JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 
 ### 11. Include chain view
-The **Include Chain (JRXML)** view sits below Best Practices and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
+The **Include Chain (JRXML)** view sits below Best Practices in the **JRXML** Activity Bar view and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
 
 A file *calls* another when it contains a double-quoted token equal to that file's base name (the commit-hook rule), so subreports are picked up however their expression is written. The workspace is scanned once (`**/*.jrxml`, excluding `node_modules`/`out`/`target`/`bin`), cached by file mtime, and refreshed when the active editor changes, on edits and saves, on file create/delete/rename and on workspace-folder changes — or manually via **JRXML: Refresh Include Chain**.
 
@@ -160,6 +162,8 @@ A file *calls* another when it contains a double-quoted token equal to that file
    (or use the **If / Else…** button inside the expression editor). The builder reads the
    open report's fields, parameters and variables automatically; **Apply to File** writes
    the result back into the expression tag under the cursor.
+5. The **JRXML** icon in the Activity Bar holds the Issues, Best Practices and Include
+   Chain views for the report you have open.
 
 ---
 

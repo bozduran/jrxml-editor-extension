@@ -340,6 +340,23 @@ suite('JRXML extension smoke', () => {
         assert.strictEqual(tree[0].current, true);
         assert.deepStrictEqual(tree[0].children, []);
     });
+
+    test('contributes the JRXML Activity Bar container', async () => {
+        const pkg = require('../package.json');
+        const containers = pkg.contributes.viewsContainers.activitybar || [];
+        const container = containers.find(candidate => candidate.id === 'jrxmlViews');
+
+        assert.ok(container, 'missing the JRXML Activity Bar container');
+        assert.strictEqual(container.title, 'JRXML');
+        assert.strictEqual(container.icon, 'media/jrxml.svg');
+        assert.deepStrictEqual(
+            pkg.contributes.views.jrxmlViews.map(view => view.id),
+            ['jrxmlIssues', 'jrxmlBestPractices', 'jrxmlIncludeChain']
+        );
+
+        // The workbench command generated for a contributed view container.
+        await vscode.commands.executeCommand('workbench.view.extension.jrxmlViews');
+    });
 });
 
 function findNode(nodes, predicate) {

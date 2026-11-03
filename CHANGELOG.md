@@ -22,6 +22,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **Settings:** `jrxml.ifElse.nullSafe`, `jrxml.ifElse.multiline` and
   `jrxml.ifElse.style` control the builder defaults; string settings with enumerated
   options now render as a dropdown in the settings panel.
+- **Views:** the Issues, Best Practices and Include Chain views now live under a
+  dedicated **JRXML** icon in the Activity Bar instead of the Explorer, with a new
+  monochrome document/XML icon. Their view IDs, commands and view-title actions are
+  unchanged.
 
 ## [0.1.1] - 2026-11-03
 

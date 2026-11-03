@@ -458,8 +458,17 @@
         }
       }
     },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "jrxmlViews",
+          "title": "JRXML",
+          "icon": "media/jrxml.svg"
+        }
+      ]
+    },
     "views": {
-      "explorer": [
+      "jrxmlViews": [
         {
           "id": "jrxmlIssues",
           "name": "Issues (JRXML)",
