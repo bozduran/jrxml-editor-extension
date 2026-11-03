@@ -131,6 +131,12 @@ test('ships the required renderer and messaging hooks', () => {
     assert.ok(script.includes('textContent'), 'content must be rendered with textContent');
     assert.ok(script.includes('addEventListener'), 'interactions must use addEventListener');
     assert.ok(script.includes('replaceChildren'), 're-rendering must replace the canvas children');
+    assert.ok(script.includes("'page-content'"), 'page content must live in the clipping layer');
+    assert.match(
+        html,
+        /\.page-content\s*\{[^}]*overflow:\s*hidden/,
+        'content wider than the paper must be clipped'
+    );
 });
 
 test('embeds the model and file name as parseable JSON', () => {

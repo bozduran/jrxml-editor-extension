@@ -114,6 +114,13 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
     box-shadow: 0 0 0 1px rgba(0,0,0,0.16), 0 6px 22px rgba(0,0,0,0.4);
   }
 
+  /* Elements are clipped to the paper; band labels live outside this layer. */
+  .page-content {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
   .margin {
     position: absolute;
     background: rgba(0,0,0,0.06);
@@ -333,6 +340,7 @@ let scale         = 1;
 let zoomMode      = 'fit';
 let selected      = null;
 let resizeTimer   = null;
+let contentLayer  = null;
 
 // ── Small DOM helpers ───────────────────────────────────────────────────────
 
@@ -483,6 +491,12 @@ function updateZoomLabel() {
 function renderPage(current, report) {
   page.replaceChildren();
 
+  // Everything that belongs to the printable page goes into a clipping layer
+  // so elements wider than the paper never paint over the surrounding canvas.
+  // Band labels are appended to the page itself, outside this layer.
+  contentLayer = make('div', 'page-content');
+  page.appendChild(contentLayer);
+
   const rows = [];
   let top = report.topMargin;
 
@@ -541,7 +555,7 @@ function renderPageBreaks(report, surfaceHeight) {
     const line = make('div', 'page-break');
     line.style.top = px(y * scale);
     line.appendChild(make('span', 'page-break-label', 'Page ' + pageNumber));
-    page.appendChild(line);
+    contentLayer.appendChild(line);
     pageNumber += 1;
   }
 }
@@ -573,19 +587,19 @@ function renderColumns(report, surfaceHeight) {
     guide.style.left = px(x * scale);
     guide.style.top = px(report.topMargin * scale);
     guide.style.height = px(Math.max(0, surfaceHeight - report.topMargin - report.bottomMargin) * scale);
-    page.appendChild(guide);
+    contentLayer.appendChild(guide);
 
     const label = make('div', 'column-label', 'Column ' + (column + 1));
     label.style.left = px((x + 4) * scale);
     label.style.top = px((report.topMargin + 2) * scale);
-    page.appendChild(label);
+    contentLayer.appendChild(label);
   }
 }
 
 function addOverlay(className, left, top, width, height) {
   const node = make('div', className);
   position(node, left, top, width, height);
-  page.appendChild(node);
+  contentLayer.appendChild(node);
   return node;
 }
 
@@ -599,7 +613,7 @@ function renderBandRow(row, report, contentWidth) {
   rowEl.style.width = px(contentWidth * scaling);
   rowEl.style.height = px(row.displayHeight * scaling);
   if (band.key === 'background') rowEl.className += ' background-band';
-  page.appendChild(rowEl);
+  contentLayer.appendChild(rowEl);
 
   const label = make('div', 'band-label');
   label.style.top = px(row.top * scaling);
@@ -619,7 +633,7 @@ function renderBandRow(row, report, contentWidth) {
   layer.style.width = px(report.columnWidth * scaling);
   layer.style.height = px(row.displayHeight * scaling);
   renderElements(band.elements, layer);
-  page.appendChild(layer);
+  contentLayer.appendChild(layer);
 }
 
 // ── Elements ────────────────────────────────────────────────────────────────
