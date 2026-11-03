@@ -6,6 +6,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-03
+
 ### Fixed
 - **Expression editor:** reopening the panel or switching to another expression no longer
   discards unsaved text, cursor position or the Auto-format checkbox. Drafts are kept per

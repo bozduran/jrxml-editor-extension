@@ -2,7 +2,7 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
@@ -567,28 +567,42 @@
             "id": "jrxml.getStarted.openExpression",
             "title": "Open an expression",
             "description": "Place the cursor inside an expression tag, then use **JRXML: Open Expression Editor** or click the pencil icon in the editor title bar. `Ctrl+Alt+E` works too.",
-            "media": { "markdown": "media/walkthrough/open-expression.md" },
-            "completionEvents": ["onCommand:jrxml.openExpressionEditor"]
+            "media": {
+              "markdown": "media/walkthrough/open-expression.md"
+            },
+            "completionEvents": [
+              "onCommand:jrxml.openExpressionEditor"
+            ]
           },
           {
             "id": "jrxml.getStarted.formatExpression",
             "title": "Format one expression",
             "description": "Run **JRXML: Format Expression at Cursor** to format only the expression under the cursor, without touching the rest of the file.",
-            "media": { "markdown": "media/walkthrough/format-expression.md" },
-            "completionEvents": ["onCommand:jrxml.formatExpressionAtCursor"]
+            "media": {
+              "markdown": "media/walkthrough/format-expression.md"
+            },
+            "completionEvents": [
+              "onCommand:jrxml.formatExpressionAtCursor"
+            ]
           },
           {
             "id": "jrxml.getStarted.fixIssues",
             "title": "Fix issues from the JRXML view",
             "description": "The **JRXML** Activity Bar view lists issues for the open report. Open an issue's expression in the editor or builder from its context menu.",
-            "media": { "markdown": "media/walkthrough/fix-issues.md" }
+            "media": {
+              "markdown": "media/walkthrough/fix-issues.md"
+            }
           },
           {
             "id": "jrxml.getStarted.buildIfElse",
             "title": "Build if / else visually",
             "description": "Use **JRXML: Open If / Else Builder** (`Ctrl+Alt+B`) to turn the expression under the cursor into branches, then apply it back.",
-            "media": { "markdown": "media/walkthrough/build-if-else.md" },
-            "completionEvents": ["onCommand:jrxml.openIfElseBuilder"]
+            "media": {
+              "markdown": "media/walkthrough/build-if-else.md"
+            },
+            "completionEvents": [
+              "onCommand:jrxml.openIfElseBuilder"
+            ]
           }
         ]
       }
