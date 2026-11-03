@@ -4,8 +4,9 @@
 
 const vscode = require('vscode');
 const { formatExpression } = require('./expressionFormatter');
-const { hasCdata, wrapExpression } = require('./expressionUtils');
 const { buildPanelHtml, getNonce } = require('./expressionPanelHtml');
+const { applyExpressionToEditor } = require('./expressionApply');
+const IfElsePanel = require('./ifElsePanel');
 
 class ExpressionEditorPanel {
     static currentPanel = undefined;
@@ -70,6 +71,9 @@ class ExpressionEditorPanel {
                     vscode.env.clipboard.writeText(message.expression);
                     vscode.window.showInformationMessage('Expression copied to clipboard.');
                     break;
+                case 'openIfElseBuilder':
+                    this._openIfElseBuilder(message.expression);
+                    break;
             }
         } catch (err) {
             console.error('[JRXML Expression Editor] Error handling message:', err);
@@ -80,78 +84,40 @@ class ExpressionEditorPanel {
         }
     }
 
-    _applyToSource(newExpression) {
-        const editor = this._sourceEditor;
-        if (!editor) { vscode.window.showWarningMessage('Source editor is no longer open.'); return; }
-
-        const tagName = this._expressionResult.tagName;
-
-        // Always re-scan the CURRENT document text — never use the stale
-        // range/fullMatch from when the panel first opened. This prevents
-        // double-application on repeated Apply clicks.
-        const doc  = editor.document;
-        const text = doc.getText();
-
-        const tagPattern = new RegExp(
-            `(<${tagName}(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/${tagName}>)`,
-            'g'
-        );
-
-        // Pick the occurrence closest to the original cursor position
-        const originalOffset = doc.offsetAt(this._expressionResult.range.start);
-        let bestMatch    = null;
-        let bestDistance = Infinity;
-        let m;
-
-        while ((m = tagPattern.exec(text)) !== null) {
-            const dist = Math.abs(m.index - originalOffset);
-            if (dist < bestDistance) {
-                bestDistance = dist;
-                bestMatch    = { index: m.index, openTag: m[1], innerOld: m[2], closeTag: m[3] };
-            }
-        }
-
-        if (!bestMatch) {
-            vscode.window.showErrorMessage(
-                `Could not find <${tagName}> in the document. It may have been moved or renamed.`
+    async _applyToSource(newExpression) {
+        let applied;
+        try {
+            applied = await applyExpressionToEditor(
+                this._sourceEditor,
+                this._expressionResult,
+                newExpression
             );
+        } catch (err) {
+            console.error('[JRXML Expression Editor] Apply error:', err);
+            vscode.window.showErrorMessage(`Failed to apply expression: ${err.message || err}`);
             return;
         }
 
-        const { openTag, innerOld, closeTag } = bestMatch;
-        const matchStart = bestMatch.index;
-        const matchEnd   = matchStart + openTag.length + innerOld.length + closeTag.length;
+        if (!applied.ok) {
+            if (applied.severity === 'warning') vscode.window.showWarningMessage(applied.reason);
+            else vscode.window.showErrorMessage(applied.reason);
+            return;
+        }
 
-        // Preserve CDATA wrapping if the original used it
-        const useCdata = hasCdata(innerOld);
-        const newInner = wrapExpression(newExpression, useCdata);
-        const newTag   = openTag + newInner + closeTag;
-
-        const liveRange = new vscode.Range(
-            doc.positionAt(matchStart),
-            doc.positionAt(matchEnd)
+        this._expressionResult = applied.expressionResult;
+        vscode.window.showInformationMessage(
+            `Expression applied to <${this._expressionResult.tagName}>.`
         );
+        // Close the panel — the expression is now in the file
+        this.dispose();
+    }
 
-        editor.edit(editBuilder => {
-            editBuilder.replace(liveRange, newTag);
-        }).then(success => {
-            if (success) {
-                // Update stored result so the next Apply still finds the right spot
-                this._expressionResult = {
-                    ...this._expressionResult,
-                    expression: newExpression,
-                    fullMatch:  newTag,
-                    range: new vscode.Range(
-                        doc.positionAt(matchStart),
-                        doc.positionAt(matchStart + newTag.length)
-                    )
-                };
-                vscode.window.showInformationMessage(`Expression applied to <${tagName}>.`);
-                // Close the panel — the expression is now in the file
-                this.dispose();
-            } else {
-                vscode.window.showErrorMessage('Failed to apply expression.');
-            }
+    /** Hand the current expression over to the if / else builder panel. */
+    _openIfElseBuilder(expression) {
+        IfElsePanel.createOrShow(this._extensionUri, {
+            sourceEditor: this._sourceEditor,
+            expressionResult: this._expressionResult,
+            initialExpression: typeof expression === 'string' ? expression : null,
         });
     }
 

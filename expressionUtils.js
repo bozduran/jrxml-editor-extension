@@ -96,4 +96,60 @@ function hasCdata(rawInner) {
     return /^\s*<!\[CDATA\[/.test(rawInner);
 }
 
-module.exports = { findExpressionAtCursor, stripCdata, wrapExpression, hasCdata, EXPRESSION_TAGS };
+function escapeRegExp(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Compute the replacement for the expression tag closest to `originalOffset`.
+ *
+ * Re-scans the live document text so a stale range from when a panel opened
+ * can never apply twice. The new expression is wrapped in CDATA when the
+ * original content used it.
+ *
+ * @param {string} text            current document text
+ * @param {string} tagName         e.g. "textFieldExpression"
+ * @param {number} originalOffset  character offset of the original expression tag
+ * @param {string} newExpression   expression text to write inside the tag
+ * @returns {{startOffset:number,endOffset:number,newTag:string,useCdata:boolean}|null}
+ */
+function findTagReplacement(text, tagName, originalOffset, newExpression) {
+    if (!text || !tagName) return null;
+
+    const safeTag = escapeRegExp(tagName);
+    const tagPattern = new RegExp(
+        `(<${safeTag}(?:\\s[^>]*)?>)([\\s\\S]*?)(<\\/${safeTag}>)`,
+        'g'
+    );
+
+    let best = null;
+    let bestDistance = Infinity;
+    let match;
+
+    while ((match = tagPattern.exec(text)) !== null) {
+        const distance = Math.abs(match.index - originalOffset);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            best = { index: match.index, openTag: match[1], innerOld: match[2], closeTag: match[3] };
+        }
+    }
+
+    if (!best) return null;
+
+    const useCdata = hasCdata(best.innerOld);
+    return {
+        startOffset: best.index,
+        endOffset: best.index + best.openTag.length + best.innerOld.length + best.closeTag.length,
+        newTag: best.openTag + wrapExpression(newExpression, useCdata) + best.closeTag,
+        useCdata,
+    };
+}
+
+module.exports = {
+    findExpressionAtCursor,
+    findTagReplacement,
+    stripCdata,
+    wrapExpression,
+    hasCdata,
+    EXPRESSION_TAGS,
+};

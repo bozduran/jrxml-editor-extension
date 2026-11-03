@@ -286,6 +286,7 @@ function buildPanelHtml({ tagName, rawExpression, formattedExpression, nonce, cs
   <button id="btnApply" class="primary">✔ Apply to File</button>
   <button id="btnCopy" class="secondary">⎘ Copy</button>
   <button id="btnReset" class="secondary">↺ Reset</button>
+  <button id="btnIfElse" class="secondary" title="Build this expression with if / else branches">If / Else…</button>
   <label class="autofmt-label">
     <input type="checkbox" id="chkAutoFormat"> Auto-format on change
   </label>
@@ -361,6 +362,9 @@ function doReset() {
   refreshPreview();
   updateStats();
 }
+function doIfElse() {
+  vscode.postMessage({ command: 'openIfElseBuilder', expression: editor.value });
+}
 function toggleAutoFormat(checked) {
   autoFmt = checked;
   if (autoFmt) doFormat();
@@ -375,6 +379,7 @@ document.getElementById('btnFormat').addEventListener('click', doFormat);
 document.getElementById('btnApply').addEventListener('click', doApply);
 document.getElementById('btnCopy').addEventListener('click', doCopy);
 document.getElementById('btnReset').addEventListener('click', doReset);
+document.getElementById('btnIfElse').addEventListener('click', doIfElse);
 document.getElementById('chkAutoFormat').addEventListener('change', e => toggleAutoFormat(e.target.checked));
 editor.addEventListener('input', onEditorInput);
 

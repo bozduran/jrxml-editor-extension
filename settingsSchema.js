@@ -38,6 +38,32 @@ const SETTINGS_GROUPS = [
         ],
     },
     {
+        id: 'ifElse',
+        title: 'If / Else builder',
+        description: 'Defaults when the If / Else builder opens',
+        settings: [
+            {
+                key: 'ifElse.nullSafe', type: 'boolean', default: true,
+                label: 'Null-safe by default',
+                description: 'Start with null guards around field, parameter and variable dereferences.',
+            },
+            {
+                key: 'ifElse.multiline', type: 'boolean', default: true,
+                label: 'Multi-line by default',
+                description: 'Start with readable multi-line output instead of one long line.',
+            },
+            {
+                key: 'ifElse.style', type: 'string', default: 'ternary',
+                label: 'Output style',
+                description: 'Ternary ( ? : ) or the Jaspersoft functions IF() / AND() / OR().',
+                options: [
+                    ['ternary', 'Ternary ( ? : )'],
+                    ['functions', 'IF() / AND() / OR()'],
+                ],
+            },
+        ],
+    },
+    {
         id: 'diagnostics',
         title: 'Diagnostics',
         description: 'Inline warnings and errors on .jrxml files',

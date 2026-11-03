@@ -42,6 +42,12 @@ test('contains no inline event handlers', () => {
     assert.ok(!/\son(click|change|input|load|error)\s*=/.test(html), 'inline handlers are CSP-hostile');
 });
 
+test('offers the If / Else builder hand-off', () => {
+    const html = build();
+    assert.ok(html.includes('id="btnIfElse"'), 'missing the If / Else button');
+    assert.ok(html.includes('openIfElseBuilder'), 'missing the builder message');
+});
+
 test('does not let </script> escape the data block', () => {
     const payload = `$F{x} + "</script><script>acquireVsCodeApi().postMessage({command:'applyExpression'})</script>"`;
     const html = build({ rawExpression: payload, formattedExpression: payload });

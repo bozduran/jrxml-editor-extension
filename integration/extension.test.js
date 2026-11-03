@@ -241,6 +241,94 @@ suite('JRXML extension smoke', () => {
         assert.match(current.path, /DetailReport\.jrxml$/);
     });
 
+    test('opens the If / Else builder and reads the report schema', async () => {
+        const uri = tempFile('IfElseBuilder.jrxml', [
+            '<jasperReport name="IfElseBuilder" uuid="44444444-4444-4444-4444-444444444444">',
+            '\t<field name="status" class="java.lang.String"/>',
+            '\t<parameter name="limit" class="java.lang.Integer"/>',
+            '\t<variable name="total" class="java.math.BigDecimal"/>',
+            '\t<detail>',
+            '\t\t<band height="20">',
+            '\t\t\t<textField>',
+            '\t\t\t\t<reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t\t\t<textFieldExpression><![CDATA[$F{status}]]></textFieldExpression>',
+            '\t\t\t</textField>',
+            '\t\t</band>',
+            '\t</detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+
+        // The builder reads names straight from the open report (no upload).
+        const { readSchema } = require('../ifElsePanel');
+        const { schema } = readSchema(document);
+        assert.ok(schema, 'expected a schema');
+        assert.ok(schema.F.some(item => item.name === 'status' && item.cls === 'String'));
+        assert.ok(schema.P.some(item => item.name === 'limit' && item.cls === 'Integer'));
+        assert.ok(schema.P.some(item => item.name === 'REPORT_CONNECTION'), 'built-in parameters missing');
+        assert.ok(schema.V.some(item => item.name === 'total' && item.cls === 'BigDecimal'));
+        assert.ok(schema.V.some(item => item.name === 'PAGE_NUMBER'), 'built-in variables missing');
+
+        const line = document.getText().split('\n').findIndex(text => text.includes('$F{status}'));
+        const character = document.lineAt(line).text.indexOf('$F{status}') + 2;
+        const position = new vscode.Position(line, character);
+        vscode.window.activeTextEditor.selection = new vscode.Selection(position, position);
+
+        await vscode.commands.executeCommand('jrxml.openIfElseBuilder');
+
+        const tab = await waitFor(() => vscode.window.tabGroups.all
+            .flatMap(group => group.tabs)
+            .find(candidate => candidate.label === 'If / Else Builder'));
+
+        assert.ok(tab, 'If / Else Builder tab was not opened');
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    });
+
+    test('applies a built expression to exactly the target tag', async () => {
+        const uri = tempFile('ApplyIfElse.jrxml', [
+            '<jasperReport name="ApplyIfElse" uuid="55555555-5555-5555-5555-555555555555">',
+            '\t<field name="status" class="java.lang.String"/>',
+            '\t<detail><band height="20">',
+            '\t\t<textField><reportElement x="0" y="0" width="100" height="20"/>',
+            '\t\t<textFieldExpression><![CDATA[$F{status}]]></textFieldExpression></textField>',
+            '\t</band></detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(uri);
+        const editor = vscode.window.activeTextEditor;
+        assert.ok(editor, 'expected an active editor');
+        const text = document.getText();
+        const offset = text.indexOf('$F{status}');
+        const { findExpressionAtCursor } = require('../expressionUtils');
+        const target = findExpressionAtCursor(
+            document,
+            document.positionAt(offset + '$F{status}'.length)
+        );
+        assert.ok(target, 'expected the expression tag under the cursor');
+
+        const expression = 'IF($F{status}.equals("PAID"), "Paid", "Unknown")';
+        const applied = await require('../expressionApply').applyExpressionToEditor(
+            editor,
+            target,
+            expression
+        );
+
+        assert.strictEqual(applied.ok, true, applied.reason);
+        const updated = document.getText();
+        assert.ok(
+            updated.includes(`<textFieldExpression><![CDATA[${expression}]]></textFieldExpression>`),
+            'the expression was not written into the target tag'
+        );
+
+        await vscode.commands.executeCommand('undo');
+        assert.ok(
+            document.getText().includes('<![CDATA[$F{status}]]>'),
+            'undo did not restore the original tag'
+        );
+    });
+
     test('marks a report nothing calls as not referenced', async () => {
         const uri = vscode.Uri.file(path.join(__dirname, 'workspace', 'OrphanReport.jrxml'));
         await openDocument(uri);

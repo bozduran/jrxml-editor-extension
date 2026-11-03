@@ -20,6 +20,7 @@ Module._load = function (request, ...rest) {
 
 const {
     findExpressionAtCursor,
+    findTagReplacement,
     stripCdata,
     wrapExpression,
     hasCdata,
@@ -87,4 +88,66 @@ test('findExpressionAtCursor matches jr:expression', () => {
 test('findExpressionAtCursor does not span a mismatched closing tag', () => {
     const text = '<textFieldExpression><![CDATA[$F{a}]]></variableExpression>';
     assert.strictEqual(findExpressionAtCursor(fakeDocument(text), 20), null);
+});
+
+// ── findTagReplacement ───────────────────────────────────────────────────────
+
+test('findTagReplacement replaces only the target tag and preserves CDATA', () => {
+    const text = [
+        '<jasperReport>',
+        '\t<textFieldExpression><![CDATA[$F{a}]]></textFieldExpression>',
+        '\t<expression><![CDATA[$F{b}]]></expression>',
+        '</jasperReport>',
+    ].join('\n');
+    const tagStart = text.indexOf('<textFieldExpression>');
+
+    const replacement = findTagReplacement(text, 'textFieldExpression', tagStart, '$F{a} + 1');
+    assert.ok(replacement, 'expected a replacement');
+    assert.ok(replacement.useCdata);
+    assert.strictEqual(
+        replacement.newTag,
+        '<textFieldExpression><![CDATA[$F{a} + 1]]></textFieldExpression>'
+    );
+    assert.strictEqual(replacement.startOffset, tagStart);
+    assert.strictEqual(
+        replacement.endOffset,
+        tagStart + '<textFieldExpression><![CDATA[$F{a}]]></textFieldExpression>'.length
+    );
+    assert.ok(text.includes('<expression><![CDATA[$F{b}]]></expression>'), 'other tags untouched');
+});
+
+test('findTagReplacement picks the occurrence closest to the original offset', () => {
+    const text = [
+        '<expression><![CDATA[$F{a}]]></expression>',
+        '<expression><![CDATA[$F{b}]]></expression>',
+    ].join('\n');
+    const second = text.indexOf('<expression>', 1);
+
+    const replacement = findTagReplacement(text, 'expression', second, '$F{b} + 1');
+    assert.ok(replacement);
+    assert.strictEqual(replacement.startOffset, second);
+    assert.ok(text.slice(second).startsWith('<expression><![CDATA[$F{b}]]></expression>'));
+});
+
+test('findTagReplacement writes plain text when the original had no CDATA', () => {
+    const text = '<expression>$F{a}</expression>';
+    const replacement = findTagReplacement(text, 'expression', 0, '$P{limit}');
+    assert.ok(replacement);
+    assert.strictEqual(replacement.useCdata, false);
+    assert.strictEqual(replacement.newTag, '<expression>$P{limit}</expression>');
+});
+
+test('findTagReplacement returns null when the tag is missing', () => {
+    assert.strictEqual(findTagReplacement('<jasperReport/>', 'expression', 0, 'x'), null);
+    assert.strictEqual(findTagReplacement('', 'expression', 0, 'x'), null);
+});
+
+test('findTagReplacement keeps the opening tag attributes', () => {
+    const text = '<expression class="java.lang.String">$F{a}</expression>';
+    const replacement = findTagReplacement(text, 'expression', 0, '$F{b}');
+    assert.ok(replacement);
+    assert.strictEqual(
+        replacement.newTag,
+        '<expression class="java.lang.String">$F{b}</expression>'
+    );
 });

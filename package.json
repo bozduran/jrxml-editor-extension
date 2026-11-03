@@ -52,6 +52,11 @@
         "icon": "$(edit)"
       },
       {
+        "command": "jrxml.openIfElseBuilder",
+        "title": "JRXML: Open If / Else Builder",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "jrxml.goToDeclaration",
         "title": "JRXML: Go to Declaration"
       },
@@ -176,6 +181,10 @@
         {
           "command": "jrxml.openExpressionEditor",
           "group": "1_open@1"
+        },
+        {
+          "command": "jrxml.openIfElseBuilder",
+          "group": "1_open@2"
         },
         {
           "command": "jrxml.issues.fixAll",
@@ -308,6 +317,29 @@
           "type": "boolean",
           "default": false,
           "description": "Automatically open expression editor when cursor is inside an expression"
+        },
+        "jrxml.ifElse.nullSafe": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the If / Else builder with null-safe guards."
+        },
+        "jrxml.ifElse.multiline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Start the If / Else builder with multi-line output."
+        },
+        "jrxml.ifElse.style": {
+          "type": "string",
+          "enum": [
+            "ternary",
+            "functions"
+          ],
+          "enumDescriptions": [
+            "Nested ternary: (condition ? value : value)",
+            "Jaspersoft functions: IF() / AND() / OR()"
+          ],
+          "default": "ternary",
+          "description": "Default output style of the If / Else builder."
         },
         "jrxml.typeCompletion.enabled": {
           "type": "boolean",

@@ -23,6 +23,7 @@ const { register: registerSort } = require('./sortProvider');
 const { register: registerClear } = require('./clearProvider');
 const { register: registerSettingsPanel } = require('./settingsPanel');
 const { register: registerIncludeChain } = require('./includeChainView');
+const { register: registerIfElsePanel } = require('./ifElsePanel');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -77,6 +78,9 @@ function activate(context) {
 
     // ── Dedicated settings panel ─────────────────────────────────────────────
     registerSettingsPanel(context);
+
+    // ── If / Else expression builder panel (reads the open .jrxml schema) ────
+    registerIfElsePanel(context);
 
     // ── Include-chain view (where the open report is called from) ─────────────
     registerIncludeChain(context);

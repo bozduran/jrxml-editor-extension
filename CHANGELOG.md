@@ -6,6 +6,23 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **If / Else builder:** a new `JRXML: Open If / Else Builder` webview panel that builds
+  `if / else if / else` conditions as a nested ternary or as `IF()` / `AND()` / `OR()`,
+  with null-safe guards, live output and reverse conversion of pasted expressions.
+- **If / Else builder:** reads the open `.jrxml`'s fields, parameters and variables
+  automatically (plus the JasperReports built-in variables and parameters) — no file
+  upload. The lists refresh on save and when declarations change; **Reload** and
+  **Use active file** re-attach the schema and the apply target. Names that are not
+  declared in the report are called out in the panel.
+- **If / Else builder:** **Apply to File** writes the result back into the expression
+  tag the builder was opened from (CDATA preserved, one undoable edit) and **Copy**
+  uses the VS Code clipboard. A preload from the cursor/selection and an **If / Else…**
+  button in the expression editor hand expressions over to the builder.
+- **Settings:** `jrxml.ifElse.nullSafe`, `jrxml.ifElse.multiline` and
+  `jrxml.ifElse.style` control the builder defaults; string settings with enumerated
+  options now render as a dropdown in the settings panel.
+
 ## [0.1.1] - 2026-11-03
 
 ### Added
