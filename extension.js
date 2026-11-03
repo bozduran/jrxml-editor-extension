@@ -26,6 +26,7 @@ const { register: registerSettingsPanel } = require('./settingsPanel');
 const { register: registerIncludeChain } = require('./includeChainView');
 const { register: registerIfElsePanel } = require('./ifElsePanel');
 const { register: registerExpressionActions } = require('./expressionActions');
+const { register: registerDesignView } = require('./designViewPanel');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -90,6 +91,9 @@ function activate(context) {
 
     // ── Include-chain view (where the open report is called from) ─────────────
     registerIncludeChain(context);
+
+    // ── Read-only design view (Jaspersoft Studio style) ───────────────────────
+    registerDesignView(context);
 
     // Diff previews for whole-file rewrites
     context.subscriptions.push(previewProvider);

@@ -226,6 +226,18 @@ suite('JRXML extension smoke', () => {
         await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     });
 
+    test('opens the read-only design view for the active report', async () => {
+        await openDocument(fixtureCopy('Blank_A4_1.jrxml'));
+        await vscode.commands.executeCommand('jrxml.openDesignView');
+
+        const tab = await waitFor(() => vscode.window.tabGroups.all
+            .flatMap(group => group.tabs)
+            .find(candidate => candidate.label === 'JRXML Design: Blank_A4_1.jrxml'));
+
+        assert.ok(tab, 'JRXML Design tab was not opened');
+        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    });
+
     test('resolves the include chain of the open report', async () => {
         const uri = vscode.Uri.file(path.join(__dirname, 'workspace', 'DetailReport.jrxml'));
         await openDocument(uri);

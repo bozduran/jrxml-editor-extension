@@ -6,6 +6,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **Read-only design view:** a Jaspersoft Studio-style visual canvas for Studio 7
+  JRXML, opened beside the source with **JRXML: Open Design View** (editor title
+  button and JRXML submenu). It shows the page, margins, columns, bands,
+  element geometry, local default/named styles, text, shapes and frames, labels
+  images/subreports/charts/tables, marks page breaks and supports click-to-reveal
+  in the source. The panel follows the active report and updates as you type.
+  Classic-format and malformed files show an explanatory banner; expressions are
+  not evaluated and no data is loaded.
+
 ## [0.1.2] - 2026-11-03
 
 ### Fixed

@@ -165,6 +165,17 @@ The **Include Chain (JRXML)** view sits below Best Practices in the **JRXML** Ac
 
 A file *calls* another when it contains a double-quoted token equal to that file's base name (the commit-hook rule), so subreports are picked up however their expression is written. The workspace is scanned once (`**/*.jrxml`, excluding `node_modules`/`out`/`target`/`bin`), cached by file mtime, and refreshed when the active editor changes, on edits and saves, on file create/delete/rename and on workspace-folder changes — or manually via **JRXML: Refresh Include Chain**.
 
+### 12. Report design view (read-only)
+**JRXML: Open Design View** opens a read-only visual canvas beside the source, modeled on Jaspersoft Studio's **Design** tab. It renders the report page, margins and columns, every band (background, title, page/column headers and footers, group headers and footers, detail bands, summary, no data), and each element at its `x`/`y`/`width`/`height`:
+
+- text fields show their expression and static text shows its content, using the element's font, colours, alignment, rotation and box borders;
+- lines, rectangles and ellipses are drawn, and frames render their nested children;
+- images, subreports, page breaks, charts, tables, lists and crosstabs appear as labelled placeholders;
+- page breaks and extra columns are marked, and the toolbar zooms or fits the page width;
+- clicking an element or band label reveals it in the source editor.
+
+The panel follows the last open `.jrxml` and updates as you type. It is strictly a visualization: nothing in the panel edits the report, evaluates expressions or loads data. Only the Studio 7 / JasperReports 7 format (`<element kind="…">`) is rendered; classic-format files show an explanatory banner. Template and conditional styles are not resolved, markup is flattened to text, and image/subreport content is not loaded.
+
 ---
 
 ## Usage
@@ -184,12 +195,15 @@ A file *calls* another when it contains a double-quoted token equal to that file
 6. New here? The **Get started with JRXML** walkthrough (Welcome page) walks through the
    editor, formatting, issue fixes and the If / Else builder.
 
+To view the whole report layout instead, run **JRXML: Open Design View** (the `$(preview)` button in the editor title or the **JRXML** menu). The read-only design view opens beside the source and follows the active report.
+
 ---
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
+| `JRXML: Open Design View` | Open a read-only visual design of the report beside the source |
 | `JRXML: Open Expression Editor` | Open the expression under the cursor in the side panel |
 | `JRXML: Open If / Else Builder` | Build the expression under the cursor as if / else-if / else branches |
 | `JRXML: Format Expression at Cursor` | Format only the expression under the cursor (CDATA preserved) |
