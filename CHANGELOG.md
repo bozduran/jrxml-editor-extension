@@ -6,6 +6,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-03
+
 ### Added
 - **Completion:** typed member completion. After `$F{...}`, `$P{...}` or `$V{...}`, a `.` now completes the
   Java members of the declaration's `class`, including overloads with snippets, inherited members,
