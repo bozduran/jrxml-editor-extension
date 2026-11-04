@@ -152,6 +152,10 @@
         "title": "JRXML: Fix All (Format and Text)"
       },
       {
+        "command": "jrxml.formatDocument",
+        "title": "JRXML: Format Document"
+      },
+      {
         "command": "jrxml.formatExpressionAtCursor",
         "title": "JRXML: Format Expression at Cursor",
         "icon": "$(wand)"
@@ -234,7 +238,7 @@
           "group": "2_fix@2"
         },
         {
-          "command": "editor.action.formatDocument",
+          "command": "jrxml.formatDocument",
           "group": "2_fix@3"
         },
         {

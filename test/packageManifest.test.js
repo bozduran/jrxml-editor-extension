@@ -160,6 +160,21 @@ test('issue context menu offers opening the expression', () => {
     }
 });
 
+test('routes Format Document through a contributed command', () => {
+    const commands = new Set((pkg.contributes.commands || []).map(command => command.command));
+    assert.ok(commands.has('jrxml.formatDocument'), 'missing the Format Document wrapper');
+
+    const entries = pkg.contributes.menus.jrxml || [];
+    assert.ok(
+        entries.some(entry => entry.command === 'jrxml.formatDocument'),
+        'the JRXML menu does not open the Format Document wrapper'
+    );
+    assert.ok(
+        !entries.some(entry => entry.command === 'editor.action.formatDocument'),
+        'the manifest must not reference the built-in format command from a menu'
+    );
+});
+
 test('contributes Format Expression at Cursor', () => {
     const command = (pkg.contributes.commands || [])
         .find(candidate => candidate.command === 'jrxml.formatExpressionAtCursor');

@@ -71,6 +71,21 @@ function activate(context) {
     // ── "Fix all format and text issues" command (context menu) ──────────────
     registerFixAllCommand(context);
 
+    // ── Format Document command used by the JRXML menu ────────────────────────
+    // Menu items must reference a command contributed by this extension; the
+    // wrapper keeps the built-in `editor.action.formatDocument` out of the
+    // manifest (which VS Code flags as an undefined command).
+    context.subscriptions.push(
+        vscode.commands.registerCommand('jrxml.formatDocument', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
+                vscode.window.showWarningMessage('The JRXML formatter works on .jrxml files only.');
+                return;
+            }
+            await vscode.commands.executeCommand('editor.action.formatDocument');
+        })
+    );
+
     // ── Context keys that gate Clear/Sort/SQL in the JRXML menu ──────────────
     registerContextKeys(context);
 
