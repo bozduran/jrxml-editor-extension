@@ -108,6 +108,11 @@ const SETTINGS_GROUPS = [
                 label: 'Variable used before declaration',
                 description: 'Warn when a variable references another variable declared later (JasperReports evaluates variables in declaration order).',
             },
+            {
+                key: 'lint.booleanEquals', type: 'boolean', default: true,
+                label: 'Boolean comparisons',
+                description: 'Warn when a Boolean field, parameter or variable is compared with == / != or Boolean.TRUE/FALSE.equals instead of EQUALS().',
+            },
         ],
     },
     {
@@ -178,18 +183,6 @@ const SETTINGS_GROUPS = [
                 key: 'sort.preview', type: 'boolean', default: true,
                 label: 'Preview sort',
                 description: 'Show a diff and ask for confirmation before applying the geometry sort.',
-            },
-        ],
-    },
-    {
-        id: 'bestPractices',
-        title: 'Best practices',
-        description: 'Suppression list for the rules engine',
-        settings: [
-            {
-                key: 'suppressedBestPractices', type: 'array', default: [],
-                label: 'Suppressed rules',
-                description: 'Best-practice rule IDs whose squiggles are hidden. Quick fixes remain available.',
             },
         ],
     },

@@ -14,7 +14,7 @@ const pkg = require('../package.json');
 
 const ROOT         = path.join(__dirname, '..');
 const CONTAINER_ID = 'jrxmlViews';
-const VIEW_IDS     = ['jrxmlIssues', 'jrxmlBestPractices', 'jrxmlIncludeChain'];
+const VIEW_IDS     = ['jrxmlIssues', 'jrxmlIncludeChain'];
 
 function activityBarContainers() {
     return pkg.contributes.viewsContainers
@@ -53,7 +53,7 @@ test('moves the JRXML views into the Activity Bar container', () => {
     const views = pkg.contributes.views || {};
     const ids = (views[CONTAINER_ID] || []).map(view => view.id);
 
-    assert.deepStrictEqual(ids, VIEW_IDS, 'the three JRXML views must be in the new container');
+    assert.deepStrictEqual(ids, VIEW_IDS, 'the two JRXML views must be in the new container');
     assert.ok(
         !(views.explorer || []).some(view => VIEW_IDS.includes(view.id)),
         'the views must be moved, not duplicated in Explorer'
@@ -160,6 +160,21 @@ test('issue context menu offers opening the expression', () => {
     }
 });
 
+test('routes Format Document through a contributed command', () => {
+    const commands = new Set((pkg.contributes.commands || []).map(command => command.command));
+    assert.ok(commands.has('jrxml.formatDocument'), 'missing the Format Document wrapper');
+
+    const entries = pkg.contributes.menus.jrxml || [];
+    assert.ok(
+        entries.some(entry => entry.command === 'jrxml.formatDocument'),
+        'the JRXML menu does not open the Format Document wrapper'
+    );
+    assert.ok(
+        !entries.some(entry => entry.command === 'editor.action.formatDocument'),
+        'the manifest must not reference the built-in format command from a menu'
+    );
+});
+
 test('contributes Format Expression at Cursor', () => {
     const command = (pkg.contributes.commands || [])
         .find(candidate => candidate.command === 'jrxml.formatExpressionAtCursor');
@@ -183,4 +198,15 @@ test('walkthrough completion events reference declared commands', () => {
             }
         }
     }
+});
+
+test('contributes the tutorial command and menu entry', () => {
+    const command = (pkg.contributes.commands || [])
+        .find(candidate => candidate.command === 'jrxml.openTutorial');
+    assert.ok(command, 'missing the open-tutorial command');
+    assert.match(command.title, /Tutorial/);
+
+    const entry = (pkg.contributes.menus.jrxml || [])
+        .find(candidate => candidate.command === 'jrxml.openTutorial');
+    assert.ok(entry, 'missing the tutorial entry in the JRXML submenu');
 });

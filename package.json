@@ -47,6 +47,11 @@
     ],
     "commands": [
       {
+        "command": "jrxml.openDesignView",
+        "title": "JRXML: Open Design View",
+        "icon": "$(preview)"
+      },
+      {
         "command": "jrxml.openExpressionEditor",
         "title": "JRXML: Open Expression Editor",
         "icon": "$(edit)"
@@ -59,11 +64,6 @@
       {
         "command": "jrxml.goToDeclaration",
         "title": "JRXML: Go to Declaration"
-      },
-      {
-        "command": "jrxml.refreshBestPractices",
-        "title": "JRXML: Refresh Best Practices",
-        "icon": "$(refresh)"
       },
       {
         "command": "jrxml.refreshIssues",
@@ -109,28 +109,6 @@
         "title": "JRXML: Go to Previous Issue"
       },
       {
-        "command": "jrxml.bp.suppressRule",
-        "title": "JRXML: Suppress Best Practice Rule"
-      },
-      {
-        "command": "jrxml.bp.unsuppressRule",
-        "title": "JRXML: Re-enable Best Practice Rule"
-      },
-      {
-        "command": "jrxml.bp.suppressFromTree",
-        "title": "JRXML: Suppress Best Practice (hide squiggles)",
-        "icon": "$(eye-closed)"
-      },
-      {
-        "command": "jrxml.bp.unsuppressFromTree",
-        "title": "JRXML: Re-enable Best Practice squiggles",
-        "icon": "$(eye)"
-      },
-      {
-        "command": "jrxml.bp.jumpToHit",
-        "title": "JRXML: Jump to Issue"
-      },
-      {
         "command": "jrxml.sortElements",
         "title": "JRXML: Sort Band/Frame Elements by Position"
       },
@@ -147,6 +125,10 @@
         "title": "JRXML: Fix All (Format and Text)"
       },
       {
+        "command": "jrxml.formatDocument",
+        "title": "JRXML: Format Document"
+      },
+      {
         "command": "jrxml.formatExpressionAtCursor",
         "title": "JRXML: Format Expression at Cursor",
         "icon": "$(wand)"
@@ -155,6 +137,11 @@
         "command": "jrxml.openSettingsPanel",
         "title": "JRXML: Open Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "jrxml.openTutorial",
+        "title": "JRXML: Open Tutorial",
+        "icon": "$(book)"
       },
       {
         "command": "jrxml.refreshIncludeChain",
@@ -177,6 +164,11 @@
         }
       ],
       "editor/title": [
+        {
+          "command": "jrxml.openDesignView",
+          "when": "resourceExtname == .jrxml",
+          "group": "navigation@0"
+        },
         {
           "command": "jrxml.openExpressionEditor",
           "when": "resourceExtname == .jrxml",
@@ -204,6 +196,10 @@
       ],
       "jrxml": [
         {
+          "command": "jrxml.openDesignView",
+          "group": "0_view@1"
+        },
+        {
           "command": "jrxml.openExpressionEditor",
           "group": "1_open@1"
         },
@@ -220,7 +216,7 @@
           "group": "2_fix@2"
         },
         {
-          "command": "editor.action.formatDocument",
+          "command": "jrxml.formatDocument",
           "group": "2_fix@3"
         },
         {
@@ -253,6 +249,10 @@
         {
           "command": "jrxml.openSettingsPanel",
           "group": "9_settings@1"
+        },
+        {
+          "command": "jrxml.openTutorial",
+          "group": "9_settings@2"
         }
       ],
       "view/title": [
@@ -264,11 +264,6 @@
         {
           "command": "jrxml.refreshIssues",
           "when": "view == jrxmlIssues",
-          "group": "navigation"
-        },
-        {
-          "command": "jrxml.refreshBestPractices",
-          "when": "view == jrxmlBestPractices",
           "group": "navigation"
         },
         {
@@ -312,21 +307,6 @@
           "command": "jrxml.issues.copyCode",
           "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
           "group": "9_copy"
-        },
-        {
-          "command": "jrxml.bp.suppressFromTree",
-          "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressible",
-          "group": "inline"
-        },
-        {
-          "command": "jrxml.bp.unsuppressFromTree",
-          "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressed",
-          "group": "inline"
-        },
-        {
-          "command": "jrxml.sortElements",
-          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-sort",
-          "group": "inline"
         }
       ]
     },
@@ -345,13 +325,15 @@
       },
       {
         "command": "jrxml.nextIssue",
-        "key": "ctrl+alt+down",
-        "when": "editorTextFocus && resourceExtname == .jrxml"
+        "key": "ctrl+alt+n",
+        "when": "editorTextFocus && resourceExtname == .jrxml",
+        "mac": "cmd+alt+n"
       },
       {
         "command": "jrxml.previousIssue",
-        "key": "ctrl+alt+up",
-        "when": "editorTextFocus && resourceExtname == .jrxml"
+        "key": "ctrl+alt+p",
+        "when": "editorTextFocus && resourceExtname == .jrxml",
+        "mac": "cmd+alt+p"
       }
     ],
     "configuration": {
@@ -454,6 +436,11 @@
           "default": true,
           "description": "Warn when a variable references another variable declared later (JasperReports evaluates variables in declaration order)."
         },
+        "jrxml.lint.booleanEquals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a Boolean field, parameter or variable is compared with == / != or Boolean.TRUE/FALSE.equals instead of EQUALS()."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,
@@ -503,14 +490,6 @@
           "type": "string",
           "default": "jsonql",
           "description": "Language written to <query language=\"...\"> when migrating a SQL query."
-        },
-        "jrxml.suppressedBestPractices": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "List of best practice rule IDs whose yellow squiggles are hidden. Quick fixes remain available."
         }
       }
     },
@@ -538,12 +517,6 @@
           "contextualTitle": "JRXML Issues"
         },
         {
-          "id": "jrxmlBestPractices",
-          "name": "Best Practices (JRXML)",
-          "icon": "$(lightbulb)",
-          "contextualTitle": "JRXML Best Practices"
-        },
-        {
           "id": "jrxmlIncludeChain",
           "name": "Include Chain (JRXML)",
           "icon": "$(references)",
@@ -554,7 +527,7 @@
     "viewsWelcome": [
       {
         "view": "jrxmlIssues",
-        "contents": "Open a `.jrxml` file to see diagnostics here.\n[Open Expression Editor](command:jrxml.openExpressionEditor)\n[Build an if / else expression](command:jrxml.openIfElseBuilder)\n[Open Settings](command:jrxml.openSettingsPanel)"
+        "contents": "Open a `.jrxml` file to see diagnostics here.\n[Open Expression Editor](command:jrxml.openExpressionEditor)\n[Build an if / else expression](command:jrxml.openIfElseBuilder)\n[Open Settings](command:jrxml.openSettingsPanel)\n[Open the tutorial](command:jrxml.openTutorial)"
       }
     ],
     "walkthroughs": [

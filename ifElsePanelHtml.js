@@ -196,6 +196,14 @@ function buildIfElsePanelHtml({
     padding: 6px;
     resize: vertical;
   }
+  textarea.res {
+    flex: 1;
+    width: auto;
+    min-width: 150px;
+    margin: 0;
+    font: inherit;
+  }
+  textarea.res.expr { font: 12px/1.5 var(--mono); }
 
   select, button { color: var(--ink); }
   button {
@@ -294,7 +302,7 @@ function buildIfElsePanelHtml({
       <textarea id="rev" rows="5" spellcheck="false" placeholder='IF($F{status}.equals("PAID"), "Paid", "Unknown")'></textarea>
       <p class="warn" id="rerr" hidden></p>
       <button id="load">Load into builder</button>
-      <p class="note">Java ternaries need compatible result types in every branch. Wrap numbers in String.valueOf(...) under an Expression result if you mix them with text.</p>
+      <p class="note"><b>Text</b> results are quoted automatically; <b>Expression</b> results are inserted verbatim, so fields, operators and method calls are allowed. Java ternaries still need compatible result types in every branch.</p>
     </aside>
   </div>
 </main>
@@ -467,19 +475,30 @@ function update() {
 
 // ── Editor rows ──────────────────────────────────────────────────────────────
 
+function resultPlaceholder(kind) {
+  if (kind === 'number') return '0';
+  if (kind === 'expr') return '$F{city} + " - " + $P{suffix}';
+  return 'Result text';
+}
+
 function resultRow(result) {
-  const value = inp(
-    result.val,
-    result.kind === 'number' ? '0' : result.kind === 'expr' ? '$F{city}' : 'Result text',
-    next => { result.val = next; update(); },
-    'res',
-    'Result value'
-  );
+  const value = h('textarea', {
+    class: 'res' + (result.kind === 'expr' ? ' expr' : ''),
+    rows: result.kind === 'expr' ? '2' : '1',
+    spellcheck: 'false',
+    placeholder: resultPlaceholder(result.kind),
+    'aria-label': 'Result value',
+    oninput: event => { result.val = event.target.value; update(); },
+  });
+  value.value = result.val == null ? '' : String(result.val);
+
   const wrap = h('div', { class: 'row' },
     sel(KINDS, result.kind, kind => {
       result.kind = kind;
       value.hidden = kind === 'null';
-      value.placeholder = kind === 'number' ? '0' : kind === 'expr' ? '$F{city}' : 'Result text';
+      value.rows = kind === 'expr' ? '2' : '1';
+      value.classList.toggle('expr', kind === 'expr');
+      value.placeholder = resultPlaceholder(kind);
       update();
     }, 'Result type'),
     value

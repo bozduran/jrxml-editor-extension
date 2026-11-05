@@ -1,22 +1,17 @@
 // completionProvider.js
-// Provides autocomplete for:
-//   - $F{...}  → fields declared in this .jrxml file
-//   - $P{...}  → parameters declared in this .jrxml file
-//   - $V{...}  → variables declared in this .jrxml file
-//   - <receiver>. → the Java members of the receiver's declared type
-//   - Jasper built-in functions
-//   - Common Java types / static methods
-//   - Custom public static methods from local src/main/java
+// Registers the JRXML editor completion provider.
+//
+// The suggestion engine itself lives in the vscode-free expressionSuggestions
+// module, which is shared with the design-view inspector's expression editor so
+// both surfaces offer exactly the same fields, parameters, variables, built-ins,
+// Java types and typed-member completions.
 
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations } = require('./jrxmlParser');
-const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('./jasperBuiltins');
-const { resolveReceiver } = require('./memberResolver');
-const { getMembers } = require('./jdkMemberIndex');
-const { buildMemberCandidates, buildTypeHint, documentationFor } = require('./typeCompletion');
+const { buildExpressionSuggestions } = require('./expressionSuggestions');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -120,77 +115,6 @@ function extractStaticMethods(filePath, results) {
     }
 }
 
-// ── Jasper built-in function definitions ──────────────────────────────────────
-const JASPER_FUNCTIONS = [
-    { label: 'TODAY',       detail: 'TODAY()',                        doc: 'Returns today\'s date as java.util.Date.',                                    snippet: 'TODAY()' },
-    { label: 'NOW',         detail: 'NOW()',                          doc: 'Returns the current date and time as java.util.Date.',                        snippet: 'NOW()' },
-    { label: 'DATE',        detail: 'DATE(year, month, day)',         doc: 'Constructs a Date from year, month (1-based), and day.',                      snippet: 'DATE(${1:year}, ${2:month}, ${3:day})' },
-    { label: 'IF',          detail: 'IF(condition, trueVal, falseVal)', doc: 'Ternary-style conditional.',                                               snippet: 'IF(${1:condition}, ${2:trueVal}, ${3:falseVal})' },
-    { label: 'AND',         detail: 'AND(a, b, ...)',                 doc: 'Returns true if all arguments are true.',                                     snippet: 'AND(${1:a}, ${2:b})' },
-    { label: 'OR',          detail: 'OR(a, b, ...)',                  doc: 'Returns true if at least one argument is true.',                              snippet: 'OR(${1:a}, ${2:b})' },
-    { label: 'NOT',         detail: 'NOT(value)',                     doc: 'Negates a boolean value.',                                                    snippet: 'NOT(${1:value})' },
-    { label: 'CONTAINS',    detail: 'CONTAINS(str, sub)',             doc: 'Returns true if str contains sub.',                                           snippet: 'CONTAINS(${1:str}, ${2:sub})' },
-    { label: 'STARTSWITH',  detail: 'STARTSWITH(str, prefix)',        doc: 'Returns true if str starts with prefix.',                                     snippet: 'STARTSWITH(${1:str}, ${2:prefix})' },
-    { label: 'ENDSWITH',    detail: 'ENDSWITH(str, suffix)',          doc: 'Returns true if str ends with suffix.',                                       snippet: 'ENDSWITH(${1:str}, ${2:suffix})' },
-    { label: 'LEN',         detail: 'LEN(str)',                       doc: 'Returns the length of a string.',                                             snippet: 'LEN(${1:str})' },
-    { label: 'LEFT',        detail: 'LEFT(str, n)',                   doc: 'Returns the leftmost n characters.',                                          snippet: 'LEFT(${1:str}, ${2:n})' },
-    { label: 'RIGHT',       detail: 'RIGHT(str, n)',                  doc: 'Returns the rightmost n characters.',                                         snippet: 'RIGHT(${1:str}, ${2:n})' },
-    { label: 'MID',         detail: 'MID(str, start, len)',           doc: 'Returns a substring starting at start (1-based) of length len.',              snippet: 'MID(${1:str}, ${2:start}, ${3:len})' },
-    { label: 'UPPER',       detail: 'UPPER(str)',                     doc: 'Converts str to uppercase.',                                                  snippet: 'UPPER(${1:str})' },
-    { label: 'LOWER',       detail: 'LOWER(str)',                     doc: 'Converts str to lowercase.',                                                  snippet: 'LOWER(${1:str})' },
-    { label: 'TRIM',        detail: 'TRIM(str)',                      doc: 'Removes leading and trailing whitespace.',                                     snippet: 'TRIM(${1:str})' },
-    { label: 'REPLACE',     detail: 'REPLACE(str, old, new)',         doc: 'Replaces all occurrences of old with new in str.',                            snippet: 'REPLACE(${1:str}, ${2:old}, ${3:new})' },
-    { label: 'CONCATENATE', detail: 'CONCATENATE(a, b, ...)',         doc: 'Concatenates two or more strings.',                                           snippet: 'CONCATENATE(${1:a}, ${2:b})' },
-    { label: 'TEXT',        detail: 'TEXT(value, format)',            doc: 'Formats a number or date as a string using a pattern.',                       snippet: 'TEXT(${1:value}, "${2:format}")' },
-    { label: 'VALUE',       detail: 'VALUE(str)',                     doc: 'Parses a numeric string into a number.',                                      snippet: 'VALUE(${1:str})' },
-    { label: 'INT',         detail: 'INT(value)',                     doc: 'Truncates a number to an integer.',                                           snippet: 'INT(${1:value})' },
-    { label: 'ROUND',       detail: 'ROUND(number, digits)',          doc: 'Rounds number to the specified decimal digits.',                               snippet: 'ROUND(${1:number}, ${2:digits})' },
-    { label: 'ROUNDDOWN',   detail: 'ROUNDDOWN(number, digits)',      doc: 'Rounds number down (toward zero).',                                           snippet: 'ROUNDDOWN(${1:number}, ${2:digits})' },
-    { label: 'ROUNDUP',     detail: 'ROUNDUP(number, digits)',        doc: 'Rounds number up (away from zero).',                                          snippet: 'ROUNDUP(${1:number}, ${2:digits})' },
-    { label: 'FLOOR',       detail: 'FLOOR(number)',                  doc: 'Returns the largest integer ≤ number.',                                       snippet: 'FLOOR(${1:number})' },
-    { label: 'CEILING',     detail: 'CEILING(number)',                doc: 'Returns the smallest integer ≥ number.',                                      snippet: 'CEILING(${1:number})' },
-    { label: 'ABS',         detail: 'ABS(number)',                    doc: 'Returns the absolute value.',                                                 snippet: 'ABS(${1:number})' },
-    { label: 'MOD',         detail: 'MOD(number, divisor)',           doc: 'Returns the remainder of number / divisor.',                                  snippet: 'MOD(${1:number}, ${2:divisor})' },
-    { label: 'POWER',       detail: 'POWER(base, exp)',               doc: 'Returns base raised to the power of exp.',                                    snippet: 'POWER(${1:base}, ${2:exp})' },
-    { label: 'SQRT',        detail: 'SQRT(number)',                   doc: 'Returns the square root.',                                                    snippet: 'SQRT(${1:number})' },
-    { label: 'SUM',         detail: 'SUM(value)',                     doc: 'Accumulates a sum.',                                                          snippet: 'SUM(${1:value})' },
-    { label: 'MIN',         detail: 'MIN(value)',                     doc: 'Tracks the minimum value.',                                                   snippet: 'MIN(${1:value})' },
-    { label: 'MAX',         detail: 'MAX(value)',                     doc: 'Tracks the maximum value.',                                                   snippet: 'MAX(${1:value})' },
-    { label: 'AVG',         detail: 'AVG(value)',                     doc: 'Tracks the running average.',                                                 snippet: 'AVG(${1:value})' },
-    { label: 'COUNT',       detail: 'COUNT(value)',                   doc: 'Counts non-null values.',                                                     snippet: 'COUNT(${1:value})' },
-    { label: 'COUNTIF',     detail: 'COUNTIF(value, condition)',      doc: 'Counts values satisfying the condition.',                                     snippet: 'COUNTIF(${1:value}, ${2:condition})' },
-    { label: 'SUMIF',       detail: 'SUMIF(value, condition)',        doc: 'Sums values satisfying the condition.',                                       snippet: 'SUMIF(${1:value}, ${2:condition})' },
-    { label: 'FIRST',       detail: 'FIRST(value)',                   doc: 'Returns the first non-null value encountered.',                               snippet: 'FIRST(${1:value})' },
-    { label: 'STDEV',       detail: 'STDEV(value)',                   doc: 'Calculates standard deviation.',                                              snippet: 'STDEV(${1:value})' },
-    { label: 'VAR',         detail: 'VAR(value)',                     doc: 'Calculates variance.',                                                        snippet: 'VAR(${1:value})' },
-];
-
-// ── Java types ────────────────────────────────────────────────────────────────
-const JAVA_TYPES = [
-    { label: 'String',               snippet: 'String' },
-    { label: 'Integer',              snippet: 'Integer' },
-    { label: 'Long',                 snippet: 'Long' },
-    { label: 'Double',               snippet: 'Double' },
-    { label: 'Float',                snippet: 'Float' },
-    { label: 'Boolean',              snippet: 'Boolean' },
-    { label: 'BigDecimal',           snippet: 'BigDecimal' },
-    { label: 'BigInteger',           snippet: 'BigInteger' },
-    { label: 'Date',                 snippet: 'Date' },
-    { label: 'Math.abs',             snippet: 'Math.abs(${1:value})' },
-    { label: 'Math.round',           snippet: 'Math.round(${1:value})' },
-    { label: 'Math.floor',           snippet: 'Math.floor(${1:value})' },
-    { label: 'Math.ceil',            snippet: 'Math.ceil(${1:value})' },
-    { label: 'Math.pow',             snippet: 'Math.pow(${1:base}, ${2:exp})' },
-    { label: 'Math.sqrt',            snippet: 'Math.sqrt(${1:value})' },
-    { label: 'Math.min',             snippet: 'Math.min(${1:a}, ${2:b})' },
-    { label: 'Math.max',             snippet: 'Math.max(${1:a}, ${2:b})' },
-    { label: 'String.valueOf',       snippet: 'String.valueOf(${1:value})' },
-    { label: 'Integer.parseInt',     snippet: 'Integer.parseInt(${1:str})' },
-    { label: 'Double.parseDouble',   snippet: 'Double.parseDouble(${1:str})' },
-    { label: 'Long.parseLong',       snippet: 'Long.parseLong(${1:str})' },
-    { label: 'Boolean.parseBoolean', snippet: 'Boolean.parseBoolean(${1:str})' },
-];
-
 // ── Expression tag check ──────────────────────────────────────────────────────
 const OPEN_TAGS_RE  = new RegExp(`<(${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>`, 'g');
 const CLOSE_TAGS_RE = new RegExp(`</(${EXPRESSION_TAGS.join('|')})>`, 'g');
@@ -214,153 +138,41 @@ function isInsideExpressionTag(document, position) {
     return lastOpen > lastClose;
 }
 
-// ── Context detection: what is the user typing right now? ────────────────────
-function detectContext(linePrefix) {
-    // Check for open $X{ without a closing }
-    const dollarBrace = linePrefix.match(/\$([FPVR])\{([^}]*)$/);
-    if (dollarBrace) {
-        const sigil  = dollarBrace[1];
-        const prefix = dollarBrace[2];
-        const modeMap = { F: 'field', P: 'param', V: 'variable', R: 'resource' };
-        return { mode: modeMap[sigil], prefix };
-    }
+// ── Mapping suggestions to CompletionItems ──────────────────────────────────
 
-    if (linePrefix.endsWith('$')) return { mode: 'dollar' };
+const KIND_MAP = {
+    field:     vscode.CompletionItemKind.Field,
+    parameter: vscode.CompletionItemKind.TypeParameter,
+    variable:  vscode.CompletionItemKind.Variable,
+    function:  vscode.CompletionItemKind.Function,
+    class:     vscode.CompletionItemKind.Class,
+    method:    vscode.CompletionItemKind.Method,
+    reference: vscode.CompletionItemKind.Reference,
+    text:      vscode.CompletionItemKind.Text,
+};
 
-    return { mode: 'general' };
-}
-
-// ── Item builders ─────────────────────────────────────────────────────────────
-function makeItem(label, kind, detail, doc, snippet, sortPrefix) {
-    const item         = new vscode.CompletionItem(label, kind);
-    item.detail        = detail || label;
-    item.documentation = new vscode.MarkdownString(doc || '');
-    item.insertText    = new vscode.SnippetString(snippet || label);
-    if (sortPrefix) item.sortText = sortPrefix + label;
-    return item;
-}
-
-function makeDeclarationItems(declarations, sigil, kind, alreadyInsideBrace, sortPrefix) {
-    return declarations.map(decl => {
-        const label   = alreadyInsideBrace ? decl.name : `$${sigil}{${decl.name}}`;
-        const snippet = alreadyInsideBrace ? decl.name : `\\$${sigil}{${decl.name}}`;
-        const doc     = [
-            `**${decl.type}**`,
-            decl.fullType && decl.fullType !== decl.type ? `\`${decl.fullType}\`` : '',
-            decl.description ? `\n\n${decl.description}` : ''
-        ].filter(Boolean).join('  \n');
-
-        const item = makeItem(
-            label, kind,
-            `${decl.type}  [${sigil === 'F' ? 'Field' : sigil === 'P' ? 'Parameter' : 'Variable'}]`,
-            doc,
-            snippet,
-            sortPrefix
-        );
-        // Show a checkmark icon for system/built-in entries
-        if (decl.isSystem || decl.isBuiltin) {
-            item.detail += ' ⚙';
+function toCompletionItem(suggestion) {
+    const label = suggestion.labelDetail
+        ? {
+            label:       suggestion.label,
+            detail:      suggestion.labelDetail,
+            description: suggestion.labelDescription,
         }
-        return item;
-    });
-}
+        : suggestion.label;
 
-// ── Type-aware member completion ──────────────────────────────────────────────
-// `$F{CustomerName}.` offers the members of java.lang.String. The receiver, its
-// type and the candidates are computed by the vscode-free modules above; this
-// section only turns them into CompletionItems.
+    const item = new vscode.CompletionItem(
+        label,
+        KIND_MAP[suggestion.kind] ?? vscode.CompletionItemKind.Text
+    );
 
-// How far back to look for the receiver. Expressions are single expressions, so
-// this only has to cover a long chain, not a whole file.
-const MEMBER_WINDOW = 4000;
-const MEMBER_RE = /\.\s*([A-Za-z_$][\w$]*)?$/;
+    item.detail        = suggestion.detail || suggestion.label;
+    item.documentation = new vscode.MarkdownString(suggestion.documentation || '');
+    item.insertText    = new vscode.SnippetString(suggestion.insertTextSnippet || '');
+    if (suggestion.filterText) item.filterText = suggestion.filterText;
+    if (suggestion.sortText) item.sortText = suggestion.sortText;
+    if (suggestion.deprecated) item.tags = [vscode.CompletionItemTag.Deprecated];
 
-/**
- * The `<receiver>.<partial>` ending at the cursor, or null when the dot is not
- * a member access: a decimal point (`1.5`) or a range/varargs dot (`a..b`).
- */
-function detectMemberContext(document, position) {
-    const offset = document.offsetAt(position);
-    const text   = document.getText().slice(Math.max(0, offset - MEMBER_WINDOW), offset);
-
-    const match = MEMBER_RE.exec(text);
-    if (!match) return null;
-
-    const before = text[match.index - 1];
-    if (before === undefined || before === '.' || /[0-9]/.test(before)) return null;
-
-    return { textBeforeDot: text.slice(0, match.index), partial: match[1] || '' };
-}
-
-/** Configured target JDK level: members newer than it are hidden. */
-function baselineFromConfig(config) {
-    const value = parseInt(String(config.get('typeCompletion.jdkBaseline', '8')), 10);
-    return Number.isFinite(value) && value > 0 ? value : 8;
-}
-
-/** Declarations the resolver can type, including the JasperReports built-ins. */
-function memberDeclarations(decls) {
-    return {
-        fields:     decls.allFields || [],
-        parameters: [...(decls.allParameters || []), ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))],
-        variables:  [...(decls.allVariables || []), ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))],
-    };
-}
-
-function toMemberItem(candidate, typeKey) {
-    const kind  = candidate.kind === 'field' ? vscode.CompletionItemKind.Field : vscode.CompletionItemKind.Method;
-    const label = candidate.labelDetail
-        ? { label: candidate.label, detail: candidate.labelDetail, description: candidate.labelDescription }
-        : { label: candidate.label, description: candidate.labelDescription };
-
-    const item = new vscode.CompletionItem(label, kind);
-    item.filterText    = candidate.filterText;
-    item.insertText    = new vscode.SnippetString(candidate.insertText);
-    item.detail        = candidate.detail;
-    item.documentation = new vscode.MarkdownString(documentationFor(candidate, typeKey));
-    item.sortText      = `${candidate.tier}_${String(candidate.rank).padStart(3, '0')}_${candidate.name}_${candidate.arity}`;
-    if (candidate.deprecated) item.tags = [vscode.CompletionItemTag.Deprecated];
     return item;
-}
-
-function toHintItem(hint) {
-    const item = new vscode.CompletionItem(hint.label, vscode.CompletionItemKind.Text);
-    item.detail        = hint.detail;
-    item.documentation = new vscode.MarkdownString(hint.documentation);
-    // Accepting the hint inserts nothing, and typing a member name filters it out.
-    item.insertText    = new vscode.SnippetString(hint.insertText);
-    item.filterText    = hint.label;
-    item.sortText      = '0000_type-hint';
-    return item;
-}
-
-/**
- * Items for a typed receiver, or null when the dot is not a member access we
- * can describe (the caller then keeps its normal completion list).
- */
-function provideMemberItems(context, decls, config) {
-    const baseline = baselineFromConfig(config);
-    const lookup   = typeKey => getMembers(typeKey, { baseline });
-
-    const resolution = resolveReceiver(context.textBeforeDot, {
-        declarations: memberDeclarations(decls),
-        lookup,
-    });
-
-    if (resolution.resolved) {
-        const members = lookup(resolution.typeKey);
-        if (members.resolved) {
-            const candidates = buildMemberCandidates(members);
-            // A type with nothing to complete (every member filtered out) is not
-            // a reason to hide the normal list.
-            if (candidates.length > 0) {
-                return candidates.map(candidate => toMemberItem(candidate, resolution.typeKey));
-            }
-        }
-    }
-
-    const hint = buildTypeHint(resolution);
-    return hint ? [toHintItem(hint)] : null;
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
@@ -382,93 +194,26 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 };
             }
 
-            // Typed member completion: `<receiver>.` → members of the receiver type.
-            if (config.get('typeCompletion.enabled', true)) {
-                const memberContext = detectMemberContext(document, position);
-                if (memberContext) {
-                    let memberItems = null;
-                    try {
-                        memberItems = provideMemberItems(memberContext, decls, config);
-                    } catch (err) {
-                        console.error('JRXML member completion failed:', err);
-                    }
-                    if (memberItems) return memberItems;
-                }
-            }
+            const result = buildExpressionSuggestions({
+                text: document.getText(),
+                offset: document.offsetAt(position),
+                declarations: decls,
+                options: {
+                    typedCompletion: config.get('typeCompletion.enabled', true),
+                    jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
+                },
+                customMethods: getCustomJavaMethods(),
+            });
 
-            const linePrefix = document.lineAt(position).text.slice(0, position.character);
-            const ctx        = detectContext(linePrefix);
-
-            const items = [];
-
-            if (ctx.mode === 'field') {
-                items.push(...makeDeclarationItems(decls.allFields, 'F', vscode.CompletionItemKind.Field, true, '0_'));
-                return items;
-            }
-
-            if (ctx.mode === 'param') {
-                const allParams = [...decls.allParameters, ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))];
-                items.push(...makeDeclarationItems(allParams, 'P', vscode.CompletionItemKind.TypeParameter, true, '0_'));
-                return items;
-            }
-
-            if (ctx.mode === 'variable') {
-                const allVars = [...decls.allVariables, ...BUILTIN_VARIABLES.map(v => ({ ...v, isBuiltin: true }))];
-                items.push(...makeDeclarationItems(allVars, 'V', vscode.CompletionItemKind.Variable, true, '0_'));
-                return items;
-            }
-
-            if (ctx.mode === 'dollar') {
-                const shortcuts = [
-                    { label: '$F{', detail: `Field  (${decls.allFields.length} defined)`,     snippet: 'F{$1}', kind: vscode.CompletionItemKind.Field },
-                    { label: '$P{', detail: `Parameter  (${decls.allParameters.length} defined)`, snippet: 'P{$1}', kind: vscode.CompletionItemKind.TypeParameter },
-                    { label: '$V{', detail: `Variable  (${decls.allVariables.length} defined)`,   snippet: 'V{$1}', kind: vscode.CompletionItemKind.Variable },
-                    { label: '$R{', detail: 'Resource bundle key',                          snippet: 'R{$1}', kind: vscode.CompletionItemKind.Reference },
-                ];
-                for (const s of shortcuts) {
-                    items.push(makeItem(s.label, s.kind, s.detail, '', s.snippet, '0_'));
-                }
-                return items;
-            }
-
-            // ── General context → show everything ────────────────────────────
-            
-            // 1. User fields
-            items.push(...makeDeclarationItems(decls.allFields, 'F', vscode.CompletionItemKind.Field, false, '1_F_'));
-
-            // 2. User parameters
-            items.push(...makeDeclarationItems(decls.allParameters.filter(p => !p.isSystem), 'P', vscode.CompletionItemKind.TypeParameter, false, '1_P_'));
-
-            // 3. User variables
-            items.push(...makeDeclarationItems(decls.allVariables, 'V', vscode.CompletionItemKind.Variable, false, '1_V_'));
-
-            // 4. Jasper built-in functions
-            for (const fn of JASPER_FUNCTIONS) {
-                items.push(makeItem(fn.label, vscode.CompletionItemKind.Function, fn.detail, `**JasperReports built-in**\n\n${fn.doc}`, fn.snippet, '2_'));
-            }
-
-            // 5. Java types/statics
-            for (const t of JAVA_TYPES) {
-                items.push(makeItem(t.label, vscode.CompletionItemKind.Class, t.label, '', t.snippet, '3_'));
-            }
-
-            // 6. Custom Local Java Methods (from src/main/java)
-            const localMethods = getCustomJavaMethods();
-            for (const m of localMethods) {
-                items.push(makeItem(
-                    m.label, 
-                    vscode.CompletionItemKind.Method, 
-                    m.detail, 
-                    m.doc, 
-                    m.snippet, 
-                    '4_' // Renders at the bottom of the default list, keeping built-ins on top
-                ));
-            }
-
-            return items;
+            return result.items.map(toCompletionItem);
         }
     },
     '$', '{', ' ', '.', '('
 );
 
-module.exports = { provider, clearCustomJavaCache };
+module.exports = {
+    provider,
+    clearCustomJavaCache,
+    getCustomJavaMethods,
+    toCompletionItem,
+};

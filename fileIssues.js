@@ -1,5 +1,5 @@
 // fileIssues.js
-// File-level issues that belong in the Best Practices view but are not
+// File-level issues that belong in the Issues view but are not
 // per-expression rule hits:
 //
 //   sort  — the document's band/frame elements are not ordered by position

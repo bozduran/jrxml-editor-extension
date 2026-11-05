@@ -35,6 +35,7 @@ function twoBranches(statusCondition, els) {
 
 const TEXT = (val = '') => ({ kind: 'text', val });
 const NUMBER = (val = '') => ({ kind: 'number', val });
+const EXPR = (val = '') => ({ kind: 'expr', val });
 
 let documentCounter = 0;
 function fakeDocument(text) {
@@ -344,6 +345,121 @@ test('reverse conversion also understands NOT, Boolean.TRUE.equals and string re
     assert.deepStrictEqual(not.state.branches[0].conds, [
         { ref: 'F', name: 's', type: 'String', op: 'notEquals', val: 'x' },
     ]);
+});
+
+// ── Expression results ───────────────────────────────────────────────────────
+// Results are opaque Java/JasperReports source, not condition fragments.
+
+test('loads arbitrary expression results verbatim', () => {
+    const result = builder.fromExpression(
+        '($F{status}.equals("PAID") ? $F{first} + " " + $F{last} : new java.util.Date())'
+    );
+
+    assert.deepStrictEqual(result.state.branches[0].res, EXPR('$F{first} + " " + $F{last}'));
+    assert.deepStrictEqual(result.state.els, EXPR('new java.util.Date()'));
+    assert.strictEqual(
+        builder.buildExpression(result.state, {
+            nullSafe: result.nullSafe, multiline: false, style: result.style,
+        }),
+        '($F{status}.equals("PAID") ? $F{first} + " " + $F{last} : new java.util.Date())'
+    );
+});
+
+test('IF() results may contain commas, calls and nested conditionals', () => {
+    const result = builder.fromExpression(
+        'IF($F{status}.equals("PAID"), String.format("%s, %s", $F{first}, $F{last}), ' +
+        'IF($F{x} != null, $F{x}, "none"))'
+    );
+
+    assert.strictEqual(result.state.branches.length, 2);
+    assert.deepStrictEqual(result.state.branches[0].res,
+        EXPR('String.format("%s, %s", $F{first}, $F{last})'));
+    assert.deepStrictEqual(result.state.branches[1].res, EXPR('$F{x}'));
+    assert.deepStrictEqual(result.state.els, TEXT('none'));
+});
+
+test('an unreadable condition becomes Custom and survives a load', () => {
+    const result = builder.fromExpression('$F{amount} * 2 > 100 ? $F{label} : "small"');
+
+    assert.deepStrictEqual(result.state.branches[0].conds, [
+        { ref: 'F', name: '', type: 'Custom', op: '', val: '$F{amount} * 2 > 100' },
+    ]);
+    assert.deepStrictEqual(result.state.branches[0].res, EXPR('$F{label}'));
+    assert.strictEqual(
+        builder.buildExpression(result.state, { nullSafe: false, multiline: false, style: 'ternary' }),
+        '($F{amount} * 2 > 100 ? $F{label} : "small")'
+    );
+});
+
+test('char literals and method references do not confuse the ternary split', () => {
+    const charResult = builder.fromExpression('($F{code} == \'?\' ? "yes" : "no")');
+    assert.deepStrictEqual(charResult.state.branches[0].conds, [
+        { ref: 'F', name: '', type: 'Custom', op: '', val: "$F{code} == '?'" },
+    ]);
+    assert.deepStrictEqual(charResult.state.els, TEXT('no'));
+
+    const methodRef = builder.fromExpression('($F{ok} ? String::valueOf : null)');
+    assert.strictEqual(methodRef.state.branches.length, 1);
+    assert.deepStrictEqual(methodRef.state.branches[0].res, EXPR('String::valueOf'));
+    assert.deepStrictEqual(methodRef.state.els, { kind: 'null', val: '' });
+});
+
+test('generic commas and wildcards stay inside expression results', () => {
+    const generic = builder.fromExpression(
+        'IF($F{a} > 0, new java.util.HashMap<String, Integer>(), "none")'
+    );
+    assert.strictEqual(generic.state.branches.length, 1);
+    assert.deepStrictEqual(generic.state.branches[0].res,
+        EXPR('new java.util.HashMap<String, Integer>()'));
+    assert.deepStrictEqual(generic.state.els, TEXT('none'));
+
+    const wildcard = builder.fromExpression('($F{ok} ? Class<? extends Number> : null)');
+    assert.deepStrictEqual(wildcard.state.branches[0].res, EXPR('Class<? extends Number>'));
+
+    // `<` in the condition and `>` in the result must not read as a generic.
+    const comparison = builder.fromExpression('($F{x} < 5 ? $F{y} > 3 : 4)');
+    assert.deepStrictEqual(comparison.state.branches[0].res, EXPR('$F{y} > 3'));
+    assert.deepStrictEqual(comparison.state.els, NUMBER('4'));
+
+    const comparisonIf = builder.fromExpression('IF($F{a} < $F{b}, $F{x} > 3, 4)');
+    assert.deepStrictEqual(comparisonIf.state.branches[0].conds, [
+        { ref: 'F', name: 'a', type: 'Number', op: '<', val: '$F{b}' },
+    ]);
+    assert.deepStrictEqual(comparisonIf.state.branches[0].res, EXPR('$F{x} > 3'));
+});
+
+test('text results round-trip quotes and control characters', () => {
+    const result = builder.fromExpression('$F{a} ? "a \\"quoted\\"\\tvalue" : "b"');
+
+    assert.deepStrictEqual(result.state.branches[0].res, TEXT('a "quoted"\tvalue'));
+    assert.strictEqual(
+        builder.buildExpression(result.state, { nullSafe: false, multiline: false, style: 'ternary' }),
+        '($F{a} ? "a \\"quoted\\"\\tvalue" : "b")'
+    );
+});
+
+test('round trip preserves expression results in both styles', () => {
+    const state = oneBranch({
+        conditions: [cond({ name: 'status', type: 'String', op: 'equals', val: 'PAID' })],
+        result: EXPR('$F{first} + " " + $F{last}'),
+        els: EXPR('new java.util.Date()'),
+    });
+
+    for (const style of ['ternary', 'functions']) {
+        for (const multiline of [false, true]) {
+            for (const nullSafe of [true, false]) {
+                const generated = builder.buildExpression(state, { nullSafe, multiline, style });
+                const recovered = builder.fromExpression(generated);
+                assert.strictEqual(
+                    builder.buildExpression(recovered.state, {
+                        nullSafe: recovered.nullSafe, multiline, style: recovered.style,
+                    }),
+                    generated,
+                    `${style} multiline=${multiline} nullSafe=${nullSafe}`
+                );
+            }
+        }
+    }
 });
 
 // ── Round trip (spec 9.3) ────────────────────────────────────────────────────

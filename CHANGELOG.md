@@ -2,9 +2,80 @@
 
 All notable changes to the "jrxml-editor" extension will be documented in this file.
 
+<!-- When adding a user-facing feature, update tutorialHtml.js. New commands and
+     settings groups must be added to its DOCUMENTED_* lists; test/tutorialHtml.test.js
+     enforces them. -->
+
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
 ## [Unreleased]
+
+### Added
+- **Design view:** a Jaspersoft Studio-style visual canvas for Studio 7 JRXML,
+  opened beside the source with **JRXML: Open Design View** (editor title button
+  and JRXML submenu). It shows the page, margins, columns, bands, element
+  geometry, local default/named styles, text, shapes and frames, labels
+  images/subreports/charts/tables, marks page breaks and supports click-to-reveal
+  in the source. The panel follows the active report and updates as you type.
+  Classic-format and malformed files show an explanatory banner; expressions are
+  not evaluated and no data is loaded.
+- **Design view selection sync:** moving the source cursor highlights and scrolls
+  the matching element or band in the panel; **Follow** toggles the behaviour.
+- **Design view editing:** an opt-in **Edit** mode adds drag-to-move, eight resize
+  handles and an inspector for geometry, text/expression content (CDATA preserved),
+  font family/size/style, alignment, rotation, markup, colours and mode. Every
+  change is one undoable `WorkspaceEdit`, guarded by the document version so a
+  stale drag cannot overwrite newer source edits. Inherited styles are left
+  untouched and shared `<style>` definitions are never modified.
+- **Design view autocomplete:** the inspector's expression textarea now uses the
+  same suggestion engine as the `.jrxml` editor — fields, parameters, variables,
+  Jasper built-ins, Java types/statics, local static methods and typed members,
+  with snippet placeholders. `Ctrl+Space` opens the list; arrows navigate;
+  Enter/Tab inserts; Escape closes. Fields completed inside `$F{...}` add the
+  closing brace when it is missing.
+- **Design view inspector:** the property panel now also covers print/behaviour
+  (`positionType`, `stretchType`, repeated values, blank lines, print-on-overflow,
+  evaluation time/group, key, bookmark), named styles, text adjust/pattern/
+  blankWhenNull, image scale/alignment/error/cache/link settings, line
+  direction/width/style/colour, rectangle radius, break type, subreport options,
+  border/padding, and an **All attributes** editor for arbitrary element
+  attributes. Drawn lines now honour diagonal `TopDown`/`BottomUp` direction and
+  border widths, and `elementGroup` containers render their children.
+- **If / Else builder — expression results:** branch and else results can now be
+  arbitrary expressions, not just text or numbers. The result field is a multiline
+  editor for Expression results, expressions are inserted verbatim, and loading an
+  existing expression keeps arithmetic, concatenation, method calls and `new`
+  expressions instead of failing. Conditions the builder cannot represent still
+  load as Custom conditions.
+- **Tutorial:** a built-in HTML guide opened with **JRXML: Open Tutorial**, the
+  JRXML menu or the **Open tutorial** button in the Settings panel. It covers the
+  editor, Expression Editor, If / Else builder (including expression results),
+  design view, Issues, formatting, clean-up, include chain, every
+  command, shortcut and settings group, and has command links that open the
+  matching feature.
+- **Tutorial coverage guard:** `test/tutorialHtml.test.js` compares the
+  documented commands and settings groups with `package.json` and
+  `settingsSchema.js`, so adding a user-facing command or settings group fails
+  `npm test` until `tutorialHtml.js` is updated. A pull-request template repeats
+  the reminder.
+
+### Changed
+- **Navigation:** **Go to Next / Previous Issue** now use `Ctrl+Alt+N` / `Ctrl+Alt+P`
+  (`Cmd+Alt+N` / `Cmd+Alt+P` on macOS) instead of `Ctrl+Alt+Down` / `Ctrl+Alt+Up`,
+  which overrode VS Code's add-cursor-below/above shortcuts while a `.jrxml` editor
+  had focus.
+
+### Removed
+- **Best Practices view:** its only rule (Boolean comparisons) now runs as the
+  normal `jrxml.booleanEquals` diagnostic with a one-click `EQUALS(...)` fix in
+  the Issues view. The separate view, diagnostics collection,
+  `jrxml.suppressedBestPractices` setting, and the `jrxml.bp.*` /
+  `jrxml.refreshBestPractices` commands were removed.
+
+### Fixed
+- **If / Else builder:** loading an expression whose results used arithmetic or
+  concatenation (`$F{a} + " " + $F{b}`) failed with "Cannot read near…"; results
+  are now captured as opaque source.
 
 ## [0.1.2] - 2026-11-03
 

@@ -11,7 +11,6 @@ const { provider: referenceProvider }    = require('./referenceProvider');
 const { provider: outlineProvider }    = require('./outlineProvider');
 const { register: registerDiagnostics } = require('./diagnosticsProvider');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
-const { register: registerBestPractices } = require('./bestPracticesProvider');
 const { register: registerIssuesView } = require('./issuesView');
 const { register: registerContextKeys } = require('./contextKeys');
 const {
@@ -23,9 +22,11 @@ const {
 const { register: registerSort } = require('./sortProvider');
 const { register: registerClear } = require('./clearProvider');
 const { register: registerSettingsPanel } = require('./settingsPanel');
+const { register: registerTutorial } = require('./tutorialPanel');
 const { register: registerIncludeChain } = require('./includeChainView');
 const { register: registerIfElsePanel } = require('./ifElsePanel');
 const { register: registerExpressionActions } = require('./expressionActions');
+const { register: registerDesignView } = require('./designViewPanel');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -70,6 +71,21 @@ function activate(context) {
     // ── "Fix all format and text issues" command (context menu) ──────────────
     registerFixAllCommand(context);
 
+    // ── Format Document command used by the JRXML menu ────────────────────────
+    // Menu items must reference a command contributed by this extension; the
+    // wrapper keeps the built-in `editor.action.formatDocument` out of the
+    // manifest (which VS Code flags as an undefined command).
+    context.subscriptions.push(
+        vscode.commands.registerCommand('jrxml.formatDocument', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
+                vscode.window.showWarningMessage('The JRXML formatter works on .jrxml files only.');
+                return;
+            }
+            await vscode.commands.executeCommand('editor.action.formatDocument');
+        })
+    );
+
     // ── Context keys that gate Clear/Sort/SQL in the JRXML menu ──────────────
     registerContextKeys(context);
 
@@ -82,6 +98,9 @@ function activate(context) {
     // ── Dedicated settings panel ─────────────────────────────────────────────
     registerSettingsPanel(context);
 
+    // ── Built-in tutorial (opened from Settings) ─────────────────────────────
+    registerTutorial(context);
+
     // ── If / Else expression builder panel (reads the open .jrxml schema) ────
     registerIfElsePanel(context);
 
@@ -90,6 +109,9 @@ function activate(context) {
 
     // ── Include-chain view (where the open report is called from) ─────────────
     registerIncludeChain(context);
+
+    // ── Read-only design view (Jaspersoft Studio style) ───────────────────────
+    registerDesignView(context);
 
     // Diff previews for whole-file rewrites
     context.subscriptions.push(previewProvider);
@@ -113,9 +135,8 @@ function activate(context) {
         })
     );
 
-    // ── Best practices + diagnostics ──────────────────────────────────────────
+    // ── Diagnostics and issues ───────────────────────────────────────────────
     registerIssuesView(context);
-    registerBestPractices(context);
     registerDiagnostics(context);
 
     // Internal command used by the "Go to declaration" quick fix. Uses

@@ -156,7 +156,9 @@ function escapeJavaString(value) {
     return '"' + String(value == null ? '' : value)
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
-        .replace(/\n/g, '\\n') + '"';
+        .replace(/\r/g, '\\r')
+        .replace(/\n/g, '\\n')
+        .replace(/\t/g, '\\t') + '"';
 }
 
 /** True for `$F{x}` / `$P{x}` / `$V{x}`. */
@@ -618,40 +620,335 @@ function toConditionGroup(node, context) {
     };
 }
 
-/** Map an AST node to a builder result. */
-function toResult(node) {
-    if (node.t === 'str') return { kind: 'text', val: node.v };
-    if (node.t === 'num') return { kind: 'number', val: node.src };
-    if (node.t === 'null') return { kind: 'null', val: '' };
-    return { kind: 'expr', val: node.src };
+// ── Structured reverse parsing ───────────────────────────────────────────────
+//
+// The builder owns only the conditional skeleton. A branch result is arbitrary
+// Java/JasperReports source (`$F{first} + " " + $F{last}`, `new Date()`, a
+// method chain, …), so results are captured verbatim instead of being fed to
+// the condition parser. Conditions still go through the AST parser above; a
+// condition it cannot read becomes a Custom condition and is written back as-is.
+
+const OPEN_BRACKETS = '([{';
+const CLOSE_FOR = { '(': ')', '[': ']', '{': '}' };
+
+/** Index just past the quoted literal starting at `index`. */
+function skipLiteral(text, index) {
+    const quote = text[index];
+    let i = index + 1;
+    while (i < text.length) {
+        if (text[i] === '\\') { i += 2; continue; }
+        if (text[i] === quote) return i + 1;
+        i += 1;
+    }
+    throw new Error('Expected ' + quote);
+}
+
+/** Index just past a comment starting at `index`, or -1 when there is none. */
+function skipComment(text, index) {
+    if (text[index] !== '/') return -1;
+    if (text[index + 1] === '/') {
+        const end = text.indexOf('\n', index + 2);
+        return end === -1 ? text.length : end;
+    }
+    if (text[index + 1] === '*') {
+        const end = text.indexOf('*/', index + 2);
+        if (end === -1) throw new Error('Expected */');
+        return end + 2;
+    }
+    return -1;
+}
+
+/** Index of the bracket that closes the one at `openIndex`. */
+function matchBracket(text, openIndex) {
+    const open = text[openIndex];
+    const close = CLOSE_FOR[open];
+    let depth = 0;
+
+    for (let i = openIndex; i < text.length;) {
+        const ch = text[i];
+        if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
+
+        const commentEnd = skipComment(text, i);
+        if (commentEnd !== -1) { i = commentEnd; continue; }
+
+        if (ch === open) depth += 1;
+        else if (ch === close) {
+            depth -= 1;
+            if (depth === 0) return i;
+        }
+        i += 1;
+    }
+    throw new Error('Expected ' + close);
+}
+
+/**
+ * A `?` in a generic type list is a wildcard, not a ternary. Reject it when it
+ * sits in an operator position (`a < b ? c > d`) or starts something that is
+ * not `>`, `,`, `extends` or `super`.
+ */
+function isGenericWildcard(text, start, index) {
+    let before = index - 1;
+    while (before >= start && /\s/.test(text[before])) before -= 1;
+    if (before >= start && text[before] !== '<' && text[before] !== ',') return false;
+
+    let after = index + 1;
+    while (after < text.length && /\s/.test(text[after])) after += 1;
+    const rest = text.slice(after);
+    return rest === '' || rest[0] === '>' || rest[0] === ',' || /^(extends|super)\b/.test(rest);
+}
+
+/**
+ * End of a generic type-argument list starting at `<`, or -1 when this is an
+ * ordinary comparison. Inside type arguments a `,` separates parameters and a
+ * `?` is a wildcard — neither may split or open a conditional.
+ */
+function genericEnd(text, index) {
+    if (text[index] !== '<') return -1;
+
+    let depth = 0;
+    for (let i = index; i < text.length; i += 1) {
+        const ch = text[i];
+        if (ch === '<') { depth += 1; continue; }
+        if (ch === '>') {
+            depth -= 1;
+            if (depth === 0) return i + 1;
+            continue;
+        }
+        if (ch === '?' && depth > 0 && !isGenericWildcard(text, index + 1, i)) return -1;
+        // Anything that cannot appear in a type list means this was `<`, not a generic.
+        if (/[(){};=+*/%&|!~^:"'$]/.test(ch)) return -1;
+    }
+    return -1;
+}
+
+/** Split on `separator` occurrences outside strings, comments and brackets. */
+function splitTopLevel(text, separator) {
+    const parts = [];
+    let start = 0;
+
+    for (let i = 0; i < text.length;) {
+        const ch = text[i];
+        if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
+
+        const commentEnd = skipComment(text, i);
+        if (commentEnd !== -1) { i = commentEnd; continue; }
+
+        if (OPEN_BRACKETS.includes(ch)) { i = matchBracket(text, i) + 1; continue; }
+
+        const generic = genericEnd(text, i);
+        if (generic !== -1) { i = generic; continue; }
+
+        if (ch === separator) { parts.push(text.slice(start, i)); start = i + 1; }
+        i += 1;
+    }
+    parts.push(text.slice(start));
+    return parts;
+}
+
+/** Remove parentheses that enclose the whole value (`(a ? b : c)`). */
+function stripOuterParens(value) {
+    let text = String(value == null ? '' : value).trim();
+    while (text[0] === '(') {
+        const close = matchBracket(text, 0);
+        if (close !== text.length - 1) break;
+        text = text.slice(1, -1).trim();
+    }
+    return text;
+}
+
+/** Index of the first `?` outside strings, comments and brackets, or -1. */
+function findTopLevelQuestion(text) {
+    for (let i = 0; i < text.length;) {
+        const ch = text[i];
+        if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
+
+        const commentEnd = skipComment(text, i);
+        if (commentEnd !== -1) { i = commentEnd; continue; }
+
+        if (OPEN_BRACKETS.includes(ch)) { i = matchBracket(text, i) + 1; continue; }
+
+        const generic = genericEnd(text, i);
+        if (generic !== -1) { i = generic; continue; }
+
+        if (ch === '?') return i;
+        i += 1;
+    }
+    return -1;
+}
+
+/** The `:` matching the `?` before `start`, honouring nested ternaries. */
+function findTernaryColon(text, start) {
+    let nested = 0;
+
+    for (let i = start; i < text.length;) {
+        const ch = text[i];
+        if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
+
+        const commentEnd = skipComment(text, i);
+        if (commentEnd !== -1) { i = commentEnd; continue; }
+
+        if (OPEN_BRACKETS.includes(ch)) { i = matchBracket(text, i) + 1; continue; }
+
+        const generic = genericEnd(text, i);
+        if (generic !== -1) { i = generic; continue; }
+
+        if (ch === '?') { nested += 1; i += 1; continue; }
+        if (ch === ':') {
+            if (text[i + 1] === ':') { i += 2; continue; } // method reference
+            if (nested === 0) return i;
+            nested -= 1;
+        }
+        i += 1;
+    }
+    throw new Error('Expected :');
+}
+
+/**
+ * Read one conditional level: either `IF(cond, then, else)` or
+ * `cond ? then : else`. Returns null when the text is a plain result.
+ *
+ * @returns {{style:string,cond:string,then:string,els:string}|null}
+ */
+function parseConditional(value) {
+    const text = stripOuterParens(value);
+    if (!text) return null;
+
+    const call = /^([A-Za-z_$][\w$]*)\s*\(/.exec(text);
+    if (call && text[text.length - 1] === ')') {
+        const open = call[0].lastIndexOf('(');
+        if (matchBracket(text, open) === text.length - 1 && call[1] === 'IF') {
+            const args = splitTopLevel(text.slice(open + 1, -1), ',');
+            if (args.length === 3) {
+                return {
+                    style: STYLE_FUNCTIONS,
+                    cond: args[0],
+                    then: args[1],
+                    els:  args[2],
+                };
+            }
+        }
+    }
+
+    const question = findTopLevelQuestion(text);
+    if (question !== -1) {
+        const colon = findTernaryColon(text, question + 1);
+        return {
+            style: STYLE_TERNARY,
+            cond: text.slice(0, question),
+            then: text.slice(question + 1, colon),
+            els:  text.slice(colon + 1),
+        };
+    }
+    return null;
+}
+
+/** Decode a Java string literal (the inverse of escapeJavaString). */
+function parseStringLiteral(raw) {
+    const body = raw.slice(1, -1);
+    let out = '';
+
+    for (let i = 0; i < body.length; i += 1) {
+        const ch = body[i];
+        if (ch !== '\\') { out += ch; continue; }
+
+        const next = body[i + 1];
+        i += 1;
+        switch (next) {
+            case 'n': out += '\n'; break;
+            case 'r': out += '\r'; break;
+            case 't': out += '\t'; break;
+            case 'b': out += '\b'; break;
+            case 'f': out += '\f'; break;
+            case 'u': {
+                const hex = body.slice(i + 1, i + 5);
+                if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+                    out += String.fromCharCode(parseInt(hex, 16));
+                    i += 4;
+                } else {
+                    out += 'u';
+                }
+                break;
+            }
+            case undefined: break;
+            default: out += next;
+        }
+    }
+    return out;
+}
+
+/**
+ * Classify a result as a text/number/null literal or an opaque expression.
+ * The raw source is kept for expressions so nothing is normalised away.
+ */
+function resultFromText(text) {
+    const raw = String(text == null ? '' : text).trim();
+    const literal = stripOuterParens(raw);
+
+    if (literal === 'null') return { kind: 'null', val: '' };
+    if (/^"(?:[^"\\]|\\.)*"$/.test(literal)) {
+        return { kind: 'text', val: parseStringLiteral(literal) };
+    }
+    if (/^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[LlDdFf])?$/.test(literal)) {
+        return { kind: 'number', val: literal };
+    }
+    return { kind: 'expr', val: raw };
+}
+
+/** Conditions keep their structured form when possible; otherwise stay raw. */
+function conditionGroupFromText(text, context) {
+    const value = String(text == null ? '' : text).trim();
+    try {
+        return toConditionGroup(parseExpression(value), context);
+    } catch (_err) {
+        return {
+            join: '&&',
+            conds: [{ ref: 'F', name: '', type: 'Custom', op: '', val: value }],
+        };
+    }
 }
 
 /**
  * Parse an expression back into builder state.
+ *
+ * Only the conditional structure is parsed. Branch results may be any Java /
+ * JasperReports expression: they are captured verbatim and written back as-is,
+ * so mixed expressions such as `$F{a} + " " + $F{b}` or `new Date()` survive a
+ * load.
  *
  * @param {string} text
  * @returns {{state:{branches:Array,els:object},nullSafe:boolean,style:'ternary'|'functions'}}
  * @throws {Error} with a readable message when the expression cannot be parsed
  */
 function fromExpression(text) {
-    const root = parseExpression(text);
+    const source = String(text == null ? '' : text).trim();
+    if (!source) throw new Error('Paste an expression first.');
+
     const context = { nullSafe: false };
     const branches = [];
-    let node = root;
+    let detectedStyle = null;
+    let rest = source;
 
-    while (node.t === 'tern') {
-        const group = toConditionGroup(node.c, context);
-        branches.push({ join: group.join, conds: group.conds, res: toResult(node.a) });
-        node = node.b;
+    while (true) {
+        const part = parseConditional(rest);
+        if (!part) break;
+
+        detectedStyle = detectedStyle || part.style;
+        const group = conditionGroupFromText(part.cond, context);
+        branches.push({
+            join: group.join,
+            conds: group.conds,
+            res: resultFromText(part.then),
+        });
+        rest = part.els;
     }
 
     return {
         state: {
             branches: branches.length ? branches : [createBranch()],
-            els: toResult(node),
+            els: resultFromText(rest),
         },
         nullSafe: context.nullSafe,
-        style: root.fn ? STYLE_FUNCTIONS : STYLE_TERNARY,
+        style: detectedStyle || STYLE_TERNARY,
     };
 }
 

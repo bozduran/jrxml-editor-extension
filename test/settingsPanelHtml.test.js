@@ -49,6 +49,15 @@ test('does not let </script> escape the data block', () => {
     assert.strictEqual((html.match(/<\/script>/g) || []).length, 1);
 });
 
+test('links to the built-in tutorial', () => {
+    const html = build();
+
+    assert.ok(html.includes('id="btnTutorial"'));
+    assert.ok(html.includes('Open tutorial'));
+    assert.ok(html.includes('New to JRXML?'));
+    assert.ok(html.includes("command: 'openTutorial'"));
+});
+
 test('embeds every setting key and the section name', () => {
     const html = build();
     for (const setting of allSettings()) {
