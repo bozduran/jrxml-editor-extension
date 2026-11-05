@@ -73,6 +73,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing `removeLineWhenBlank="true"` (or with another value)
   - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField expression while `markup` is not `styled`, `html` or `rtf`
   - `jrxml.lint.uncheckedNullDereference` — a `$F`/`$P`/`$V` reference used as a method-call receiver without a dominating null check (short-circuit aware: `!= null &&`, `== null ||`, ternaries, `EQUALS(x, null)`, `Objects.nonNull`/`isNull`/`equals`)
+- **Boolean comparison style** — `==` / `!=` on a declared Boolean value, or `Boolean.TRUE`/`FALSE.equals(...)`, with a one-click `EQUALS(...)` fix (`jrxml.lint.booleanEquals`)
 
   The first three have quick fixes and can be switched off individually. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
@@ -81,7 +82,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - **Act on issues** — right-click an issue (or use its lightbulb) to open the offending
   expression in the Expression Editor or the If / Else Builder
 
-The **Issues (JRXML)**, **Best Practices (JRXML)** and **Include Chain (JRXML)** views live under the extension's own **JRXML** icon in the Activity Bar. When no report is open, the Issues view shows quick-start actions.
+The **Issues (JRXML)** and **Include Chain (JRXML)** views live under the extension's own **JRXML** icon in the Activity Bar. When no report is open, the Issues view shows quick-start actions.
 
 ### 6. Document formatting and text check
 The hook's `format` + `textcheck` steps run through **Format Document** and the
@@ -99,19 +100,7 @@ The hook's `format` + `textcheck` steps run through **Format Document** and the
 Formatting only runs when you ask for it (Format Document, the fix-all action, or opt-in
 `jrxml.formatOnSave`) and never reorders elements or deletes declarations.
 
-### 7. Best practices
-| Rule | What it flags |
-|------|---------------|
-| `jrxml.bp001.booleanEquals` | `==`/`!=` on Boolean values → use `EQUALS(...)` / `NOT(EQUALS(...))` |
-
-Warnings can be suppressed per rule from the **Best Practices (JRXML)** view or the lightbulb menu; quick fixes remain available while suppressed. The former `bp002`/`bp003` null-safety rules were retired in favour of the more precise `jrxml.lint.uncheckedNullDereference` diagnostic.
-
-The view also lists **file-level issues**, each with an inline action:
-
-- *Elements are not sorted by position* → opens the sort diff preview
-- *SQL query can be migrated to …* → runs the SQL→jsonql migration
-
-### 8. Clear fixes and geometry sort
+### 7. Clear fixes and geometry sort
 Two destructive steps are opt-in commands, always previewed as a diff before applying:
 
 - **Clear fixes** (`JRXML: Apply Clear Fixes`) — delete unused declarations (never the
@@ -124,7 +113,7 @@ Two destructive steps are opt-in commands, always previewed as a diff before app
   direct `<element>` children by y then x, moving each element's comment/property trivia
   with it; missing coordinates and overlaps are reported as warnings.
 
-### 9. Smart autocomplete
+### 8. Smart autocomplete
 Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
 
 **Typed member completion.** Typing `.` after a field, parameter or variable completes the *Java members of its declared `class`*:
@@ -160,17 +149,17 @@ Date/time helpers: `jdatetoday` (format `TODAY()`), `jdateadd` (`TODAY()` + N da
 `jdatecompare` (two string dates), `jnow`, `jdatediff`, `jdatetodaytz` (report time zone)
 and `jdatetodaylocale` (report locale).
 
-### 10. Settings panel and tutorial
-**JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
+### 9. Settings panel and tutorial
+**JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 
-The panel also has an **Open tutorial** button. **JRXML: Open Tutorial** opens a built-in HTML guide that walks through the editor, Expression Editor, If / Else builder (including expression results), design view, Issues, formatting, best practices, clean-up and the include chain, with a reference for every command, shortcut and settings group. Its command and settings-group coverage is enforced by `test/tutorialHtml.test.js`, so adding a user-facing feature fails `npm test` until the guide is updated.
+The panel also has an **Open tutorial** button. **JRXML: Open Tutorial** opens a built-in HTML guide that walks through the editor, Expression Editor, If / Else builder (including expression results), design view, Issues, formatting, clean-up and the include chain, with a reference for every command, shortcut and settings group. Its command and settings-group coverage is enforced by `test/tutorialHtml.test.js`, so adding a user-facing feature fails `npm test` until the guide is updated.
 
-### 11. Include chain view
-The **Include Chain (JRXML)** view sits below Best Practices in the **JRXML** Activity Bar view and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
+### 10. Include chain view
+The **Include Chain (JRXML)** view sits in the **JRXML** Activity Bar view and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
 
 A file *calls* another when it contains a double-quoted token equal to that file's base name (the commit-hook rule), so subreports are picked up however their expression is written. The workspace is scanned once (`**/*.jrxml`, excluding `node_modules`/`out`/`target`/`bin`), cached by file mtime, and refreshed when the active editor changes, on edits and saves, on file create/delete/rename and on workspace-folder changes — or manually via **JRXML: Refresh Include Chain**.
 
-### 12. Report design view (view and edit)
+### 11. Report design view (view and edit)
 **JRXML: Open Design View** opens a visual canvas beside the source, modeled on Jaspersoft Studio's **Design** tab. It renders the report page, margins and columns, every band (background, title, page/column headers and footers, group headers and footers, detail bands, summary, no data), and each element at its `x`/`y`/`width`/`height`:
 
 - text fields show their expression and static text shows its content, using the element's font, colours, alignment, rotation and box borders;
@@ -207,8 +196,8 @@ Only the Studio 7 / JasperReports 7 format (`<element kind="…">`) is rendered;
    (or use the **If / Else…** button inside the expression editor, or `Ctrl+Alt+B`). The
    builder reads the open report's fields, parameters and variables automatically;
    **Apply to File** writes the result back into the expression tag under the cursor.
-5. The **JRXML** icon in the Activity Bar holds the Issues, Best Practices and Include
-   Chain views for the report you have open.
+5. The **JRXML** icon in the Activity Bar holds the Issues and Include Chain views
+   for the report you have open.
 6. New here? The **Get started with JRXML** walkthrough (Welcome page) walks through the
    editor, formatting, issue fixes and the If / Else builder.
 
@@ -227,10 +216,6 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `JRXML: Edit Issue in Expression Editor` | Open the expression behind an issue in the Expression Editor |
 | `JRXML: Edit Issue in If / Else Builder` | Open the expression behind an issue in the If / Else Builder |
 | `JRXML: Go to Declaration` | Jump from `$F{}`/`$P{}`/`$V{}` to its declaration |
-| `JRXML: Refresh Best Practices` | Re-run the best-practice rules |
-| `JRXML: Suppress Best Practice Rule` | Hide squiggles for a rule (quick fixes stay) |
-| `JRXML: Re-enable Best Practice Rule` | Restore squiggles for a rule |
-| `JRXML: Jump to Issue` | Move the cursor to a reported best-practice hit |
 | `JRXML: Sort Band/Frame Elements by Position` | Reorder band/frame elements by geometry (previewed) |
 | `JRXML: Apply Clear Fixes` | Delete unused declarations, sync descriptions, fix jsonql (previewed) |
 | `JRXML: Migrate SQL Query to jsonql` | Prompt for jsonql and rewrite the `<query>` element |
@@ -255,6 +240,7 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `jrxml.lint.removeLineWhenBlank` | `true` | Warn when a `textField`/`subreport` is missing `removeLineWhenBlank="true"` |
 | `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
 | `jrxml.lint.nullDereference` | `true` | Warn on an unguarded `$F`/`$P`/`$V` method-call receiver |
+| `jrxml.lint.booleanEquals` | `true` | Warn on `==`/`!=` or `Boolean.TRUE/FALSE.equals` for Boolean values |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
@@ -265,7 +251,6 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
 | `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |
 | `jrxml.migrate.targetLanguage` | `jsonql` | Language written to `<query language="...">` when migrating a SQL query |
-| `jrxml.suppressedBestPractices` | `[]` | Best-practice rule IDs whose squiggles are hidden |
 
 ---
 

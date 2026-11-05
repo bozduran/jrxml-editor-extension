@@ -446,7 +446,7 @@ suite('JRXML extension smoke', () => {
         assert.strictEqual(container.icon, 'media/jrxml.svg');
         assert.deepStrictEqual(
             pkg.contributes.views.jrxmlViews.map(view => view.id),
-            ['jrxmlIssues', 'jrxmlBestPractices', 'jrxmlIncludeChain']
+            ['jrxmlIssues', 'jrxmlIncludeChain']
         );
 
         // The workbench command generated for a contributed view container.

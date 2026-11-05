@@ -5,6 +5,9 @@
 //    → "Go to declaration"
 //    → "Remove declaration"
 //
+//  jrxml.booleanEquals  (Boolean comparison style)
+//    → "Replace with EQUALS(...) / NOT(EQUALS(...))"
+//
 //  jrxml.undeclaredReference  ($F/$P/$V used but not declared)
 //    → "Add <field name='x' class='java.lang.Object'> declaration"
 //    → "Add <parameter name='x' class='java.lang.Object'> declaration"
@@ -173,6 +176,21 @@ const provider = vscode.languages.registerCodeActionsProvider(
                     edit.insert(document.uri, document.positionAt(insertAt), snippet);
                     addAction.edit = edit;
                     actions.push(addAction);
+                }
+
+                // ── Boolean comparison style ──────────────────────────────────
+                if (diag.code === 'jrxml.booleanEquals' && diag.data && typeof diag.data.replacement === 'string') {
+                    const action = new vscode.CodeAction(
+                        `Replace with ${diag.data.replacement}`,
+                        vscode.CodeActionKind.QuickFix
+                    );
+                    action.diagnostics = [diag];
+                    action.isPreferred = true;
+
+                    const edit = new vscode.WorkspaceEdit();
+                    edit.replace(document.uri, diag.range, diag.data.replacement);
+                    action.edit = edit;
+                    actions.push(action);
                 }
 
                 // ── Structural lint rules ─────────────────────────────────────

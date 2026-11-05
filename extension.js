@@ -11,7 +11,6 @@ const { provider: referenceProvider }    = require('./referenceProvider');
 const { provider: outlineProvider }    = require('./outlineProvider');
 const { register: registerDiagnostics } = require('./diagnosticsProvider');
 const { provider: codeActionsProvider }  = require('./codeActionsProvider');
-const { register: registerBestPractices } = require('./bestPracticesProvider');
 const { register: registerIssuesView } = require('./issuesView');
 const { register: registerContextKeys } = require('./contextKeys');
 const {
@@ -136,9 +135,8 @@ function activate(context) {
         })
     );
 
-    // ── Best practices + diagnostics ──────────────────────────────────────────
+    // ── Diagnostics and issues ───────────────────────────────────────────────
     registerIssuesView(context);
-    registerBestPractices(context);
     registerDiagnostics(context);
 
     // Internal command used by the "Go to declaration" quick fix. Uses

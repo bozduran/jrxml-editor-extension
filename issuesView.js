@@ -1,5 +1,5 @@
 // issuesView.js
-// The "Issues (JRXML)" JRXML Activity Bar view, shown above Best Practices.
+// The "Issues (JRXML)" JRXML Activity Bar view.
 //
 // It is a live mirror of the JRXML diagnostics (source "JRXML": undeclared
 // references, unbalanced parens, unclosed strings, unused declarations, the

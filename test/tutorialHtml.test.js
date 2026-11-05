@@ -85,7 +85,7 @@ test('walks through the main surfaces', () => {
 
     for (const id of [
         'quick-start', 'editor', 'expression-editor', 'if-else', 'design-view',
-        'issues', 'formatting', 'best-practices', 'cleanup', 'include-chain',
+        'issues', 'formatting', 'cleanup', 'include-chain',
         'settings', 'commands', 'shortcuts', 'limits', 'maintain',
     ]) {
         assert.ok(html.includes(`id="${id}"`), `missing section #${id}`);

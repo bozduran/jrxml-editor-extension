@@ -66,11 +66,6 @@
         "title": "JRXML: Go to Declaration"
       },
       {
-        "command": "jrxml.refreshBestPractices",
-        "title": "JRXML: Refresh Best Practices",
-        "icon": "$(refresh)"
-      },
-      {
         "command": "jrxml.refreshIssues",
         "title": "JRXML: Refresh Issues",
         "icon": "$(refresh)"
@@ -112,28 +107,6 @@
       {
         "command": "jrxml.previousIssue",
         "title": "JRXML: Go to Previous Issue"
-      },
-      {
-        "command": "jrxml.bp.suppressRule",
-        "title": "JRXML: Suppress Best Practice Rule"
-      },
-      {
-        "command": "jrxml.bp.unsuppressRule",
-        "title": "JRXML: Re-enable Best Practice Rule"
-      },
-      {
-        "command": "jrxml.bp.suppressFromTree",
-        "title": "JRXML: Suppress Best Practice (hide squiggles)",
-        "icon": "$(eye-closed)"
-      },
-      {
-        "command": "jrxml.bp.unsuppressFromTree",
-        "title": "JRXML: Re-enable Best Practice squiggles",
-        "icon": "$(eye)"
-      },
-      {
-        "command": "jrxml.bp.jumpToHit",
-        "title": "JRXML: Jump to Issue"
       },
       {
         "command": "jrxml.sortElements",
@@ -294,11 +267,6 @@
           "group": "navigation"
         },
         {
-          "command": "jrxml.refreshBestPractices",
-          "when": "view == jrxmlBestPractices",
-          "group": "navigation"
-        },
-        {
           "command": "jrxml.refreshIncludeChain",
           "when": "view == jrxmlIncludeChain",
           "group": "navigation"
@@ -339,21 +307,6 @@
           "command": "jrxml.issues.copyCode",
           "when": "view == jrxmlIssues && viewItem == jrxmlIssueDiagnostic",
           "group": "9_copy"
-        },
-        {
-          "command": "jrxml.bp.suppressFromTree",
-          "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressible",
-          "group": "inline"
-        },
-        {
-          "command": "jrxml.bp.unsuppressFromTree",
-          "when": "view == jrxmlBestPractices && viewItem == bp-rule-suppressed",
-          "group": "inline"
-        },
-        {
-          "command": "jrxml.sortElements",
-          "when": "view == jrxmlBestPractices && viewItem == bp-file-issue-sort",
-          "group": "inline"
         }
       ]
     },
@@ -481,6 +434,11 @@
           "default": true,
           "description": "Warn when a variable references another variable declared later (JasperReports evaluates variables in declaration order)."
         },
+        "jrxml.lint.booleanEquals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a Boolean field, parameter or variable is compared with == / != or Boolean.TRUE/FALSE.equals instead of EQUALS()."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,
@@ -530,14 +488,6 @@
           "type": "string",
           "default": "jsonql",
           "description": "Language written to <query language=\"...\"> when migrating a SQL query."
-        },
-        "jrxml.suppressedBestPractices": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "List of best practice rule IDs whose yellow squiggles are hidden. Quick fixes remain available."
         }
       }
     },
@@ -563,12 +513,6 @@
           "name": "Issues (JRXML)",
           "icon": "$(warning)",
           "contextualTitle": "JRXML Issues"
-        },
-        {
-          "id": "jrxmlBestPractices",
-          "name": "Best Practices (JRXML)",
-          "icon": "$(lightbulb)",
-          "contextualTitle": "JRXML Best Practices"
         },
         {
           "id": "jrxmlIncludeChain",

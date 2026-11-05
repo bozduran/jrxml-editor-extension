@@ -50,7 +50,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **Tutorial:** a built-in HTML guide opened with **JRXML: Open Tutorial**, the
   JRXML menu or the **Open tutorial** button in the Settings panel. It covers the
   editor, Expression Editor, If / Else builder (including expression results),
-  design view, Issues, formatting, best practices, clean-up, include chain, every
+  design view, Issues, formatting, clean-up, include chain, every
   command, shortcut and settings group, and has command links that open the
   matching feature.
 - **Tutorial coverage guard:** `test/tutorialHtml.test.js` compares the
@@ -58,6 +58,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   `settingsSchema.js`, so adding a user-facing command or settings group fails
   `npm test` until `tutorialHtml.js` is updated. A pull-request template repeats
   the reminder.
+
+### Removed
+- **Best Practices view:** its only rule (Boolean comparisons) now runs as the
+  normal `jrxml.booleanEquals` diagnostic with a one-click `EQUALS(...)` fix in
+  the Issues view. The separate view, diagnostics collection,
+  `jrxml.suppressedBestPractices` setting, and the `jrxml.bp.*` /
+  `jrxml.refreshBestPractices` commands were removed.
 
 ### Fixed
 - **If / Else builder:** loading an expression whose results used arithmetic or

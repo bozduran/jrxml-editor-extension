@@ -39,21 +39,14 @@ const DOCUMENTED_COMMANDS = [
     { id: 'jrxml.issues.editInIfElseBuilder', group: 'Issues and navigation', summary: 'Open an issue’s expression in the If / Else Builder.' },
     { id: 'jrxml.nextIssue', group: 'Issues and navigation', summary: 'Go to the next JRXML issue in the current report.' },
     { id: 'jrxml.previousIssue', group: 'Issues and navigation', summary: 'Go to the previous JRXML issue in the current report.' },
-    { id: 'jrxml.bp.jumpToHit', group: 'Issues and navigation', summary: 'Jump to a best-practice hit.' },
     { id: 'jrxml.issues.copyMessage', group: 'Issues and navigation', summary: 'Copy an issue’s message to the clipboard.' },
     { id: 'jrxml.issues.copyCode', group: 'Issues and navigation', summary: 'Copy an issue’s rule id (for example jrxml.undeclaredReference).' },
-
-    { id: 'jrxml.bp.suppressRule', group: 'Best practices', summary: 'Hide a rule’s squiggles while keeping its quick fixes available.' },
-    { id: 'jrxml.bp.unsuppressRule', group: 'Best practices', summary: 'Re-enable a suppressed best-practice rule.' },
-    { id: 'jrxml.bp.suppressFromTree', group: 'Best practices', summary: 'Suppress a rule from the Best Practices view.' },
-    { id: 'jrxml.bp.unsuppressFromTree', group: 'Best practices', summary: 'Re-enable a rule from the Best Practices view.' },
 
     { id: 'jrxml.sortElements', group: 'Clean-up', summary: 'Preview and sort band/frame elements by their position.' },
     { id: 'jrxml.applyClearFixes', group: 'Clean-up', summary: 'Preview and apply unused-declaration, description and jsonql fixes.' },
     { id: 'jrxml.migrateSqlQuery', group: 'Clean-up', summary: 'Preview and migrate a SQL query to a jsonql expression.' },
 
     { id: 'jrxml.refreshIssues', group: 'Views', summary: 'Recompute the Issues view.' },
-    { id: 'jrxml.refreshBestPractices', group: 'Views', summary: 'Recompute the Best Practices view.' },
     { id: 'jrxml.refreshIncludeChain', group: 'Views', summary: 'Rescan the workspace and rebuild the include chain.' },
 ];
 
@@ -64,11 +57,10 @@ const DOCUMENTED_COMMANDS = [
 const DOCUMENTED_SETTING_GROUPS = [
     { id: 'editor', summary: 'Indent size, auto-open, auto-format, typed completion and the target Java version.' },
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
-    { id: 'diagnostics', summary: 'Unused warnings, expression validation and the structural lint rules.' },
+    { id: 'diagnostics', summary: 'Unused warnings, expression validation, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
     { id: 'clear', summary: 'The SQL migration target language and whether to preview clear fixes.' },
     { id: 'sort', summary: 'Whether the geometry sort opens a diff before applying.' },
-    { id: 'bestPractices', summary: 'The suppress list for the best-practices rules.' },
 ];
 
 /**
@@ -84,7 +76,6 @@ const TUTORIAL_COMMAND_URIS = [
     'jrxml.issues.fixAll',
     'jrxml.nextIssue',
     'jrxml.formatDocument',
-    'jrxml.refreshBestPractices',
     'jrxml.refreshIncludeChain',
     'jrxml.refreshIssues',
     'workbench.action.openSettings',
@@ -157,7 +148,9 @@ function formatKeybinding(binding) {
         .map(part => {
             const key = part.trim();
             const lower = key.toLowerCase();
-            return names[lower] || (key.length === 1 ? key.toUpperCase() : key);
+            if (names[lower]) return names[lower];
+            if (/^f\d{1,2}$/i.test(key)) return key.toUpperCase();
+            return key.length === 1 ? key.toUpperCase() : key;
         })
         .join('+');
 }
@@ -419,7 +412,6 @@ function buildTutorialHtml({ nonce }) {
     <li><a href="#design-view">Design view</a></li>
     <li><a href="#issues">Issues and quick fixes</a></li>
     <li><a href="#formatting">Formatting and text check</a></li>
-    <li><a href="#best-practices">Best practices</a></li>
     <li><a href="#cleanup">Clear, sort and SQL migration</a></li>
     <li><a href="#include-chain">Include chain</a></li>
     <li><a href="#settings">Settings</a></li>
@@ -437,7 +429,7 @@ function buildTutorialHtml({ nonce }) {
   <ol>
     <li>Open a <code>.jrxml</code> file. The language features activate automatically.</li>
     <li>Use the <strong>JRXML</strong> entry in the editor title bar, the editor/explorer context menu, or the Command Palette to open a tool.</li>
-    <li>The <strong>JRXML</strong> Activity Bar container holds the <strong>Issues</strong>, <strong>Best Practices</strong> and <strong>Include Chain</strong> views.</li>
+    <li>The <strong>JRXML</strong> Activity Bar container holds the <strong>Issues</strong> and <strong>Include Chain</strong> views.</li>
     <li>Put the cursor inside an expression tag such as <code>&lt;textFieldExpression&gt;</code> before opening the Expression Editor or the If / Else Builder.</li>
   </ol>
 
@@ -549,6 +541,7 @@ Class&lt;? extends Number&gt;</code></div>
   <p>The <strong>Issues (JRXML)</strong> view mirrors the diagnostics for the open report, grouped by severity. The same diagnostics appear as squiggles in the editor.</p>
   <ul>
     <li>Undeclared <code>$F{}</code>/<code>$P{}</code>/<code>$V{}</code> references, unbalanced parentheses, unclosed strings, unused declarations, the structural lint rules and text-check findings.</li>
+    <li>Boolean comparisons such as <code>$F{active} == true</code> offer a one-click <code>EQUALS(...)</code> fix (<code>jrxml.lint.booleanEquals</code>).</li>
     <li>Open an issue’s context menu to jump to it, apply its quick fix, copy the message/rule id, or open the expression in the Expression Editor or If / Else Builder.</li>
     <li><strong>Fix All Issues in File</strong> applies the preferred fixes where they do not overlap.</li>
     <li><strong>Go to Next Issue</strong> and <strong>Go to Previous Issue</strong> move between problems without leaving the keyboard.</li>
@@ -567,17 +560,6 @@ Class&lt;? extends Number&gt;</code></div>
   </ul>
   <div class="note">The text-check rules fix characters that fail to render, spacing around periods and double spaces, and related display issues. Each finding is also exposed as a diagnostic so the change is visible before it is applied.</div>
   <p><a href="command:jrxml.formatDocument">Format the open document</a></p>
-</section>
-
-<section id="best-practices">
-  <h2>Best practices</h2>
-  <p>The <strong>Best Practices</strong> view runs opinionated rules over every expression in the report — for example, preferring <code>EQUALS()</code> for Boolean comparisons, or flagging repeated-value settings that are worth a second look.</p>
-  <ul>
-    <li>Each hit links to its source and offers a quick fix.</li>
-    <li>Rules can be suppressed so the squiggles disappear while the quick fixes remain available; re-enable them from the view or the Command Palette.</li>
-    <li>The view also surfaces the geometry sort action when the report’s elements are out of order.</li>
-  </ul>
-  <p><a href="command:jrxml.refreshBestPractices">Refresh Best Practices</a></p>
 </section>
 
 <section id="cleanup">

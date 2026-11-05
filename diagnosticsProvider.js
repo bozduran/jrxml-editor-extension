@@ -6,15 +6,21 @@
 //   WARNING  — unclosed string literal inside an expression tag
 //   WARNING  — structural lint rules (constant printWhenExpression,
 //              removeLineWhenBlank, markup tags without markup)
+//   WARNING  — Boolean comparisons that should use EQUALS()
 
 const vscode = require('vscode');
 const { parseDeclarations, clearCache } = require('./jrxmlParser');
-const { EXPRESSION_TAGS } = require('./expressionUtils');
+const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
+const {
+    CODE: BOOLEAN_EQUALS_CODE,
+    MESSAGE: BOOLEAN_EQUALS_MESSAGE,
+    checkBooleanEquals,
+} = require('./booleanEqualsRule');
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
@@ -48,6 +54,7 @@ function updateDiagnostics(document) {
     const cfg = vscode.workspace.getConfiguration('jrxml');
     const checkUnused = cfg.get('showUnusedWarnings', true);
     const checkExpr   = cfg.get('validateExpressions', true);
+    const checkBoolean = cfg.get('lint.booleanEquals', true);
     const lintEnabled = {
         constantPrintWhen:      cfg.get('lint.constantPrintWhen', true),
         removeLineWhenBlank:    cfg.get('lint.removeLineWhenBlank', true),
@@ -108,7 +115,7 @@ function updateDiagnostics(document) {
         }
     }
 
-    // ── 2. Undeclared references + 3. expression validation ───────────────────
+    // ── 2. Undeclared references ─────────────────────────────────────────────
     if (checkExpr) {
         // A reference inside a dataset resolves against that dataset's
         // declarations, so the declared set spans report and dataset scope.
@@ -142,51 +149,51 @@ function updateDiagnostics(document) {
                 ));
             }
         }
+    }
 
-        // ── Expression syntax validation ──────────────────────────────────────
-        const exprTagRe = new RegExp(
-            `(<(?<tag>${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)<\\/\\k<tag>>`,
-            'g'
-        );
+    // ── 3. Expression syntax and style ───────────────────────────────────────
+    if (checkExpr || checkBoolean) {
+        forEachExpression(text, (rawExpr, exprOffset) => {
+            if (checkExpr) {
+                // Check unbalanced parens
+                const parenError = checkParens(rawExpr);
+                if (parenError) {
+                    diagnostics.push(makeDiagnostic(
+                        document, exprOffset + parenError.index, 1,
+                        parenError.message,
+                        vscode.DiagnosticSeverity.Error,
+                        'jrxml.unbalancedParen'
+                    ));
+                }
 
-        let em;
-        while ((em = exprTagRe.exec(text)) !== null) {
-            const openTag    = em[1];
-            const inner      = em[3];
-            const exprOffset = em.index + openTag.length;
-
-            // Strip CDATA
-            const rawExpr = inner
-                .replace(/^\s*<!\[CDATA\[/, '')
-                .replace(/\]\]>\s*$/, '')
-                .trim();
-
-            if (!rawExpr) continue;
-
-            // Check unbalanced parens
-            const parenError = checkParens(rawExpr);
-            if (parenError) {
-                const errOffset = exprOffset + inner.indexOf(rawExpr) + parenError.index;
-                diagnostics.push(makeDiagnostic(
-                    document, errOffset, 1,
-                    parenError.message,
-                    vscode.DiagnosticSeverity.Error,
-                    'jrxml.unbalancedParen'
-                ));
+                // Check unclosed strings
+                const strError = checkUnclosedString(rawExpr);
+                if (strError) {
+                    diagnostics.push(makeDiagnostic(
+                        document, exprOffset + strError.index,
+                        rawExpr.length - strError.index,
+                        strError.message,
+                        vscode.DiagnosticSeverity.Warning,
+                        'jrxml.unclosedString'
+                    ));
+                }
             }
 
-            // Check unclosed strings
-            const strError = checkUnclosedString(rawExpr);
-            if (strError) {
-                const errOffset = exprOffset + inner.indexOf(rawExpr) + strError.index;
-                diagnostics.push(makeDiagnostic(
-                    document, errOffset, rawExpr.length - strError.index,
-                    strError.message,
-                    vscode.DiagnosticSeverity.Warning,
-                    'jrxml.unclosedString'
-                ));
+            if (checkBoolean) {
+                for (const hit of checkBooleanEquals(rawExpr, parsed)) {
+                    const diagnostic = makeDiagnostic(
+                        document,
+                        exprOffset + hit.start,
+                        hit.end - hit.start,
+                        BOOLEAN_EQUALS_MESSAGE,
+                        vscode.DiagnosticSeverity.Warning,
+                        BOOLEAN_EQUALS_CODE
+                    );
+                    diagnostic.data = { replacement: hit.replacement };
+                    diagnostics.push(diagnostic);
+                }
             }
-        }
+        });
     }
 
     // ── 4. Structural lint rules (ported from the commit-time hook) ───────────
@@ -323,6 +330,26 @@ function checkUnclosedString(expr) {
 }
 
 // ── Helper ────────────────────────────────────────────────────────────────────
+
+/**
+ * Run `callback(rawExpression, startOffset)` for every non-empty expression
+ * element. CDATA markers and surrounding whitespace are stripped, matching the
+ * offsets the diagnostics use.
+ */
+function forEachExpression(text, callback) {
+    const expressionRe = new RegExp(
+        `(<(?<tag>${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)<\\/\\k<tag>>`,
+        'g'
+    );
+
+    let match;
+    while ((match = expressionRe.exec(text)) !== null) {
+        const inner = match[3];
+        const raw = stripCdata(inner);
+        if (!raw) continue;
+        callback(raw, match.index + match[1].length + inner.indexOf(raw));
+    }
+}
 
 function makeDiagnostic(document, offset, length, message, severity, code) {
     const start = document.positionAt(offset);

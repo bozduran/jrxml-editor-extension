@@ -14,7 +14,7 @@ const pkg = require('../package.json');
 
 const ROOT         = path.join(__dirname, '..');
 const CONTAINER_ID = 'jrxmlViews';
-const VIEW_IDS     = ['jrxmlIssues', 'jrxmlBestPractices', 'jrxmlIncludeChain'];
+const VIEW_IDS     = ['jrxmlIssues', 'jrxmlIncludeChain'];
 
 function activityBarContainers() {
     return pkg.contributes.viewsContainers
@@ -53,7 +53,7 @@ test('moves the JRXML views into the Activity Bar container', () => {
     const views = pkg.contributes.views || {};
     const ids = (views[CONTAINER_ID] || []).map(view => view.id);
 
-    assert.deepStrictEqual(ids, VIEW_IDS, 'the three JRXML views must be in the new container');
+    assert.deepStrictEqual(ids, VIEW_IDS, 'the two JRXML views must be in the new container');
     assert.ok(
         !(views.explorer || []).some(view => VIEW_IDS.includes(view.id)),
         'the views must be moved, not duplicated in Explorer'

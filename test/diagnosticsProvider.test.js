@@ -127,6 +127,30 @@ test('a field used before its declaration in propertyExpression is not unused', 
     assert.deepStrictEqual(unused(diagnose(text)), []);
 });
 
+test('Boolean comparisons become a diagnostic with a quick-fix payload', () => {
+    const text = `<jasperReport name="R">
+  <field name="active" class="java.lang.Boolean"/>
+  <expression><![CDATA[$F{active} == true]]></expression>
+</jasperReport>`;
+
+    const diags = diagnose(text).filter(d => d.code === 'jrxml.booleanEquals');
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 1); // Warning
+    assert.strictEqual(diags[0].data.replacement, 'EQUALS($F{active}, true)');
+});
+
+test('the Boolean comparison rule ignores non-Boolean declarations', () => {
+    const text = `<jasperReport name="R">
+  <field name="name" class="java.lang.String"/>
+  <expression><![CDATA[$F{name} == true]]></expression>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        diagnose(text).filter(d => d.code === 'jrxml.booleanEquals'),
+        []
+    );
+});
+
 test('a variable used before its declaration is reported as a warning', () => {
     const text = `<jasperReport name="R">
   <variable name="A" class="java.lang.String"><expression><![CDATA[$V{B}]]></expression></variable>
