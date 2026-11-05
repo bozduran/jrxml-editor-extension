@@ -75,6 +75,17 @@ test('offers Apply, Copy, Reload and Use active file controls', () => {
     assert.ok(html.includes('Use active file'));
 });
 
+test('result values use a multiline expression editor', () => {
+    const html = build();
+    const script = scriptOf(html);
+
+    assert.ok(html.includes('textarea.res'), 'result values need the res textarea style');
+    assert.ok(script.includes('function resultPlaceholder'), 'the result placeholder helper is missing');
+    assert.ok(script.includes('const KINDS = JR.KINDS;'), 'the result kind selector must come from the core');
+    assert.ok(script.includes("value.classList.toggle('expr'"), 'Expression results need their own editor style');
+    assert.ok(html.includes('inserted verbatim'), 'the panel must explain expression results');
+});
+
 test('embeds the schema, options and initial expression', () => {
     const html = build();
     assert.ok(html.includes('"fileName":"Report.jrxml"'));

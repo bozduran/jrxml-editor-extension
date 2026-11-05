@@ -41,15 +41,18 @@ A visual builder for conditional expressions, opened on demand:
   dropdowns. There is no file upload; the lists refresh when the report is saved or its
   declarations change.
 - **if / else if / else branches** — conditions joined with AND/OR, typed comparisons
-  (String, Number, Boolean, null checks) or a raw Boolean expression.
+  (String, Number, Boolean, null checks) or a raw Boolean expression. Each result can be
+  **Text**, a **Number**, `null`, or an **Expression** — expressions are inserted
+  verbatim, so `$F{first} + " " + $F{last}`, method calls and `new Date()` work.
 - **Two output styles** — a nested ternary or the Jaspersoft `IF()` / `AND()` / `OR()`
   functions. Null-safe guards are written as inline ternaries in function style.
 - **Apply or copy** — Apply writes the expression back into the expression tag the
   builder was opened from (CDATA preserved, one undoable edit); Copy puts it on the
   clipboard.
 - **Reverse conversion** — paste an existing expression and load it back into the
-  branches. Anything that cannot be mapped becomes a Custom condition instead of being
-  dropped.
+  branches. Conditions are mapped to typed controls when possible (anything else becomes
+  a Custom condition); results are captured verbatim, so arithmetic, concatenation,
+  method calls and nested calls survive the round trip.
 - **Expression Editor hand-off** — the expression editor's **If / Else…** button opens
   the builder with the current text.
 
@@ -159,6 +162,7 @@ and `jdatetodaylocale` (report locale).
 
 ### 10. Settings panel
 **JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
+
 
 ### 11. Include chain view
 The **Include Chain (JRXML)** view sits below Best Practices in the **JRXML** Activity Bar view and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
@@ -287,6 +291,7 @@ The unit suite runs on plain Node with no VS Code needed. The integration suite
 activates the extension for real and covers command registration, diagnostics,
 the sort/clear commands (preview disabled), document formatting and the settings
 panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
+
 
 ---
 

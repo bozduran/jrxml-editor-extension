@@ -37,6 +37,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   border/padding, and an **All attributes** editor for arbitrary element
   attributes. Drawn lines now honour diagonal `TopDown`/`BottomUp` direction and
   border widths, and `elementGroup` containers render their children.
+- **If / Else builder — expression results:** branch and else results can now be
+  arbitrary expressions, not just text or numbers. The result field is a multiline
+  editor for Expression results, expressions are inserted verbatim, and loading an
+  existing expression keeps arithmetic, concatenation, method calls and `new`
+  expressions instead of failing. Conditions the builder cannot represent still
+  load as Custom conditions.
+
+### Fixed
+- **If / Else builder:** loading an expression whose results used arithmetic or
+  concatenation (`$F{a} + " " + $F{b}`) failed with "Cannot read near…"; results
+  are now captured as opaque source.
 
 ## [0.1.2] - 2026-11-03
 
