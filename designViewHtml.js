@@ -1,5 +1,5 @@
 // designViewHtml.js
-// Pure HTML/CSS/client-JS builder for the read-only JRXML design view webview.
+// Pure HTML/CSS/client-JS builder for the JRXML design view webview.
 //
 // Like expressionPanelHtml, this module deliberately does NOT require('vscode')
 // so the generated document can be unit-tested with plain Node. The host panel
@@ -18,14 +18,16 @@ const { jsonForInlineScript } = require('./expressionPanelHtml');
  * @param {object} opts
  * @param {object|null} opts.model       designModel result (null = empty state)
  * @param {string} [opts.fileName]       basename shown in the toolbar
+ * @param {number|null} [opts.version]   TextDocument version the model was built from
  * @param {string} opts.nonce            CSP nonce for the style/script tags
  * @param {string} [opts.cspSource]      webview.cspSource
  * @returns {string} full HTML document
  */
-function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
+function buildDesignViewHtml({ model, fileName, version, nonce, cspSource }) {
     const source    = cspSource || '';
     const modelJson = jsonForInlineScript(model === undefined ? null : model);
     const fileJson  = jsonForInlineScript(fileName || '');
+    const versionJson = jsonForInlineScript(Number.isInteger(version) ? version : null);
 
     return /* html */`<!DOCTYPE html>
 <html lang="en">
@@ -90,7 +92,13 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
     cursor: pointer;
   }
   .actions button:hover { background: rgba(127,127,127,0.16); }
-  .actions button.primary { background: var(--btn-bg); color: var(--btn-fg); border-color: transparent; }
+  .actions button.primary,
+  .actions button.active { background: var(--btn-bg); color: var(--btn-fg); border-color: transparent; }
+  .mode-group { display: inline-flex; }
+  .mode-group button { border-radius: 0; }
+  .mode-group button:first-child { border-radius: 3px 0 0 3px; }
+  .mode-group button:last-child { border-radius: 0 3px 3px 0; border-left: none; }
+  #follow-cursor[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   #zoom-label { min-width: 40px; text-align: center; font-size: 11px; color: var(--muted); }
 
   .banner {
@@ -104,7 +112,8 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
   .banner.warn  { background: rgba(204,167,0,0.12);  color: #cca700; }
   .banner.info  { background: rgba(117,190,255,0.12); color: #75beff; }
 
-  #viewport { flex: 1; overflow: auto; position: relative; }
+  #workspace { flex: 1; display: flex; min-height: 0; overflow: hidden; }
+  #viewport { flex: 1; overflow: auto; position: relative; min-width: 0; }
   #canvas { position: relative; min-height: 100%; padding: 16px 16px 32px; }
 
   .page {
@@ -159,6 +168,33 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
   .element { position: absolute; cursor: pointer; }
   .element:hover { outline: 1px solid var(--accent); outline-offset: 0; }
   .element.selected { outline: 2px solid var(--accent); outline-offset: 1px; z-index: 10; }
+  .band-row.band-selected {
+    background: rgba(0,120,215,0.08);
+    border-top-color: var(--accent);
+  }
+
+  .editing .element { cursor: move; }
+  .editing .element.selected { overflow: visible !important; }
+  .editing .element.placeholder.selected { background: rgba(110,110,110,0.06); }
+  .resize-handle {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    background: #ffffff;
+    border: 1px solid var(--accent);
+    border-radius: 1px;
+    z-index: 30;
+  }
+  .resize-handle.nw { left: -4px; top: -4px; cursor: nwse-resize; }
+  .resize-handle.n  { left: calc(50% - 3px); top: -4px; cursor: ns-resize; }
+  .resize-handle.ne { right: -4px; top: -4px; cursor: nesw-resize; }
+  .resize-handle.e  { right: -4px; top: calc(50% - 3px); cursor: ew-resize; }
+  .resize-handle.se { right: -4px; bottom: -4px; cursor: nwse-resize; }
+  .resize-handle.s  { left: calc(50% - 3px); bottom: -4px; cursor: ns-resize; }
+  .resize-handle.sw { left: -4px; bottom: -4px; cursor: nesw-resize; }
+  .resize-handle.w  { left: -4px; top: calc(50% - 3px); cursor: ew-resize; }
+  body.dragging, body.dragging * { user-select: none !important; }
+  body.dragging .element { cursor: move; }
 
   .text-wrap {
     position: absolute;
@@ -265,6 +301,197 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
   .empty-title { font-size: 14px; font-weight: 600; }
   .empty-message { font-size: 12px; color: var(--muted); max-width: 520px; }
 
+  #inspector {
+    flex: 0 0 290px;
+    width: 290px;
+    border-left: 1px solid var(--border);
+    overflow: auto;
+    background: rgba(127,127,127,0.05);
+  }
+  .inspector-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .inspector-kind { font-weight: 600; font-size: 13px; }
+  .inspector-position { font-size: 11px; color: var(--muted); font-family: var(--vscode-editor-font-family, monospace); }
+  .link-button {
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--accent);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .link-button:hover { text-decoration: underline; }
+  .inspector-body { padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .inspector-section {
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px;
+  }
+  .inspector-section h3 {
+    grid-column: 1 / -1;
+    margin: 0 0 1px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .field { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); min-width: 0; }
+  .field.full { grid-column: 1 / -1; }
+  .field input[type="text"],
+  .field input[type="number"],
+  .field select,
+  .field textarea {
+    width: 100%;
+    background: var(--vscode-input-background, #2d2d2d);
+    color: var(--vscode-input-foreground, #d4d4d4);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 3px 5px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .field textarea {
+    resize: vertical;
+    min-height: 64px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    line-height: 1.35;
+  }
+  .field input.invalid { border-color: #f48771; }
+  .check { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--fg); padding-top: 14px; }
+  .hint.full, .check.full { grid-column: 1 / -1; }
+  .completion-popup {
+    grid-column: 1 / -1;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    background: var(--vscode-editorWidget-background, #252526);
+    max-height: 170px;
+    overflow: auto;
+  }
+  .completion-popup-title {
+    position: sticky;
+    top: 0;
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--border);
+    background: var(--vscode-editorWidget-background, #252526);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .completion-list { list-style: none; margin: 0; padding: 2px; }
+  .completion-item {
+    padding: 3px 6px;
+    border-radius: 2px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .completion-item.active {
+    background: var(--vscode-list-activeSelectionBackground, #094771);
+    color: var(--vscode-list-activeSelectionForeground, #ffffff);
+  }
+  .completion-label {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .completion-detail {
+    font-size: 10px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .completion-item.active .completion-detail { color: inherit; opacity: 0.8; }
+  .inspector-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .inspector-actions button {
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    border: none;
+    border-radius: 3px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .inspector-actions button:disabled { opacity: 0.5; cursor: default; }
+  .hint { font-size: 10px; color: var(--muted); }
+  .field-error { grid-column: 1 / -1; color: #f48771; font-size: 11px; min-height: 0; }
+  #attributes-list {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 220px;
+    overflow: auto;
+  }
+  .attr-row {
+    display: grid;
+    grid-template-columns: 0.9fr 1.4fr auto;
+    gap: 4px;
+    align-items: center;
+  }
+  .attr-name {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 10px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attr-row input,
+  .attributes-add input {
+    width: 100%;
+    min-width: 0;
+    background: var(--vscode-input-background, #2d2d2d);
+    color: var(--vscode-input-foreground, #d4d4d4);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 2px 4px;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 10px;
+  }
+  .attr-row button,
+  .attributes-add button {
+    background: transparent;
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    height: 21px;
+    padding: 0 6px;
+    font-size: 10px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .attr-row button:hover,
+  .attributes-add button:hover { background: rgba(127,127,127,0.16); }
+  .attributes-add {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 0.9fr 1.4fr auto;
+    gap: 4px;
+  }
+  #inspector.editing-pending input,
+  #inspector.editing-pending select,
+  #inspector.editing-pending textarea,
+  #inspector.editing-pending button { opacity: 0.6; pointer-events: none; }
+
+  @media (max-width: 700px) {
+    #inspector { flex-basis: 240px; width: 240px; }
+  }
+
   .statusbar {
     flex-shrink: 0;
     display: flex;
@@ -288,6 +515,11 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
     <span class="report-meta" id="report-meta"></span>
   </div>
   <div class="actions">
+    <div class="mode-group" role="group" aria-label="Design view mode">
+      <button id="mode-view" type="button" title="Read-only view" aria-pressed="true">View</button>
+      <button id="mode-edit" type="button" title="Drag and edit elements" aria-pressed="false">Edit</button>
+    </div>
+    <button id="follow-cursor" type="button" title="Follow the source cursor" aria-pressed="true">Follow</button>
     <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">&minus;</button>
     <span id="zoom-label"></span>
     <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">+</button>
@@ -298,14 +530,297 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
 
 <div id="banner" class="banner" hidden></div>
 
-<main id="viewport">
-  <div id="canvas">
-    <div id="page" class="page" hidden></div>
-    <div id="empty" class="empty">
-      <div class="empty-title" id="empty-title"></div>
-      <div class="empty-message" id="empty-message"></div>
+<main id="workspace">
+  <div id="viewport">
+    <div id="canvas">
+      <div id="page" class="page" hidden></div>
+      <div id="empty" class="empty">
+        <div class="empty-title" id="empty-title"></div>
+        <div class="empty-message" id="empty-message"></div>
+      </div>
     </div>
   </div>
+
+  <aside id="inspector" hidden>
+    <div class="inspector-header">
+      <div class="inspector-kind" id="inspect-kind"></div>
+      <div class="inspector-position" id="inspect-position"></div>
+      <button class="link-button" id="inspect-reveal" type="button">Reveal in source</button>
+    </div>
+    <div class="inspector-body">
+      <section class="inspector-section">
+        <h3>Geometry</h3>
+        <label class="field">X <input id="prop-x" type="number" step="1"></label>
+        <label class="field">Y <input id="prop-y" type="number" step="1"></label>
+        <label class="field">Width <input id="prop-width" type="number" min="1" step="1"></label>
+        <label class="field">Height <input id="prop-height" type="number" min="1" step="1"></label>
+      </section>
+
+      <section class="inspector-section" id="content-section">
+        <h3 id="content-title">Text</h3>
+        <label class="field full"><textarea id="prop-text" spellcheck="false"></textarea></label>
+        <div class="completion-popup" id="completion-popup" hidden>
+          <div class="completion-popup-title" id="completion-hint"></div>
+          <ul class="completion-list" id="completion-list" role="listbox" aria-label="Expression suggestions"></ul>
+        </div>
+        <div class="field full inspector-actions">
+          <span class="hint" id="content-hint"></span>
+          <button id="prop-text-apply" type="button">Apply text</button>
+        </div>
+      </section>
+
+      <section class="inspector-section" id="text-style-section">
+        <h3>Text style</h3>
+        <label class="field full">Font <input id="prop-font-name" type="text" placeholder="sans-serif"></label>
+        <label class="field">Size <input id="prop-font-size" type="number" min="0.1" step="0.5"></label>
+        <label class="check"><input id="prop-bold" type="checkbox"> Bold</label>
+        <label class="check"><input id="prop-italic" type="checkbox"> Italic</label>
+        <label class="check"><input id="prop-underline" type="checkbox"> Underline</label>
+        <label class="check"><input id="prop-strike" type="checkbox"> Strike</label>
+        <label class="field">H align
+          <select id="prop-halign">
+            <option value="Left">Left</option>
+            <option value="Center">Center</option>
+            <option value="Right">Right</option>
+            <option value="Justify">Justify</option>
+          </select>
+        </label>
+        <label class="field">V align
+          <select id="prop-valign">
+            <option value="Top">Top</option>
+            <option value="Middle">Middle</option>
+            <option value="Bottom">Bottom</option>
+          </select>
+        </label>
+        <label class="field">Rotation
+          <select id="prop-rotation">
+            <option value="None">None</option>
+            <option value="Left">Left</option>
+            <option value="Right">Right</option>
+            <option value="UpsideDown">Upside down</option>
+          </select>
+        </label>
+        <label class="field">Markup
+          <select id="prop-markup">
+            <option value="none">None</option>
+            <option value="styled">Styled</option>
+            <option value="html">HTML</option>
+            <option value="rtf">RTF</option>
+          </select>
+        </label>
+        <label class="field">Text adjust
+          <select id="prop-text-adjust">
+            <option value="">Default</option>
+            <option value="CutText">Cut text</option>
+            <option value="StretchHeight">Stretch height</option>
+            <option value="ScaleFont">Scale font</option>
+          </select>
+        </label>
+        <label class="field">Pattern <input id="prop-pattern" type="text" placeholder="no pattern"></label>
+        <label class="check"><input id="prop-blank-null" type="checkbox"> Blank when null</label>
+      </section>
+
+      <section class="inspector-section" id="appearance-section">
+        <h3>Appearance</h3>
+        <label class="field">Foreground <input id="prop-forecolor" type="text" placeholder="#000000"></label>
+        <label class="field">Background <input id="prop-backcolor" type="text" placeholder="transparent"></label>
+        <label class="field full">Mode
+          <select id="prop-mode">
+            <option value="Transparent">Transparent</option>
+            <option value="Opaque">Opaque</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="inspector-section" id="style-section">
+        <h3>Style</h3>
+        <label class="field full">Named style
+          <select id="prop-style">
+            <option value="">(inherit / default)</option>
+          </select>
+        </label>
+        <span class="hint full" id="style-hint"></span>
+      </section>
+
+      <section class="inspector-section" id="behavior-section">
+        <h3>Print &amp; behaviour</h3>
+        <label class="field">Position
+          <select id="prop-position-type">
+            <option value="">Default</option>
+            <option value="Float">Float</option>
+            <option value="FixRelativeToTop">Fix to top</option>
+            <option value="FixRelativeToBottom">Fix to bottom</option>
+          </select>
+        </label>
+        <label class="field">Stretch
+          <select id="prop-stretch-type">
+            <option value="">Default</option>
+            <option value="NoStretch">No stretch</option>
+            <option value="ElementGroupHeight">Element group height</option>
+            <option value="ElementGroupBottom">Element group bottom</option>
+            <option value="ContainerHeight">Container height</option>
+            <option value="ContainerBottom">Container bottom</option>
+            <option value="RelativeToTallestObject">Relative to tallest object</option>
+            <option value="RelativeToBandHeight">Relative to band height</option>
+          </select>
+        </label>
+        <label class="check"><input id="prop-print-repeated" type="checkbox"> Print repeated</label>
+        <label class="check"><input id="prop-remove-line" type="checkbox"> Remove when blank</label>
+        <label class="check"><input id="prop-print-first-whole" type="checkbox"> First whole band</label>
+        <label class="check"><input id="prop-print-detail-overflow" type="checkbox"> On detail overflow</label>
+        <label class="field">Print when group changes
+          <input id="prop-print-group" type="text" placeholder="group name">
+        </label>
+        <label class="field">Evaluation time
+          <select id="prop-evaluation-time">
+            <option value="">Default</option>
+            <option value="Now">Now</option>
+            <option value="Report">Report</option>
+            <option value="Page">Page</option>
+            <option value="Column">Column</option>
+            <option value="Group">Group</option>
+            <option value="Band">Band</option>
+            <option value="Auto">Auto</option>
+            <option value="Master">Master</option>
+          </select>
+        </label>
+        <label class="field">Evaluation group
+          <input id="prop-evaluation-group" type="text" placeholder="group name">
+        </label>
+        <label class="field">Bookmark level
+          <input id="prop-bookmark-level" type="number" min="0" step="1">
+        </label>
+        <label class="field">Key <input id="prop-key" type="text" placeholder="element key"></label>
+      </section>
+
+      <section class="inspector-section" id="image-section">
+        <h3>Image</h3>
+        <label class="field">Scale
+          <select id="prop-scale-image">
+            <option value="">Default</option>
+            <option value="Clip">Clip</option>
+            <option value="FillFrame">Fill frame</option>
+            <option value="RetainShape">Retain shape</option>
+            <option value="RealSize">Real size</option>
+            <option value="RealHeight">Real height</option>
+            <option value="RealWidth">Real width</option>
+          </select>
+        </label>
+        <label class="field">H align
+          <select id="prop-h-image-align">
+            <option value="">Default</option>
+            <option value="Left">Left</option>
+            <option value="Center">Center</option>
+            <option value="Right">Right</option>
+          </select>
+        </label>
+        <label class="field">V align
+          <select id="prop-v-image-align">
+            <option value="">Default</option>
+            <option value="Top">Top</option>
+            <option value="Middle">Middle</option>
+            <option value="Bottom">Bottom</option>
+          </select>
+        </label>
+        <label class="field">On error
+          <select id="prop-on-error">
+            <option value="">Default</option>
+            <option value="Error">Error</option>
+            <option value="Blank">Blank</option>
+            <option value="Icon">Icon</option>
+          </select>
+        </label>
+        <label class="field full">Link type
+          <select id="prop-link-type">
+            <option value="">Default</option>
+            <option value="None">None</option>
+            <option value="Reference">Reference</option>
+            <option value="LocalAnchor">Local anchor</option>
+            <option value="LocalPage">Local page</option>
+            <option value="RemoteAnchor">Remote anchor</option>
+            <option value="RemotePage">Remote page</option>
+          </select>
+        </label>
+        <label class="check"><input id="prop-using-cache" type="checkbox"> Use cache</label>
+        <label class="check"><input id="prop-lazy" type="checkbox"> Lazy load</label>
+      </section>
+
+      <section class="inspector-section" id="line-section">
+        <h3>Line</h3>
+        <label class="field">Direction
+          <select id="prop-line-direction">
+            <option value="">Default</option>
+            <option value="TopDown">Top down</option>
+            <option value="BottomUp">Bottom up</option>
+          </select>
+        </label>
+        <label class="field">Width <input id="prop-line-width" type="number" min="0.1" step="0.5"></label>
+        <label class="field">Style
+          <select id="prop-line-style">
+            <option value="">Default</option>
+            <option value="Solid">Solid</option>
+            <option value="Dashed">Dashed</option>
+            <option value="Dotted">Dotted</option>
+            <option value="Double">Double</option>
+          </select>
+        </label>
+        <label class="field">Color <input id="prop-line-color" type="text" placeholder="#000000"></label>
+      </section>
+
+      <section class="inspector-section" id="rectangle-section">
+        <h3>Rectangle</h3>
+        <label class="field full">Corner radius
+          <input id="prop-radius" type="number" min="0" step="1">
+        </label>
+      </section>
+
+      <section class="inspector-section" id="break-section">
+        <h3>Page break</h3>
+        <label class="field full">Type
+          <select id="prop-break-type">
+            <option value="">Default</option>
+            <option value="Page">Page</option>
+            <option value="Column">Column</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="inspector-section" id="subreport-section">
+        <h3>Subreport</h3>
+        <label class="check"><input id="prop-subreport-cache" type="checkbox"> Use cache</label>
+        <label class="check"><input id="prop-run-to-bottom" type="checkbox"> Run to bottom</label>
+      </section>
+
+      <section class="inspector-section" id="box-section">
+        <h3>Border &amp; padding</h3>
+        <label class="check full"><input id="prop-box-border" type="checkbox"> Draw border</label>
+        <label class="field">Width <input id="prop-box-width" type="number" min="0.1" step="0.5"></label>
+        <label class="field">Style
+          <select id="prop-box-style">
+            <option value="Solid">Solid</option>
+            <option value="Dashed">Dashed</option>
+            <option value="Dotted">Dotted</option>
+            <option value="Double">Double</option>
+          </select>
+        </label>
+        <label class="field">Color <input id="prop-box-color" type="text" placeholder="#000000"></label>
+        <label class="field">Padding <input id="prop-box-padding" type="number" min="0" step="1"></label>
+        <span class="hint full">A single border replaces per-side pens.</span>
+      </section>
+
+      <section class="inspector-section" id="attributes-section">
+        <h3>All attributes</h3>
+        <div id="attributes-list"></div>
+        <div class="attributes-add">
+          <input id="new-attr-name" type="text" placeholder="name" spellcheck="false">
+          <input id="new-attr-value" type="text" placeholder="value" spellcheck="false">
+          <button id="add-attribute" type="button">Add</button>
+        </div>
+      </section>
+
+      <div class="field-error" id="inspector-error"></div>
+    </div>
+  </aside>
 </main>
 
 <footer class="statusbar">
@@ -317,30 +832,147 @@ function buildDesignViewHtml({ model, fileName, nonce, cspSource }) {
 const vscode = acquireVsCodeApi();
 const INITIAL_MODEL = ${modelJson};
 const INITIAL_FILE  = ${fileJson};
+const INITIAL_VERSION = ${versionJson};
 
 const GUTTER = 150;          // CSS px reserved for band labels
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.1;
+const DRAG_THRESHOLD = 3;
 
-const viewport   = document.getElementById('viewport');
-const page       = document.getElementById('page');
-const empty      = document.getElementById('empty');
-const emptyTitle = document.getElementById('empty-title');
-const emptyMsg   = document.getElementById('empty-message');
-const banner     = document.getElementById('banner');
-const fileNameEl = document.getElementById('file-name');
-const metaEl     = document.getElementById('report-meta');
-const statusLeft = document.getElementById('status-left');
-const zoomLabel  = document.getElementById('zoom-label');
+const byId = id => document.getElementById(id);
+
+const viewport   = byId('viewport');
+const page       = byId('page');
+const empty      = byId('empty');
+const emptyTitle = byId('empty-title');
+const emptyMsg   = byId('empty-message');
+const banner     = byId('banner');
+const fileNameEl = byId('file-name');
+const metaEl     = byId('report-meta');
+const statusLeft = byId('status-left');
+const statusHint = byId('status-hint');
+const zoomLabel  = byId('zoom-label');
+
+const modeViewBtn = byId('mode-view');
+const modeEditBtn = byId('mode-edit');
+const followBtn   = byId('follow-cursor');
+
+const inspector      = byId('inspector');
+const inspectKind    = byId('inspect-kind');
+const inspectPos     = byId('inspect-position');
+const inspectReveal  = byId('inspect-reveal');
+const inspectorError = byId('inspector-error');
+const contentSection = byId('content-section');
+const contentTitle   = byId('content-title');
+const contentHint    = byId('content-hint');
+const textStyleSection = byId('text-style-section');
+const appearanceSection = byId('appearance-section');
+const styleSection      = byId('style-section');
+const styleHint         = byId('style-hint');
+const behaviorSection   = byId('behavior-section');
+const imageSection      = byId('image-section');
+const lineSection       = byId('line-section');
+const rectangleSection  = byId('rectangle-section');
+const breakSection      = byId('break-section');
+const subreportSection  = byId('subreport-section');
+const boxSection        = byId('box-section');
+const attributesSection = byId('attributes-section');
+const attributesList    = byId('attributes-list');
+const completionPopup   = byId('completion-popup');
+const completionList    = byId('completion-list');
+const completionHint    = byId('completion-hint');
+
+const inputs = {
+  x:          byId('prop-x'),
+  y:          byId('prop-y'),
+  width:      byId('prop-width'),
+  height:     byId('prop-height'),
+  text:       byId('prop-text'),
+  textApply:  byId('prop-text-apply'),
+  fontName:   byId('prop-font-name'),
+  fontSize:   byId('prop-font-size'),
+  bold:       byId('prop-bold'),
+  italic:     byId('prop-italic'),
+  underline:  byId('prop-underline'),
+  strike:     byId('prop-strike'),
+  hAlign:     byId('prop-halign'),
+  vAlign:     byId('prop-valign'),
+  rotation:   byId('prop-rotation'),
+  markup:     byId('prop-markup'),
+  mode:       byId('prop-mode'),
+  forecolor:  byId('prop-forecolor'),
+  backcolor:  byId('prop-backcolor'),
+  style:            byId('prop-style'),
+  positionType:     byId('prop-position-type'),
+  stretchType:      byId('prop-stretch-type'),
+  printRepeated:    byId('prop-print-repeated'),
+  removeLine:       byId('prop-remove-line'),
+  printFirstWhole:  byId('prop-print-first-whole'),
+  printDetail:      byId('prop-print-detail-overflow'),
+  printGroup:       byId('prop-print-group'),
+  evaluationTime:   byId('prop-evaluation-time'),
+  evaluationGroup:  byId('prop-evaluation-group'),
+  bookmarkLevel:    byId('prop-bookmark-level'),
+  key:              byId('prop-key'),
+  textAdjust:       byId('prop-text-adjust'),
+  pattern:          byId('prop-pattern'),
+  blankNull:        byId('prop-blank-null'),
+  scaleImage:       byId('prop-scale-image'),
+  hImageAlign:      byId('prop-h-image-align'),
+  vImageAlign:      byId('prop-v-image-align'),
+  onError:          byId('prop-on-error'),
+  linkType:         byId('prop-link-type'),
+  usingCache:       byId('prop-using-cache'),
+  lazy:             byId('prop-lazy'),
+  lineDirection:    byId('prop-line-direction'),
+  lineWidth:        byId('prop-line-width'),
+  lineStyle:        byId('prop-line-style'),
+  lineColor:        byId('prop-line-color'),
+  radius:           byId('prop-radius'),
+  breakType:        byId('prop-break-type'),
+  subreportCache:   byId('prop-subreport-cache'),
+  runToBottom:      byId('prop-run-to-bottom'),
+  boxBorder:        byId('prop-box-border'),
+  boxWidth:         byId('prop-box-width'),
+  boxStyle:         byId('prop-box-style'),
+  boxColor:         byId('prop-box-color'),
+  boxPadding:       byId('prop-box-padding'),
+  newAttrName:      byId('new-attr-name'),
+  newAttrValue:     byId('new-attr-value'),
+  addAttribute:     byId('add-attribute'),
+};
+
+const savedState = typeof vscode.getState === 'function' ? (vscode.getState() || {}) : {};
 
 let model         = null;
 let fileName      = '';
+let version       = Number.isInteger(INITIAL_VERSION) ? INITIAL_VERSION : null;
+let baseVersion   = version;
 let scale         = 1;
 let zoomMode      = 'fit';
 let selected      = null;
+let selectedElement = null;
+let lastSelection = null;
+let lastSourceSelection = null;
+let editMode      = savedState.editMode === true;
+let followCursor  = savedState.followCursor !== false;
+let editPending   = false;
+let drag          = null;
+let suppressClick = false;
 let resizeTimer   = null;
 let contentLayer  = null;
+const elementModels = new WeakMap();
+
+let completionTimer      = null;
+let completionRequestId  = 0;
+let completionSnapshot   = null;
+let completionItems      = [];
+let completionIndex      = -1;
+let completionVisible    = false;
+let completionReplace    = null;
+let completionMode       = 'general';
+let completionPrefix     = '';
 
 // ── Small DOM helpers ───────────────────────────────────────────────────────
 
@@ -391,11 +1023,67 @@ function hideEmptyState() {
 
 // ── Model / state ───────────────────────────────────────────────────────────
 
-function setModel(nextModel, nextFile) {
+function setModel(nextModel, nextFile, nextVersion) {
   model    = nextModel || null;
   fileName = nextFile || '';
+  version  = Number.isInteger(nextVersion) ? nextVersion : version;
+  baseVersion = version;
+
   fileNameEl.textContent = fileName;
   fileNameEl.title = fileName;
+}
+
+function persistState() {
+  try {
+    vscode.setState({ editMode: editMode, followCursor: followCursor });
+  } catch (err) {
+    // The webview state API is best-effort only.
+  }
+}
+
+function syncModeControls() {
+  document.body.classList.toggle('editing', editMode);
+  modeViewBtn.classList.toggle('active', !editMode);
+  modeEditBtn.classList.toggle('active', editMode);
+  modeViewBtn.setAttribute('aria-pressed', !editMode ? 'true' : 'false');
+  modeEditBtn.setAttribute('aria-pressed', editMode ? 'true' : 'false');
+  followBtn.setAttribute('aria-pressed', followCursor ? 'true' : 'false');
+  statusHint.textContent = editMode
+    ? 'Edit mode \u00b7 drag to move, handles to resize \u00b7 changes are undoable'
+    : 'Read-only \u00b7 click an element or band label to reveal it in the source';
+
+  if (model && model.report) {
+    statusLeft.textContent = (editMode ? 'Editing' : 'Read-only') + ' \u00b7 ' + model.report.language;
+  }
+}
+
+function setEditMode(next) {
+  if (drag) cancelDrag(true);
+  editMode = !!next;
+  persistState();
+  syncModeControls();
+  applySelection(lastSelection, false);
+}
+
+function setFollowCursor(next) {
+  followCursor = !!next;
+  persistState();
+  syncModeControls();
+  if (followCursor) applySelection(lastSourceSelection, true);
+}
+
+function updatePendingUi() {
+  inspector.classList.toggle('editing-pending', editPending);
+  if (editPending) page.classList.add('edit-pending');
+  else page.classList.remove('edit-pending');
+
+  inspector.querySelectorAll('input, select, textarea, button').forEach(function (control) {
+    control.disabled = editPending;
+  });
+
+  if (!editPending && selectedElement && selectedElement.content) {
+    inputs.textApply.disabled = !selectedElement.content.editable;
+  }
 }
 
 function clamp(value, low, high) {
@@ -413,7 +1101,11 @@ function fitScale(report) {
 function render() {
   const scrollLeft = viewport.scrollLeft;
   const scrollTop  = viewport.scrollTop;
+
   selected = null;
+  selectedElement = null;
+  clearHandles();
+  hideInspector();
 
   if (!model) {
     hideBanner();
@@ -421,12 +1113,16 @@ function render() {
       'No report selected',
       'Open a .jrxml file and run "JRXML: Open Design View" from the editor title or the JRXML menu.'
     );
+    applySelection(null, false);
+    updatePendingUi();
     return;
   }
 
   if (model.error) {
     setBanner('error', 'Cannot read this report: ' + model.error);
     setEmptyState('Cannot read this report', model.error + ' Fix the XML and the view will refresh.');
+    applySelection(null, false);
+    updatePendingUi();
     return;
   }
 
@@ -437,6 +1133,8 @@ function render() {
       'This report uses the classic format (<staticText>, <textField>, <reportElement ...>). ' +
       'The read-only Design view currently renders Studio 7 files (<element kind="...">).'
     );
+    applySelection(null, false);
+    updatePendingUi();
     return;
   }
 
@@ -446,6 +1144,8 @@ function render() {
     if (model.report) {
       metaEl.textContent = 'Page ' + model.report.pageWidth + ' \u00d7 ' + model.report.pageHeight + ' px';
     }
+    applySelection(null, false);
+    updatePendingUi();
     return;
   }
 
@@ -458,6 +1158,8 @@ function render() {
   renderPage(model, report);
   updateMeta(model);
   updateZoomLabel();
+  applySelection(lastSelection, false);
+  updatePendingUi();
 
   viewport.scrollLeft = scrollLeft;
   viewport.scrollTop  = scrollTop;
@@ -481,11 +1183,390 @@ function updateMeta(current) {
     'Page ' + report.pageWidth + ' \u00d7 ' + report.pageHeight + ' px \u00b7 ' +
     columnText + ' \u00b7 ' + current.counts.bands + ' bands \u00b7 ' +
     current.counts.elements + ' elements';
-  statusLeft.textContent = 'Read-only \u00b7 ' + report.language;
+  statusLeft.textContent = (editMode ? 'Editing' : 'Read-only') + ' \u00b7 ' + report.language;
 }
 
 function updateZoomLabel() {
   zoomLabel.textContent = Math.round(scale * 100) + '%';
+}
+
+// ── Selection, handles and inspector ────────────────────────────────────────
+
+function clearHandles() {
+  page.querySelectorAll('.resize-handle').forEach(function (handle) {
+    handle.remove();
+  });
+}
+
+function hideInspector() {
+  inspector.hidden = true;
+}
+
+function findElementNode(offset) {
+  if (!contentLayer) return null;
+  return contentLayer.querySelector('.element[data-offset="' + Number(offset) + '"]');
+}
+
+function findBandRow(offset) {
+  if (!contentLayer) return null;
+  return contentLayer.querySelector('.band-row[data-offset="' + Number(offset) + '"]');
+}
+
+function scrollTargetIntoView(node) {
+  if (!node) return;
+  const rect = node.getBoundingClientRect();
+  const view = viewport.getBoundingClientRect();
+  if (rect.top < view.top + 4 || rect.bottom > view.bottom - 4 ||
+      rect.left < view.left + 4 || rect.right > view.right - 4) {
+    node.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+}
+
+function applySelection(target, shouldScroll) {
+  page.querySelectorAll('.band-selected').forEach(function (node) {
+    node.classList.remove('band-selected');
+  });
+  if (selected) selected.classList.remove('selected');
+  clearHandles();
+  selected = null;
+  selectedElement = null;
+  hideInspector();
+
+  if (!target) {
+    lastSelection = null;
+    return;
+  }
+
+  lastSelection = target;
+
+  if (target.kind === 'band') {
+    const row = findBandRow(target.offset);
+    if (!row) {
+      lastSelection = null;
+      return;
+    }
+    row.classList.add('band-selected');
+    selected = row;
+    if (shouldScroll) scrollTargetIntoView(row);
+    return;
+  }
+
+  const node = findElementNode(target.offset);
+  if (!node) {
+    lastSelection = null;
+    return;
+  }
+
+  const element = elementModels.get(node);
+  if (!element) {
+    lastSelection = null;
+    return;
+  }
+
+  selected = node;
+  selectedElement = element;
+  node.classList.add('selected');
+
+  if (editMode) {
+    if (!editPending) addHandles(node);
+    renderInspector(element);
+  }
+
+  if (shouldScroll) scrollTargetIntoView(node);
+}
+
+function addHandles(node) {
+  node.querySelectorAll('.resize-handle').forEach(function (handle) {
+    handle.remove();
+  });
+
+  for (const direction of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
+    const handle = make('div', 'resize-handle ' + direction);
+    handle.setAttribute('data-handle', direction);
+    handle.setAttribute('aria-hidden', 'true');
+    node.appendChild(handle);
+  }
+}
+
+function fontNameFromStack(stack) {
+  const text = String(stack || '');
+  const quoted = /^"([^"]+)"/.exec(text);
+  if (quoted) return quoted[1];
+  const first = text.split(',')[0].trim();
+  if (!first || first === 'sans-serif' || first === 'monospace' || first === 'serif') return '';
+  return first;
+}
+
+function rotationToXml(degrees) {
+  if (degrees === -90) return 'Left';
+  if (degrees === 90) return 'Right';
+  if (degrees === 180) return 'UpsideDown';
+  return 'None';
+}
+
+const H_ALIGN_TO_XML = { left: 'Left', center: 'Center', right: 'Right', justify: 'Justify' };
+const V_ALIGN_TO_XML = { top: 'Top', middle: 'Middle', bottom: 'Bottom' };
+
+function setInspectorError(message) {
+  inspectorError.textContent = message || '';
+}
+
+function renderInspector(element) {
+  const style = element.style || {};
+  const kind  = String(element.kind || '').toLowerCase();
+  const content = element.content || null;
+
+  hideCompletions();
+  inspector.hidden = false;
+  setInspectorError('');
+
+  inspectKind.textContent = element.kind;
+  inspectPos.textContent = 'x ' + element.x + ' \u00b7 y ' + element.y +
+    ' \u00b7 ' + element.width + ' \u00d7 ' + element.height;
+
+  inputs.x.value = String(element.x);
+  inputs.y.value = String(element.y);
+  inputs.width.value = String(element.width);
+  inputs.height.value = String(element.height);
+
+  contentSection.hidden = !content;
+  textStyleSection.hidden = !(kind === 'statictext' || kind === 'textfield');
+  appearanceSection.hidden = false;
+
+  if (content) {
+    contentTitle.textContent = content.tag === 'text' ? 'Text' : 'Expression';
+    inputs.text.value = content.raw;
+    inputs.text.readOnly = !content.editable;
+    inputs.textApply.disabled = !content.editable || editPending;
+
+    if (!content.editable) {
+      if (content.nested) contentHint.textContent = 'Nested markup \u2014 edit in source';
+      else if (content.mixed) contentHint.textContent = 'Mixed CDATA/text \u2014 edit in source';
+      else contentHint.textContent = 'Too long to edit here';
+    } else if (content.missing) {
+      contentHint.textContent = 'Adds <' + content.tag + '>';
+    } else {
+      contentHint.textContent = content.cdata ? 'CDATA' : 'Plain text';
+    }
+  }
+
+  inputs.fontName.value = fontNameFromStack(style.fontFamily);
+  inputs.fontSize.value = String(style.fontSize || '');
+  inputs.bold.checked = !!style.bold;
+  inputs.italic.checked = !!style.italic;
+  inputs.underline.checked = !!style.underline;
+  inputs.strike.checked = !!style.strikeThrough;
+  inputs.hAlign.value = H_ALIGN_TO_XML[style.hAlign] || 'Left';
+  inputs.vAlign.value = V_ALIGN_TO_XML[style.vAlign] || 'Top';
+  inputs.rotation.value = rotationToXml(style.rotation);
+  inputs.markup.value = style.markup || 'none';
+  inputs.mode.value = style.mode === 'Opaque' ? 'Opaque' : 'Transparent';
+  inputs.forecolor.value = style.forecolor && style.forecolor !== 'transparent' ? style.forecolor : '';
+  inputs.backcolor.value = style.backcolor && style.backcolor !== 'transparent' ? style.backcolor : '';
+
+  const attrs = element.attrs || {};
+
+  styleSection.hidden = false;
+  behaviorSection.hidden = false;
+  imageSection.hidden = kind !== 'image';
+  lineSection.hidden = kind !== 'line';
+  rectangleSection.hidden = kind !== 'rectangle';
+  breakSection.hidden = kind !== 'break';
+  subreportSection.hidden = kind !== 'subreport';
+  boxSection.hidden = !['statictext', 'textfield', 'image', 'frame', 'elementgroup',
+    'rectangle', 'ellipse', 'subreport', 'chart'].includes(kind);
+  attributesSection.hidden = false;
+
+  populateStyleSelect(attrs.style || '');
+  styleHint.textContent = attrs.style
+    ? 'Explicit style reference; element attributes still win.'
+    : 'No explicit style; uses the default style and inherited attributes.';
+
+  setSelect(inputs.positionType, attrs.positionType || '');
+  setSelect(inputs.stretchType, attrs.stretchType || '');
+  setSelect(inputs.evaluationTime, attrs.evaluationTime || '');
+  inputs.printGroup.value = attrs.printWhenGroupChanges || '';
+  inputs.evaluationGroup.value = attrs.evaluationGroup || '';
+  inputs.bookmarkLevel.value = attrs.bookmarkLevel !== undefined ? attrs.bookmarkLevel : '';
+  inputs.key.value = attrs.key || '';
+  inputs.printRepeated.checked = String(attrs.printRepeatedValues || '').toLowerCase() !== 'false';
+  inputs.removeLine.checked = isAttrTrue(attrs.removeLineWhenBlank);
+  inputs.printFirstWhole.checked = isAttrTrue(attrs.printInFirstWholeBand);
+  inputs.printDetail.checked = isAttrTrue(attrs.printWhenDetailOverflows);
+
+  inputs.textAdjust.value = attrs.textAdjust || '';
+  ensureSelectOption(inputs.textAdjust, attrs.textAdjust);
+  inputs.pattern.value = attrs.pattern !== undefined ? attrs.pattern : '';
+  inputs.blankNull.checked = isAttrTrue(attrs.blankWhenNull);
+
+  inputs.scaleImage.value = attrs.scaleImage || '';
+  ensureSelectOption(inputs.scaleImage, attrs.scaleImage);
+  inputs.hImageAlign.value = attrs.hImageAlign || '';
+  ensureSelectOption(inputs.hImageAlign, attrs.hImageAlign);
+  inputs.vImageAlign.value = attrs.vImageAlign || '';
+  ensureSelectOption(inputs.vImageAlign, attrs.vImageAlign);
+  inputs.onError.value = attrs.onErrorType || '';
+  ensureSelectOption(inputs.onError, attrs.onErrorType);
+  inputs.linkType.value = attrs.linkType || '';
+  ensureSelectOption(inputs.linkType, attrs.linkType);
+  inputs.usingCache.checked = isAttrTrue(attrs.usingCache);
+  inputs.lazy.checked = isAttrTrue(attrs.lazy);
+
+  const lineInfo = element.line || {};
+  inputs.lineDirection.value = attrs.direction || '';
+  ensureSelectOption(inputs.lineDirection, attrs.direction);
+  inputs.lineWidth.value = String(lineInfo.width || 1);
+  inputs.lineStyle.value = capitalizeWord(lineInfo.style || 'Solid');
+  ensureSelectOption(inputs.lineStyle, capitalizeWord(lineInfo.style || 'Solid'));
+  inputs.lineColor.value = lineInfo.color || '';
+
+  inputs.radius.value = attrs.radius !== undefined ? attrs.radius : '';
+  inputs.breakType.value = attrs.type || '';
+  ensureSelectOption(inputs.breakType, attrs.type);
+  inputs.subreportCache.checked = isAttrTrue(attrs.usingCache);
+  inputs.runToBottom.checked = isAttrTrue(attrs.runToBottom);
+
+  const box = element.box || {};
+  inputs.boxBorder.checked = !!box.border;
+  inputs.boxWidth.value = String(box.width || 1);
+  inputs.boxStyle.value = capitalizeWord(box.lineStyle || 'Solid');
+  ensureSelectOption(inputs.boxStyle, capitalizeWord(box.lineStyle || 'Solid'));
+  inputs.boxColor.value = box.color || '';
+  inputs.boxPadding.value = String(box.padding || 0);
+
+  renderAttributeRows(element);
+
+  [inputs.x, inputs.y, inputs.width, inputs.height, inputs.fontSize,
+    inputs.forecolor, inputs.backcolor].forEach(function (input) {
+    input.classList.remove('invalid');
+  });
+  updatePendingUi();
+}
+
+function capitalizeWord(value) {
+  const text = String(value || '');
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
+}
+
+function isAttrTrue(value) {
+  return String(value || '').toLowerCase() === 'true';
+}
+
+function ensureSelectOption(select, value) {
+  if (!value) return;
+  const exists = Array.from(select.options).some(option => option.value === value);
+  if (exists) return;
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = value;
+  select.appendChild(option);
+}
+
+function setSelect(select, value) {
+  ensureSelectOption(select, value);
+  select.value = value;
+}
+
+function populateStyleSelect(current) {
+  const names = (model && model.styles ? model.styles : []).map(style => style.name);
+  if (current && !names.includes(current)) names.push(current);
+
+  inputs.style.replaceChildren();
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '(inherit / default)';
+  inputs.style.appendChild(none);
+
+  for (const name of names) {
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    inputs.style.appendChild(option);
+  }
+  inputs.style.value = current || '';
+}
+
+function renderAttributeRows(element) {
+  attributesList.replaceChildren();
+  const attrs = element.attrs || {};
+
+  for (const name of Object.keys(attrs).sort()) {
+    const row = make('div', 'attr-row');
+    row.appendChild(make('span', 'attr-name', name));
+
+    const value = make('input', 'attr-value');
+    value.type = 'text';
+    value.value = attrs[name];
+    value.spellcheck = false;
+    if (name === 'kind') {
+      value.readOnly = true;
+    } else {
+      value.addEventListener('change', function () {
+        queueAttributeSet(name, value.value);
+      });
+    }
+    row.appendChild(value);
+
+    if (name === 'kind') {
+      row.appendChild(make('span'));
+    } else {
+      const remove = make('button', '', '\u00d7');
+      remove.type = 'button';
+      remove.title = 'Remove attribute ' + name;
+      remove.addEventListener('click', function () {
+        queueAttributeRemove(name);
+      });
+      row.appendChild(remove);
+    }
+    attributesList.appendChild(row);
+  }
+}
+
+function queueAttributeSet(name, value) {
+  if (!selectedElement || editPending) return;
+  if (name === 'kind') return;
+  if (!/^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(name)) {
+    setInspectorError('Attribute names must start with a letter or underscore.');
+    return;
+  }
+  setInspectorError('');
+  queuePatch({ attributes: { set: { [name]: value } } });
+}
+
+function queueAttributeRemove(name) {
+  if (!selectedElement || editPending) return;
+  if (name === 'kind') return;
+  setInspectorError('');
+  queuePatch({ attributes: { remove: [name] } });
+}
+
+function applyOptionalProperty(name, value) {
+  if (!selectedElement || editPending) return;
+  const text = String(value || '').trim();
+  if (!text) {
+    queuePatch({ attributes: { remove: [name] } });
+    return;
+  }
+  queuePatch({ properties: { [name]: text } });
+}
+
+function applyOptionalText(name, input) {
+  if (!selectedElement || editPending) return;
+  const text = String(input.value || '').trim();
+  if (!text) {
+    queuePatch({ attributes: { remove: [name] } });
+    input.value = '';
+    return;
+  }
+  queuePatch({ properties: { [name]: text } });
+}
+
+function updateInspectorGeometry(geometry) {
+  if (inspector.hidden) return;
+  inputs.x.value = String(geometry.x);
+  inputs.y.value = String(geometry.y);
+  inputs.width.value = String(geometry.width);
+  inputs.height.value = String(geometry.height);
 }
 
 function renderPage(current, report) {
@@ -612,6 +1693,8 @@ function renderBandRow(row, report, contentWidth) {
   rowEl.style.left = px(report.leftMargin * scaling);
   rowEl.style.width = px(contentWidth * scaling);
   rowEl.style.height = px(row.displayHeight * scaling);
+  rowEl.setAttribute('data-offset', String(band.offset));
+  rowEl.setAttribute('data-end', String(band.end));
   if (band.key === 'background') rowEl.className += ' background-band';
   contentLayer.appendChild(rowEl);
 
@@ -653,6 +1736,7 @@ function renderElement(element) {
   node.style.height = px(Math.max(0, element.height * scale));
   node.setAttribute('data-offset', String(element.offset));
   node.setAttribute('data-end', String(element.end));
+  elementModels.set(node, element);
   if (element.tooltip) node.title = element.tooltip;
 
   if (style.mode === 'Opaque' && style.backcolor && style.backcolor !== 'transparent') {
@@ -671,7 +1755,7 @@ function renderElement(element) {
     renderShape(node, element, style, false);
   } else if (kind === 'ellipse') {
     renderShape(node, element, style, true);
-  } else if (kind === 'frame') {
+  } else if (kind === 'frame' || kind === 'elementgroup') {
     renderFrame(node, element, style);
   } else if (kind === 'break') {
     renderBreak(node);
@@ -689,6 +1773,8 @@ function renderText(node, element, style) {
 
   const wrap = make('div', 'text-wrap');
   wrap.style.justifyContent = justifyFor(style.vAlign);
+  const padding = element.box && element.box.padding ? element.box.padding : 0;
+  if (padding > 0) wrap.style.padding = px(padding * scale);
 
   const content = make('div', 'text-content');
   const isTextField = String(element.kind).toLowerCase() === 'textfield';
@@ -736,29 +1822,60 @@ function renderFrame(node, element, style) {
 }
 
 function renderLine(node, element) {
-  const line = element.line || { direction: 'horizontal', width: 1, color: '#000000' };
-  const stroke = make('div', 'line-stroke');
-  const thickness = Math.max(1, (line.width || 1) * scale);
-  stroke.style.backgroundColor = line.color || '#000000';
+  const line = element.line || { direction: 'TopDown', width: 1, style: 'solid', color: '#000000' };
+  const width = Math.max(1, element.width * scale);
+  const height = Math.max(1, element.height * scale);
+  const viewWidth = Math.max(1, element.width);
+  const viewHeight = Math.max(1, element.height);
+  const strokeWidth = Math.max(0.5, (line.width || 1) * scale);
 
-  if (line.direction === 'vertical') {
-    stroke.style.left = '50%';
-    stroke.style.top = '0';
-    stroke.style.width = px(thickness);
-    stroke.style.height = '100%';
-    stroke.style.transform = 'translateX(-50%)';
-  } else {
-    stroke.style.left = '0';
-    stroke.style.top = '50%';
-    stroke.style.width = '100%';
-    stroke.style.height = px(thickness);
-    stroke.style.transform = 'translateY(-50%)';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '100%');
+  svg.setAttribute('height', '100%');
+  svg.setAttribute('viewBox', '0 0 ' + viewWidth + ' ' + viewHeight);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.style.display = 'block';
+  svg.style.overflow = 'visible';
+
+  const stroke = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  let x1 = 0;
+  let y1 = 0;
+  let x2 = viewWidth;
+  let y2 = viewHeight;
+
+  if (element.height <= 1) {
+    y1 = y2 = viewHeight / 2;
+  } else if (element.width <= 1) {
+    x1 = x2 = viewWidth / 2;
+  } else if (line.direction === 'BottomUp') {
+    y1 = viewHeight;
+    y2 = 0;
   }
-  node.appendChild(stroke);
+
+  stroke.setAttribute('x1', String(x1));
+  stroke.setAttribute('y1', String(y1));
+  stroke.setAttribute('x2', String(x2));
+  stroke.setAttribute('y2', String(y2));
+  stroke.setAttribute('stroke', line.color || '#000000');
+  stroke.setAttribute('stroke-width', String(strokeWidth));
+  stroke.setAttribute('stroke-linecap', 'butt');
+  if (line.style === 'dashed') stroke.setAttribute('stroke-dasharray', '4 2');
+  else if (line.style === 'dotted') stroke.setAttribute('stroke-dasharray', '1 2');
+
+  svg.appendChild(stroke);
+  node.appendChild(svg);
+
+  node.style.width = px(width);
+  node.style.height = px(height);
 }
 
 function renderShape(node, element, style, ellipse) {
-  if (ellipse) node.style.borderRadius = '50%';
+  if (ellipse) {
+    node.style.borderRadius = '50%';
+  } else {
+    const radius = Number.parseFloat(element.attrs && element.attrs.radius);
+    if (Number.isFinite(radius) && radius > 0) node.style.borderRadius = px(radius * scale);
+  }
   if (style.mode === 'Opaque' && style.backcolor && style.backcolor !== 'transparent') {
     node.style.backgroundColor = style.backcolor;
   }
@@ -783,12 +1900,13 @@ function applyBox(node, box, fallbackColor) {
     ? box.lineStyle
     : 'solid';
   const color = box.color || fallbackColor || '#000000';
+  const width = Math.max(1, Math.round((box.width || 1) * scale)) + 'px';
   let drew = false;
 
-  if (box.top)    { node.style.borderTop    = '1px ' + borderStyle + ' ' + color; drew = true; }
-  if (box.right)  { node.style.borderRight  = '1px ' + borderStyle + ' ' + color; drew = true; }
-  if (box.bottom) { node.style.borderBottom = '1px ' + borderStyle + ' ' + color; drew = true; }
-  if (box.left)   { node.style.borderLeft   = '1px ' + borderStyle + ' ' + color; drew = true; }
+  if (box.top)    { node.style.borderTop    = width + ' ' + borderStyle + ' ' + color; drew = true; }
+  if (box.right)  { node.style.borderRight  = width + ' ' + borderStyle + ' ' + color; drew = true; }
+  if (box.bottom) { node.style.borderBottom = width + ' ' + borderStyle + ' ' + color; drew = true; }
+  if (box.left)   { node.style.borderLeft   = width + ' ' + borderStyle + ' ' + color; drew = true; }
 
   return drew;
 }
@@ -831,35 +1949,845 @@ window.addEventListener('resize', function () {
   resizeTimer = setTimeout(render, 120);
 });
 
+// ── Mode / follow controls ──────────────────────────────────────────────────
+
+modeViewBtn.addEventListener('click', function () { setEditMode(false); });
+modeEditBtn.addEventListener('click', function () { setEditMode(true); });
+followBtn.addEventListener('click', function () { setFollowCursor(!followCursor); });
+
+// ── Drag and resize ─────────────────────────────────────────────────────────
+
+function suppressNextClick() {
+  suppressClick = true;
+  setTimeout(function () { suppressClick = false; }, 300);
+}
+
+function postReveal(target) {
+  if (!target) return;
+  vscode.postMessage({
+    command: 'reveal',
+    offset: Number.isFinite(target.offset) ? target.offset : 0,
+    end: Number.isFinite(target.end) ? target.end : target.offset,
+  });
+}
+
+function queuePatch(patch, element) {
+  const target = element || selectedElement;
+  if (!editMode || editPending || !target) return;
+
+  editPending = true;
+  updatePendingUi();
+  setInspectorError('');
+  vscode.postMessage({
+    command: 'applyEdit',
+    elementOffset: target.offset,
+    baseVersion: baseVersion,
+    patch: patch,
+  });
+}
+
+function liveGeometry(node, geometry) {
+  node.style.left = px(geometry.x * scale);
+  node.style.top = px(geometry.y * scale);
+  node.style.width = px(Math.max(1, geometry.width) * scale);
+  node.style.height = px(Math.max(1, geometry.height) * scale);
+}
+
+function dragGeometry(current, dxPx, dyPx) {
+  const start = current.startGeometry;
+  const dx = Math.round(dxPx / scale);
+  const dy = Math.round(dyPx / scale);
+
+  if (current.mode === 'move') {
+    return {
+      x: Math.max(0, start.x + dx),
+      y: Math.max(0, start.y + dy),
+      width: start.width,
+      height: start.height,
+    };
+  }
+
+  let left   = start.x;
+  let right  = start.x + start.width;
+  let top    = start.y;
+  let bottom = start.y + start.height;
+  const handle = current.handle || '';
+
+  if (handle.indexOf('e') !== -1) right += dx;
+  if (handle.indexOf('w') !== -1) left += dx;
+  if (handle.indexOf('s') !== -1) bottom += dy;
+  if (handle.indexOf('n') !== -1) top += dy;
+
+  left = Math.max(0, left);
+  top  = Math.max(0, top);
+
+  if (right - left < 1) {
+    if (handle.indexOf('w') !== -1) left = right - 1;
+    else right = left + 1;
+  }
+  if (bottom - top < 1) {
+    if (handle.indexOf('n') !== -1) top = bottom - 1;
+    else bottom = top + 1;
+  }
+
+  return {
+    x: Math.round(left),
+    y: Math.round(top),
+    width: Math.max(1, Math.round(right - left)),
+    height: Math.max(1, Math.round(bottom - top)),
+  };
+}
+
+function onPointerDown(event) {
+  if (!editMode || editPending || event.button !== 0) return;
+  if (!model || model.error || model.unsupported) return;
+
+  const target = event.target;
+  if (!target || !target.closest) return;
+
+  const handleEl  = target.closest('.resize-handle');
+  const elementEl = target.closest('.element');
+  if (!elementEl) return;
+
+  const element = elementModels.get(elementEl);
+  if (!element) return;
+
+  if (selected !== elementEl) {
+    applySelection({ kind: 'element', offset: element.offset, end: element.end }, false);
+  }
+
+  event.preventDefault();
+
+  drag = {
+    pointerId: event.pointerId,
+    mode: handleEl ? 'resize' : 'move',
+    handle: handleEl ? handleEl.getAttribute('data-handle') : '',
+    node: elementEl,
+    element: element,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startGeometry: {
+      x: element.x,
+      y: element.y,
+      width: element.width,
+      height: element.height,
+    },
+    geometry: null,
+    started: false,
+  };
+}
+
+function onPointerMove(event) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+
+  const dx = event.clientX - drag.startClientX;
+  const dy = event.clientY - drag.startClientY;
+
+  if (!drag.started) {
+    if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+    drag.started = true;
+    document.body.classList.add('dragging');
+  }
+
+  event.preventDefault();
+  drag.geometry = dragGeometry(drag, dx, dy);
+  liveGeometry(drag.node, drag.geometry);
+  updateInspectorGeometry(drag.geometry);
+}
+
+function finishDrag() {
+  document.body.classList.remove('dragging');
+  const finished = drag;
+  drag = null;
+  return finished;
+}
+
+function cancelDrag(restore) {
+  const finished = finishDrag();
+  if (!finished) return;
+
+  if (restore) {
+    liveGeometry(finished.node, {
+      x: finished.element.x,
+      y: finished.element.y,
+      width: finished.element.width,
+      height: finished.element.height,
+    });
+    updateInspectorGeometry(finished.element);
+  }
+}
+
+function onPointerUp(event) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+
+  const finished = finishDrag();
+  if (!finished.started || !finished.geometry) return;
+
+  suppressNextClick();
+  const changed =
+    finished.geometry.x !== finished.element.x ||
+    finished.geometry.y !== finished.element.y ||
+    finished.geometry.width !== finished.element.width ||
+    finished.geometry.height !== finished.element.height;
+  if (!changed) return;
+
+  queuePatch({ geometry: finished.geometry }, finished.element);
+}
+
+page.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+window.addEventListener('pointercancel', function (event) {
+  if (drag && event.pointerId === drag.pointerId) cancelDrag(true);
+});
+
+window.addEventListener('keydown', function (event) {
+  if (event.key !== 'Escape') return;
+  if (event.target && event.target.closest && event.target.closest('#inspector')) return;
+  if (drag) {
+    cancelDrag(true);
+    return;
+  }
+  if (editMode) applySelection(null, false);
+});
+
+// ── Inspector edits ─────────────────────────────────────────────────────────
+
+function readGeometryFields() {
+  const geometry = {};
+  let valid = true;
+
+  for (const field of ['x', 'y', 'width', 'height']) {
+    const input = inputs[field];
+    const raw = Number(input.value);
+    const ok = Number.isFinite(raw) &&
+      (field === 'x' || field === 'y' ? raw >= 0 : raw >= 1);
+    input.classList.toggle('invalid', !ok);
+    if (!ok) valid = false;
+    else geometry[field] = Math.round(raw);
+  }
+  return valid ? geometry : null;
+}
+
+function sameGeometry(a, b) {
+  return !!a && !!b &&
+    a.x === b.x && a.y === b.y &&
+    a.width === b.width && a.height === b.height;
+}
+
+function applyGeometryFromInspector() {
+  if (!selectedElement || editPending) return;
+  const geometry = readGeometryFields();
+  if (!geometry) {
+    setInspectorError('Geometry values must be non-negative integers and at least 1 px wide/tall.');
+    return;
+  }
+  setInspectorError('');
+  if (sameGeometry(geometry, selectedElement)) return;
+  queuePatch({ geometry: geometry });
+}
+
+function applyColorField(key) {
+  if (!selectedElement || editPending) return;
+  const input = inputs[key];
+  const value = String(input.value || '').trim();
+  if (!value) {
+    input.value = key === 'backcolor' ? '' : (selectedElement.style.forecolor || '');
+    return;
+  }
+  if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)) {
+    input.classList.add('invalid');
+    setInspectorError('Colors must be #rgb, #rrggbb or #rrggbbaa.');
+    return;
+  }
+  input.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({ properties: { [key]: value } });
+}
+
+function applyFontName() {
+  if (!selectedElement || editPending) return;
+  const name = String(inputs.fontName.value || '').trim();
+  if (!name) {
+    inputs.fontName.classList.add('invalid');
+    setInspectorError('Font name cannot be empty.');
+    return;
+  }
+  inputs.fontName.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({ properties: { fontName: name } });
+}
+
+function applyFontSize() {
+  if (!selectedElement || editPending) return;
+  const size = Number(inputs.fontSize.value);
+  if (!Number.isFinite(size) || size <= 0) {
+    inputs.fontSize.classList.add('invalid');
+    setInspectorError('Font size must be a positive number.');
+    return;
+  }
+  inputs.fontSize.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({ properties: { fontSize: size } });
+}
+
+function applyContentFromInspector() {
+  if (!selectedElement || !selectedElement.content || !selectedElement.content.editable || editPending) return;
+  queuePatch({ content: { text: inputs.text.value } });
+}
+
+// ── Expression autocomplete ─────────────────────────────────────────────────
+
+function completionEligible() {
+  return editMode
+    && !editPending
+    && !!selectedElement
+    && !!selectedElement.content
+    && selectedElement.content.tag === 'expression'
+    && selectedElement.content.editable;
+}
+
+function hideCompletions() {
+  clearTimeout(completionTimer);
+  completionRequestId += 1;
+  completionSnapshot = null;
+  completionItems = [];
+  completionIndex = -1;
+  completionVisible = false;
+  completionReplace = null;
+  completionPopup.hidden = true;
+  completionList.replaceChildren();
+  completionHint.textContent = '';
+}
+
+function completionTrigger(event) {
+  if (completionVisible) return true;
+
+  const data = event && event.data;
+  if (data && ['$', '{', '.', '(', ' '].includes(data)) return true;
+
+  const value = inputs.text.value;
+  const offset = inputs.text.selectionStart;
+  const before = value.slice(0, offset);
+  return /\$[FPVR]?\{[^}]*$/.test(before)
+    || /\.\s*[A-Za-z_$][\w$]*$/.test(before);
+}
+
+function scheduleCompletions(event) {
+  clearTimeout(completionTimer);
+
+  if (!completionEligible()) {
+    hideCompletions();
+    return;
+  }
+  if (!completionTrigger(event)) {
+    hideCompletions();
+    return;
+  }
+
+  completionTimer = setTimeout(requestCompletions, 100);
+}
+
+function requestCompletions() {
+  if (!completionEligible()) {
+    hideCompletions();
+    return;
+  }
+
+  const text = inputs.text.value;
+  const offset = inputs.text.selectionStart;
+  if (!Number.isInteger(offset)) return;
+
+  completionSnapshot = { text, offset };
+  const requestId = ++completionRequestId;
+
+  vscode.postMessage({
+    command: 'complete',
+    expression: text,
+    offset,
+    requestId,
+  });
+}
+
+function filterCompletions(items) {
+  const prefix = String(completionPrefix || '').toLowerCase();
+  if (!prefix) return items;
+
+  return items.filter(function (item) {
+    const label = String(item.label || '');
+    const filter = String(item.filterText || label).toLowerCase();
+    if (filter.startsWith(prefix)) return true;
+    if (completionMode === 'general') {
+      return label.toLowerCase().startsWith(prefix)
+        || label.toLowerCase().includes('{' + prefix);
+    }
+    return false;
+  });
+}
+
+function showCompletions(result, requestId) {
+  if (requestId !== completionRequestId) return;
+  if (!completionSnapshot) return;
+  if (inputs.text.value !== completionSnapshot.text) return;
+  if (inputs.text.selectionStart !== completionSnapshot.offset) return;
+
+  if (!result || !Array.isArray(result.items) || result.items.length === 0) {
+    hideCompletions();
+    return;
+  }
+
+  completionMode = String(result.mode || 'general');
+  completionPrefix = String(result.prefix || '');
+  completionReplace = result.replace || {
+    start: completionSnapshot.offset,
+    end:   completionSnapshot.offset,
+  };
+
+  const filtered = filterCompletions(result.items).slice(0, 100);
+  if (filtered.length === 0) {
+    hideCompletions();
+    return;
+  }
+
+  completionItems = filtered;
+  completionIndex = 0;
+  completionVisible = true;
+
+  renderCompletions();
+}
+
+function renderCompletions() {
+  completionList.replaceChildren();
+  const fragment = document.createDocumentFragment();
+
+  completionItems.forEach(function (item, index) {
+    const row = make('li', 'completion-item');
+    row.setAttribute('role', 'option');
+    row.dataset.index = String(index);
+    row.classList.toggle('active', index === completionIndex);
+    row.setAttribute('aria-selected', index === completionIndex ? 'true' : 'false');
+
+    row.appendChild(make('span', 'completion-label', item.label));
+    if (item.detail) {
+      row.appendChild(make('span', 'completion-detail', item.detail));
+    }
+    if (item.documentation) {
+      row.title = String(item.documentation).slice(0, 800);
+    }
+    fragment.appendChild(row);
+  });
+
+  completionList.appendChild(fragment);
+  completionHint.textContent = completionItems.length +
+    (completionItems.length === 1 ? ' suggestion' : ' suggestions');
+  completionPopup.hidden = false;
+
+  const active = completionList.querySelector('.completion-item.active');
+  if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function moveCompletion(delta) {
+  if (!completionVisible || completionItems.length === 0) return;
+  const length = completionItems.length;
+  completionIndex = (completionIndex + delta + length) % length;
+  renderCompletions();
+}
+
+function acceptCompletion() {
+  if (!completionVisible || completionIndex < 0) return;
+  const item = completionItems[completionIndex];
+  if (!item) return;
+
+  // Type hints are informational: accepting one must not delete typed text.
+  if (item.kind === 'text') {
+    hideCompletions();
+    return;
+  }
+
+  // If the draft or caret moved after the request, this list is stale.
+  if (!completionSnapshot
+      || inputs.text.value !== completionSnapshot.text
+      || inputs.text.selectionStart !== completionSnapshot.offset) {
+    hideCompletions();
+    return;
+  }
+
+  const current = inputs.text.value;
+  const fallback = inputs.text.selectionStart;
+  const start = completionReplace
+    ? Math.max(0, Math.min(completionReplace.start, current.length))
+    : fallback;
+  const end = completionReplace
+    ? Math.max(start, Math.min(completionReplace.end, current.length))
+    : fallback;
+
+  const insert = String(item.insertTextPlain !== undefined ? item.insertTextPlain : item.label);
+  const next = current.slice(0, start) + insert + current.slice(end);
+  inputs.text.value = next;
+
+  let caretStart = start + insert.length;
+  let caretEnd = caretStart;
+  if (item.placeholder) {
+    const from = Math.max(0, Math.min(item.placeholder.start, insert.length));
+    const to = Math.max(from, Math.min(item.placeholder.end, insert.length));
+    caretStart = start + from;
+    caretEnd = start + to;
+  }
+
+  inputs.text.focus();
+  inputs.text.setSelectionRange(caretStart, caretEnd);
+  hideCompletions();
+}
+
+inputs.text.addEventListener('input', scheduleCompletions);
+inputs.text.addEventListener('blur', function () {
+  setTimeout(hideCompletions, 120);
+});
+inputs.text.addEventListener('keydown', function (event) {
+  if ((event.ctrlKey || event.metaKey) && event.key === ' ') {
+    event.preventDefault();
+    requestCompletions();
+    return;
+  }
+  if (!completionVisible) return;
+
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault();
+    moveCompletion(event.key === 'ArrowDown' ? 1 : -1);
+  } else if ((event.key === 'Enter' || event.key === 'Tab') && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    acceptCompletion();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    hideCompletions();
+  }
+});
+completionList.addEventListener('mousedown', function (event) {
+  const row = event.target && event.target.closest
+    ? event.target.closest('.completion-item')
+    : null;
+  if (!row) return;
+
+  event.preventDefault();
+  completionIndex = Number(row.dataset.index);
+  acceptCompletion();
+});
+
+inputs.x.addEventListener('change', applyGeometryFromInspector);
+inputs.y.addEventListener('change', applyGeometryFromInspector);
+inputs.width.addEventListener('change', applyGeometryFromInspector);
+inputs.height.addEventListener('change', applyGeometryFromInspector);
+inputs.fontName.addEventListener('change', applyFontName);
+inputs.fontSize.addEventListener('change', applyFontSize);
+
+function applyBooleanProperty(key, input) {
+  if (!selectedElement || editPending) return;
+  queuePatch({ properties: { [key]: input.checked } });
+}
+
+inputs.bold.addEventListener('change', function () { applyBooleanProperty('bold', inputs.bold); });
+inputs.italic.addEventListener('change', function () { applyBooleanProperty('italic', inputs.italic); });
+inputs.underline.addEventListener('change', function () { applyBooleanProperty('underline', inputs.underline); });
+inputs.strike.addEventListener('change', function () { applyBooleanProperty('strikeThrough', inputs.strike); });
+inputs.hAlign.addEventListener('change', function () {
+  if (selectedElement && !editPending) queuePatch({ properties: { hTextAlign: inputs.hAlign.value } });
+});
+inputs.vAlign.addEventListener('change', function () {
+  if (selectedElement && !editPending) queuePatch({ properties: { vTextAlign: inputs.vAlign.value } });
+});
+inputs.rotation.addEventListener('change', function () {
+  if (selectedElement && !editPending) queuePatch({ properties: { rotation: inputs.rotation.value } });
+});
+inputs.markup.addEventListener('change', function () {
+  if (selectedElement && !editPending) queuePatch({ properties: { markup: inputs.markup.value } });
+});
+inputs.mode.addEventListener('change', function () {
+  if (selectedElement && !editPending) queuePatch({ properties: { mode: inputs.mode.value } });
+});
+inputs.forecolor.addEventListener('change', function () { applyColorField('forecolor'); });
+inputs.backcolor.addEventListener('change', function () { applyColorField('backcolor'); });
+
+function isHexColor(value) {
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(value || '').trim());
+}
+
+function applyLineFields() {
+  if (!selectedElement || editPending) return;
+
+  const width = Number(inputs.lineWidth.value);
+  if (!Number.isFinite(width) || width <= 0) {
+    inputs.lineWidth.classList.add('invalid');
+    setInspectorError('Line width must be a positive number.');
+    return;
+  }
+  const style = inputs.lineStyle.value || 'Solid';
+  const color = String(inputs.lineColor.value || '').trim();
+  if (color && !isHexColor(color)) {
+    inputs.lineColor.classList.add('invalid');
+    setInspectorError('Line color must be #rgb, #rrggbb or #rrggbbaa.');
+    return;
+  }
+
+  inputs.lineWidth.classList.remove('invalid');
+  inputs.lineColor.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({ line: { width: width, style: style, color: color } });
+}
+
+function applyBoxFields() {
+  if (!selectedElement || editPending) return;
+
+  const width = Number(inputs.boxWidth.value);
+  const paddingValue = String(inputs.boxPadding.value || '').trim();
+  const padding = paddingValue === '' ? 0 : Number(paddingValue);
+  const color = String(inputs.boxColor.value || '').trim();
+
+  if (!Number.isFinite(width) || width <= 0) {
+    inputs.boxWidth.classList.add('invalid');
+    setInspectorError('Border width must be a positive number.');
+    return;
+  }
+  if (!Number.isFinite(padding) || padding < 0) {
+    inputs.boxPadding.classList.add('invalid');
+    setInspectorError('Padding must be a non-negative number.');
+    return;
+  }
+  if (color && !isHexColor(color)) {
+    inputs.boxColor.classList.add('invalid');
+    setInspectorError('Border color must be #rgb, #rrggbb or #rrggbbaa.');
+    return;
+  }
+
+  inputs.boxWidth.classList.remove('invalid');
+  inputs.boxPadding.classList.remove('invalid');
+  inputs.boxColor.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({
+    box: {
+      border:  inputs.boxBorder.checked,
+      padding: Math.round(padding),
+      width:   width,
+      style:   inputs.boxStyle.value || 'Solid',
+      color:   color,
+    },
+  });
+}
+
+inputs.style.addEventListener('change', function () {
+  if (!selectedElement || editPending) return;
+  if (inputs.style.value) queuePatch({ properties: { style: inputs.style.value } });
+  else queuePatch({ attributes: { remove: ['style'] } });
+});
+
+inputs.positionType.addEventListener('change', function () {
+  applyOptionalProperty('positionType', inputs.positionType.value);
+});
+inputs.stretchType.addEventListener('change', function () {
+  applyOptionalProperty('stretchType', inputs.stretchType.value);
+});
+inputs.evaluationTime.addEventListener('change', function () {
+  applyOptionalProperty('evaluationTime', inputs.evaluationTime.value);
+});
+inputs.printGroup.addEventListener('change', function () {
+  applyOptionalText('printWhenGroupChanges', inputs.printGroup);
+});
+inputs.evaluationGroup.addEventListener('change', function () {
+  applyOptionalText('evaluationGroup', inputs.evaluationGroup);
+});
+inputs.key.addEventListener('change', function () {
+  applyOptionalText('key', inputs.key);
+});
+inputs.bookmarkLevel.addEventListener('change', function () {
+  if (!selectedElement || editPending) return;
+  const text = String(inputs.bookmarkLevel.value || '').trim();
+  if (!text) {
+    queuePatch({ attributes: { remove: ['bookmarkLevel'] } });
+    return;
+  }
+  const value = Number(text);
+  if (!Number.isInteger(value) || value < 0) {
+    inputs.bookmarkLevel.classList.add('invalid');
+    setInspectorError('Bookmark level must be a non-negative integer.');
+    return;
+  }
+  inputs.bookmarkLevel.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({ properties: { bookmarkLevel: value } });
+});
+
+inputs.printRepeated.addEventListener('change', function () {
+  applyBooleanProperty('printRepeatedValues', inputs.printRepeated);
+});
+inputs.removeLine.addEventListener('change', function () {
+  applyBooleanProperty('removeLineWhenBlank', inputs.removeLine);
+});
+inputs.printFirstWhole.addEventListener('change', function () {
+  applyBooleanProperty('printInFirstWholeBand', inputs.printFirstWhole);
+});
+inputs.printDetail.addEventListener('change', function () {
+  applyBooleanProperty('printWhenDetailOverflows', inputs.printDetail);
+});
+
+inputs.textAdjust.addEventListener('change', function () {
+  applyOptionalProperty('textAdjust', inputs.textAdjust.value);
+});
+inputs.pattern.addEventListener('change', function () {
+  if (!selectedElement || editPending) return;
+  queuePatch({ properties: { pattern: inputs.pattern.value } });
+});
+inputs.blankNull.addEventListener('change', function () {
+  applyBooleanProperty('blankWhenNull', inputs.blankNull);
+});
+
+inputs.scaleImage.addEventListener('change', function () {
+  applyOptionalProperty('scaleImage', inputs.scaleImage.value);
+});
+inputs.hImageAlign.addEventListener('change', function () {
+  applyOptionalProperty('hImageAlign', inputs.hImageAlign.value);
+});
+inputs.vImageAlign.addEventListener('change', function () {
+  applyOptionalProperty('vImageAlign', inputs.vImageAlign.value);
+});
+inputs.onError.addEventListener('change', function () {
+  applyOptionalProperty('onErrorType', inputs.onError.value);
+});
+inputs.linkType.addEventListener('change', function () {
+  applyOptionalProperty('linkType', inputs.linkType.value);
+});
+inputs.usingCache.addEventListener('change', function () {
+  applyBooleanProperty('usingCache', inputs.usingCache);
+});
+inputs.lazy.addEventListener('change', function () {
+  applyBooleanProperty('lazy', inputs.lazy);
+});
+
+inputs.lineDirection.addEventListener('change', function () {
+  applyOptionalProperty('direction', inputs.lineDirection.value);
+});
+inputs.lineWidth.addEventListener('change', applyLineFields);
+inputs.lineStyle.addEventListener('change', applyLineFields);
+inputs.lineColor.addEventListener('change', applyLineFields);
+
+inputs.radius.addEventListener('change', function () {
+  if (!selectedElement || editPending) return;
+  const text = String(inputs.radius.value || '').trim();
+  if (!text) {
+    queuePatch({ attributes: { remove: ['radius'] } });
+    return;
+  }
+  const value = Number(text);
+  if (!Number.isInteger(value) || value < 0) {
+    inputs.radius.classList.add('invalid');
+    setInspectorError('Corner radius must be a non-negative integer.');
+    return;
+  }
+  inputs.radius.classList.remove('invalid');
+  setInspectorError('');
+  queuePatch({ properties: { radius: value } });
+});
+
+inputs.breakType.addEventListener('change', function () {
+  applyOptionalProperty('type', inputs.breakType.value);
+});
+inputs.subreportCache.addEventListener('change', function () {
+  applyBooleanProperty('usingCache', inputs.subreportCache);
+});
+inputs.runToBottom.addEventListener('change', function () {
+  applyBooleanProperty('runToBottom', inputs.runToBottom);
+});
+
+inputs.boxBorder.addEventListener('change', applyBoxFields);
+inputs.boxWidth.addEventListener('change', applyBoxFields);
+inputs.boxStyle.addEventListener('change', applyBoxFields);
+inputs.boxColor.addEventListener('change', applyBoxFields);
+inputs.boxPadding.addEventListener('change', applyBoxFields);
+
+inputs.addAttribute.addEventListener('click', function () {
+  if (!selectedElement || editPending) return;
+  const name = String(inputs.newAttrName.value || '').trim();
+  const value = String(inputs.newAttrValue.value || '');
+  if (!/^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(name)) {
+    setInspectorError('Attribute names must start with a letter or underscore.');
+    return;
+  }
+  if (name.toLowerCase() === 'kind' || name.toLowerCase() === 'xmlns' || name.toLowerCase().startsWith('xmlns:')) {
+    setInspectorError('That attribute cannot be changed from the inspector.');
+    return;
+  }
+  inputs.newAttrName.value = '';
+  inputs.newAttrValue.value = '';
+  setInspectorError('');
+  queuePatch({ attributes: { set: { [name]: value } } });
+});
+
+inputs.textApply.addEventListener('click', applyContentFromInspector);
+inputs.text.addEventListener('keydown', function (event) {
+  if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    event.preventDefault();
+    applyContentFromInspector();
+  }
+});
+inspectReveal.addEventListener('click', function () {
+  if (selectedElement) {
+    postReveal({ offset: selectedElement.offset, end: selectedElement.end });
+  }
+});
+
 // ── Reveal in source ────────────────────────────────────────────────────────
 
 page.addEventListener('click', function (event) {
-  const target = event.target && event.target.closest
-    ? event.target.closest('[data-offset]')
-    : null;
-  if (!target) return;
+  if (suppressClick) {
+    suppressClick = false;
+    return;
+  }
 
-  const offset = Number(target.getAttribute('data-offset'));
-  const end    = Number(target.getAttribute('data-end'));
+  const target = event.target;
+  if (!target || !target.closest) return;
+  if (target.closest('.resize-handle')) return;
 
-  if (selected && selected !== target) selected.classList.remove('selected');
-  selected = target;
-  target.classList.add('selected');
+  const elementNode = target.closest('.element');
+  if (elementNode) {
+    const element = elementModels.get(elementNode);
+    if (!element) return;
+    const selection = { kind: 'element', offset: element.offset, end: element.end };
+    applySelection(selection, false);
+    if (!editMode) postReveal(selection);
+    return;
+  }
 
-  vscode.postMessage({
-    command: 'reveal',
-    offset: Number.isFinite(offset) ? offset : 0,
-    end: Number.isFinite(end) ? end : offset,
-  });
+  const bandLabel = target.closest('.band-label');
+  if (bandLabel) {
+    const selection = {
+      kind: 'band',
+      offset: Number(bandLabel.getAttribute('data-offset')),
+      end: Number(bandLabel.getAttribute('data-end')),
+    };
+    applySelection(selection, true);
+    postReveal(selection);
+  }
 });
 
 // ── Host messages ───────────────────────────────────────────────────────────
 
 window.addEventListener('message', function (event) {
   const message = event.data || {};
+
   if (message.command === 'update') {
-    setModel(message.model, message.fileName);
+    if (drag) cancelDrag(false);
+    setModel(message.model, message.fileName, message.version);
+    editPending = false;
+    updatePendingUi();
     render();
+  } else if (message.command === 'select') {
+    lastSourceSelection = message.target || null;
+    if (followCursor && !drag) applySelection(lastSourceSelection, true);
+  } else if (message.command === 'completions') {
+    showCompletions(message.result, message.requestId);
+  } else if (message.command === 'editRejected') {
+    editPending = false;
+    updatePendingUi();
+    render();
+    setBanner('error', String(message.reason || 'The edit was not applied.'));
   } else if (message.command === 'error') {
     setBanner('error', String(message.message || 'The design view hit an error.'));
   }
@@ -867,7 +2795,9 @@ window.addEventListener('message', function (event) {
 
 // ── Init ────────────────────────────────────────────────────────────────────
 
-setModel(INITIAL_MODEL, INITIAL_FILE);
+setModel(INITIAL_MODEL, INITIAL_FILE, INITIAL_VERSION);
+syncModeControls();
+updatePendingUi();
 render();
 vscode.postMessage({ command: 'ready' });
 </script>

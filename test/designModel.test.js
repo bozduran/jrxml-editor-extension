@@ -8,11 +8,13 @@ const path   = require('node:path');
 
 const {
     buildDesignModel,
+    findSelectionTarget,
     decodeXmlEntities,
     flattenMarkup,
     localName,
     MAX_ELEMENTS,
     MAX_TEXT,
+    MAX_CONTENT,
 } = require('../designModel');
 
 function fixture(name) {
@@ -217,8 +219,8 @@ test('reads shapes and placeholder elements', () => {
                 <element kind="image" x="0" y="0" width="20" height="20">
                     <expression><![CDATA["logo.png"]]></expression>
                 </element>
-                <element kind="line" x="0" y="25" width="100" height="1" direction="LeftToRight">
-                    <pen lineWidth="2.0" lineColor="#123456"/>
+                <element kind="line" x="0" y="25" width="100" height="40" direction="BottomUp" forecolor="#00ff00">
+                    <pen lineWidth="2.0" lineStyle="Dashed"/>
                 </element>
                 <element kind="rectangle" x="0" y="30" width="50" height="20" mode="Opaque" backcolor="#abcdef">
                     <box><pen lineWidth="1.0" lineStyle="Dashed" lineColor="#ff0000"/></box>
@@ -233,14 +235,16 @@ test('reads shapes and placeholder elements', () => {
 
     assert.strictEqual(image.displayText, 'logo.png');
     assert.strictEqual(line.kind, 'line');
-    assert.strictEqual(line.line.direction, 'horizontal');
+    assert.strictEqual(line.line.direction, 'BottomUp');
     assert.strictEqual(line.line.width, 2);
-    assert.strictEqual(line.line.color, '#123456');
+    assert.strictEqual(line.line.style, 'dashed');
+    assert.strictEqual(line.line.color, '#00ff00');
     assert.strictEqual(rectangle.kind, 'rectangle');
     assert.strictEqual(rectangle.style.mode, 'Opaque');
     assert.strictEqual(rectangle.style.backcolor, '#abcdef');
     assert.deepStrictEqual(rectangle.box, {
         top: true, right: true, bottom: true, left: true,
+        border: true, width: 1, padding: 0,
         color: '#ff0000', lineStyle: 'dashed',
     });
     assert.strictEqual(ellipse.kind, 'ellipse');
@@ -326,4 +330,139 @@ test('text helpers decode entities, flatten markup and strip tag prefixes', () =
     assert.strictEqual(decodeXmlEntities('a &amp; b &lt;c&gt; &#65; &#x42; &unknown;'), 'a & b <c> A B &unknown;');
     assert.strictEqual(flattenMarkup('one<br/>two<BR>three<b>four</b>'), 'one\ntwo\nthreefour');
     assert.strictEqual(localName('jr:jasperReport'), 'jasperreport');
+});
+
+test('exposes editable content separate from the flattened display text', () => {
+    const model = buildDesignModel(fixture('Blank_A4_1.jrxml'));
+    const title = model.bands.find(band => band.key === 'title');
+    const field = title.elements[0];
+    const text  = title.elements[1];
+
+    assert.strictEqual(field.content.tag, 'expression');
+    assert.strictEqual(field.content.cdata, true);
+    assert.strictEqual(field.content.missing, false);
+    assert.strictEqual(field.content.editable, true);
+    assert.match(field.content.raw, /^"Text Field"/);
+    assert.strictEqual(text.content.tag, 'text');
+    assert.strictEqual(text.content.raw, 'Static Text');
+
+    const image = buildDesignModel(report(
+        '<detail><band height="10"><element kind="image" x="0" y="0" width="10" height="10"/></band></detail>'
+    )).bands[0].elements[0];
+    assert.strictEqual(image.content.missing, true);
+    assert.strictEqual(image.content.tag, 'expression');
+    assert.strictEqual(image.content.raw, '');
+    assert.strictEqual(image.content.editable, true);
+
+    const line = buildDesignModel(report(
+        '<detail><band height="10"><element kind="line" x="0" y="0" width="10" height="1"/></band></detail>'
+    )).bands[0].elements[0];
+    assert.strictEqual(line.content, null);
+});
+
+test('keeps markup raw for editing and disables unsupported content', () => {
+    const markup = buildDesignModel(fixture('MarkupReport.jrxml'));
+    const styled = markup.bands[0].elements.find(element => element.kind === 'staticText');
+    assert.strictEqual(styled.content.tag, 'text');
+    assert.ok(styled.content.raw.includes('<style'));
+    assert.ok(!styled.displayText.includes('<style'));
+
+    const nested = buildDesignModel(report(
+        '<detail><band height="10"><element kind="staticText" x="0" y="0" width="10" height="10">' +
+        '<text><b>nested</b></text></element></band></detail>'
+    )).bands[0].elements[0].content;
+    assert.strictEqual(nested.nested, true);
+    assert.strictEqual(nested.editable, false);
+
+    const mixed = buildDesignModel(report(
+        '<detail><band height="10"><element kind="staticText" x="0" y="0" width="10" height="10">' +
+        '<text>plain<![CDATA[cdata]]></text></element></band></detail>'
+    )).bands[0].elements[0].content;
+    assert.strictEqual(mixed.mixed, true);
+    assert.strictEqual(mixed.editable, false);
+
+    const long = buildDesignModel(report(
+        '<detail><band height="10"><element kind="staticText" x="0" y="0" width="10" height="10">' +
+        `<text>${'x'.repeat(MAX_CONTENT + 1)}</text></element></band></detail>`
+    )).bands[0].elements[0].content;
+    assert.strictEqual(long.truncated, true);
+    assert.strictEqual(long.editable, false);
+});
+
+test('exposes raw attributes, report styles and box metadata', () => {
+    const styled = buildDesignModel(report(`
+        <style name="Big" fontName="Arial" fontSize="20" bold="true"/>
+        <detail>
+            <band height="40">
+                <element kind="textField" style="Big" data-custom="v" x="0" y="0" width="10" height="10">
+                    <expression><![CDATA[$F{x}]]></expression>
+                </element>
+            </band>
+        </detail>
+    `));
+    const element = styled.bands.find(band => band.key === 'detail').elements[0];
+    assert.deepStrictEqual(styled.styles, [{ name: 'Big', default: false }]);
+    assert.strictEqual(element.attrs.kind, 'textField');
+    assert.strictEqual(element.attrs.style, 'Big');
+    assert.strictEqual(element.attrs['data-custom'], 'v');
+    assert.strictEqual(element.style.fontSize, 20);
+
+    assert.deepStrictEqual(
+        buildDesignModel(fixture('TextReport.jrxml')).styles,
+        [{ name: 'FixSizeFontStyle', default: true }]
+    );
+
+    const boxed = buildDesignModel(report(`
+        <detail><band height="40">
+            <element kind="staticText" x="0" y="0" width="10" height="10">
+                <box padding="5">
+                    <pen lineWidth="2.0" lineStyle="Dashed" lineColor="#ff0000"/>
+                </box>
+                <text>Hi</text>
+            </element>
+        </band></detail>
+    `)).bands[0].elements[0];
+    assert.strictEqual(boxed.box.border, true);
+    assert.strictEqual(boxed.box.width, 2);
+    assert.strictEqual(boxed.box.padding, 5);
+    assert.strictEqual(boxed.box.lineStyle, 'dashed');
+    assert.strictEqual(boxed.box.color, '#ff0000');
+
+    const group = buildDesignModel(report(`
+        <detail><band height="40">
+            <element kind="elementGroup">
+                <element kind="staticText" x="0" y="0" width="10" height="10"><text>Inside</text></element>
+            </element>
+        </band></detail>
+    `)).bands[0].elements[0];
+    assert.strictEqual(group.kind, 'elementGroup');
+    assert.strictEqual(group.children.length, 1);
+    assert.strictEqual(group.children[0].displayText, 'Inside');
+});
+
+test('findSelectionTarget resolves elements, frame children and bands', () => {
+    const model = buildDesignModel(fixture('Blank_A4_1.jrxml'));
+    const title = model.bands.find(band => band.key === 'title');
+    const field = title.elements[0];
+
+    assert.deepStrictEqual(
+        findSelectionTarget(model, field.offset + 5),
+        { kind: 'element', offset: field.offset, end: field.end }
+    );
+
+    const gap = title.elements[1].offset - 1;
+    assert.strictEqual(findSelectionTarget(model, gap).kind, 'band');
+    assert.strictEqual(findSelectionTarget(model, title.offset + 2).kind, 'band');
+
+    const frame = model.bands
+        .filter(band => band.key === 'detail')[0]
+        .elements.find(element => element.kind === 'frame');
+    assert.strictEqual(
+        findSelectionTarget(model, frame.children[1].offset + 5).offset,
+        frame.children[1].offset
+    );
+
+    assert.strictEqual(findSelectionTarget(model, 0), null);
+    assert.strictEqual(findSelectionTarget(buildDesignModel('<jasperReport name="R"/>'), 0), null);
+    assert.strictEqual(findSelectionTarget({ error: 'broken' }, 0), null);
 });

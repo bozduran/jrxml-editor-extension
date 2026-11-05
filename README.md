@@ -165,16 +165,28 @@ The **Include Chain (JRXML)** view sits below Best Practices in the **JRXML** Ac
 
 A file *calls* another when it contains a double-quoted token equal to that file's base name (the commit-hook rule), so subreports are picked up however their expression is written. The workspace is scanned once (`**/*.jrxml`, excluding `node_modules`/`out`/`target`/`bin`), cached by file mtime, and refreshed when the active editor changes, on edits and saves, on file create/delete/rename and on workspace-folder changes — or manually via **JRXML: Refresh Include Chain**.
 
-### 12. Report design view (read-only)
-**JRXML: Open Design View** opens a read-only visual canvas beside the source, modeled on Jaspersoft Studio's **Design** tab. It renders the report page, margins and columns, every band (background, title, page/column headers and footers, group headers and footers, detail bands, summary, no data), and each element at its `x`/`y`/`width`/`height`:
+### 12. Report design view (view and edit)
+**JRXML: Open Design View** opens a visual canvas beside the source, modeled on Jaspersoft Studio's **Design** tab. It renders the report page, margins and columns, every band (background, title, page/column headers and footers, group headers and footers, detail bands, summary, no data), and each element at its `x`/`y`/`width`/`height`:
 
 - text fields show their expression and static text shows its content, using the element's font, colours, alignment, rotation and box borders;
 - lines, rectangles and ellipses are drawn, and frames render their nested children;
 - images, subreports, page breaks, charts, tables, lists and crosstabs appear as labelled placeholders;
 - page breaks and extra columns are marked, and the toolbar zooms or fits the page width;
-- clicking an element or band label reveals it in the source editor.
+- in **View** mode, clicking an element or band label reveals it in the source editor; moving the source cursor highlights the matching element or band (toggle **Follow**).
 
-The panel follows the last open `.jrxml` and updates as you type. It is strictly a visualization: nothing in the panel edits the report, evaluates expressions or loads data. Only the Studio 7 / JasperReports 7 format (`<element kind="…">`) is rendered; classic-format files show an explanatory banner. Template and conditional styles are not resolved, markup is flattened to text, and image/subreport content is not loaded.
+The panel follows the last open `.jrxml` and updates as you type. It starts in **View** mode; switch to **Edit** to drag elements, resize them from the eight handles, and edit the selected element in the inspector:
+
+- geometry; static text/expression content (CDATA preserved); font family/size/style, alignment, rotation, markup, colours and mode;
+- print and behaviour properties — `positionType`, `stretchType`, repeated-value and blank-line handling, print-on-overflow/group, `evaluationTime`/`evaluationGroup`, key and bookmark level;
+- a named `<style>` reference, plus `textAdjust`, `pattern` and `blankWhenNull` for text;
+- image scale/alignment/on-error/cache/lazy and link type; line direction/width/style/colour; rectangle radius; page-break type; subreport cache and run-to-bottom;
+- border and padding (one border is written; per-side pens are normalised to it);
+- an **All attributes** editor that can add, edit or remove any element attribute not covered by a control (`kind` and namespace declarations are protected);
+- **editor-grade autocomplete in the expression textarea**: the same fields, parameters, variables, Jasper built-ins, Java types/statics, local static methods and typed members (including snippets/placeholders) as the `.jrxml` editor. Use `Ctrl+Space` to open the list, arrows to move, Enter/Tab to insert and Escape to close.
+
+Each change is a single undoable `WorkspaceEdit`; edits are rejected if the source changed since the view was rendered. Inspector edits write explicit element attributes and never modify shared `<style>` definitions.
+
+Only the Studio 7 / JasperReports 7 format (`<element kind="…">`) is rendered; classic-format files show an explanatory banner. Expressions are not evaluated and no data is loaded. Template and conditional styles are not resolved, paragraph definitions and per-side padding are not exposed in the inspector, markup is flattened for display, and image/subreport content is not loaded. Multi-select, grid snapping, alignment tools, add/delete element and band editing are not part of this version; content editing is disabled for nested markup, mixed CDATA/plain content or content longer than 8,000 characters.
 
 ---
 
@@ -195,7 +207,7 @@ The panel follows the last open `.jrxml` and updates as you type. It is strictly
 6. New here? The **Get started with JRXML** walkthrough (Welcome page) walks through the
    editor, formatting, issue fixes and the If / Else builder.
 
-To view the whole report layout instead, run **JRXML: Open Design View** (the `$(preview)` button in the editor title or the **JRXML** menu). The read-only design view opens beside the source and follows the active report.
+To view or edit the whole report layout instead, run **JRXML: Open Design View** (the `$(preview)` button in the editor title or the **JRXML** menu). The design view opens beside the source and follows the active report; switch to **Edit** in its toolbar to move/resize elements or edit properties.
 
 ---
 
@@ -203,7 +215,7 @@ To view the whole report layout instead, run **JRXML: Open Design View** (the `$
 
 | Command | Description |
 |---------|-------------|
-| `JRXML: Open Design View` | Open a read-only visual design of the report beside the source |
+| `JRXML: Open Design View` | Open the visual report design beside the source (view and edit) |
 | `JRXML: Open Expression Editor` | Open the expression under the cursor in the side panel |
 | `JRXML: Open If / Else Builder` | Build the expression under the cursor as if / else-if / else branches |
 | `JRXML: Format Expression at Cursor` | Format only the expression under the cursor (CDATA preserved) |

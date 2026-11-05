@@ -40,6 +40,7 @@ function build(overrides = {}) {
     return buildDesignViewHtml({
         model: model(),
         fileName: 'Report.jrxml',
+        version: 7,
         nonce: NONCE,
         cspSource: 'vscode-webview://test',
         ...overrides,
@@ -120,14 +121,51 @@ test('ships the required renderer and messaging hooks', () => {
     const html = build();
     const script = inlineScript(html);
 
-    for (const id of ['page', 'empty', 'banner', 'zoom-in', 'zoom-out', 'zoom-fit', 'refresh']) {
+    for (const id of [
+        'page', 'empty', 'banner', 'zoom-in', 'zoom-out', 'zoom-fit', 'refresh',
+        'mode-view', 'mode-edit', 'follow-cursor', 'workspace',
+        'inspector', 'inspect-kind', 'inspect-position', 'inspect-reveal',
+        'prop-x', 'prop-y', 'prop-width', 'prop-height', 'prop-text',
+        'prop-text-apply', 'prop-font-name', 'prop-font-size', 'prop-bold',
+        'prop-italic', 'prop-underline', 'prop-strike', 'prop-halign',
+        'prop-valign', 'prop-rotation', 'prop-markup', 'prop-mode',
+        'prop-forecolor', 'prop-backcolor', 'inspector-error',
+        'prop-style', 'prop-position-type', 'prop-stretch-type',
+        'prop-print-repeated', 'prop-remove-line', 'prop-print-first-whole',
+        'prop-print-detail-overflow', 'prop-print-group',
+        'prop-evaluation-time', 'prop-evaluation-group',
+        'prop-bookmark-level', 'prop-key', 'prop-text-adjust', 'prop-pattern',
+        'prop-blank-null', 'prop-scale-image', 'prop-h-image-align',
+        'prop-v-image-align', 'prop-on-error', 'prop-link-type',
+        'prop-using-cache', 'prop-lazy', 'prop-line-direction',
+        'prop-line-width', 'prop-line-style', 'prop-line-color',
+        'prop-radius', 'prop-break-type', 'prop-subreport-cache',
+        'prop-run-to-bottom', 'prop-box-border', 'prop-box-width',
+        'prop-box-style', 'prop-box-color', 'prop-box-padding',
+        'attributes-list', 'new-attr-name', 'new-attr-value', 'add-attribute',
+        'completion-popup', 'completion-hint', 'completion-list',
+    ]) {
         assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
     }
 
     assert.ok(html.includes('acquireVsCodeApi()'));
+    assert.ok(html.includes('const INITIAL_VERSION = 7;'));
     assert.ok(script.includes("command: 'ready'"));
     assert.ok(script.includes("command: 'reveal'"));
     assert.ok(script.includes("command: 'refresh'"));
+    assert.ok(script.includes("message.command === 'select'"));
+    assert.ok(script.includes("command: 'applyEdit'"));
+    assert.ok(script.includes("message.command === 'editRejected'"));
+    assert.ok(script.includes('resize-handle'));
+    assert.ok(script.includes('borderRadius'), 'the rectangle radius must be rendered');
+    assert.ok(script.includes("'elementgroup'"), 'element groups must render as containers');
+    assert.ok(script.includes("createElementNS"), 'lines must render with SVG');
+    assert.ok(script.includes('renderAttributeRows'), 'the all-attributes editor must be wired');
+    assert.ok(script.includes('queueAttributeRemove'));
+    assert.ok(script.includes("command: 'complete'"), 'the inspector must request completions');
+    assert.ok(script.includes("message.command === 'completions'"), 'completion responses must be handled');
+    assert.ok(script.includes('acceptCompletion'));
+    assert.ok(script.includes('placeholder'), 'snippet placeholders must be preserved');
     assert.ok(script.includes('textContent'), 'content must be rendered with textContent');
     assert.ok(script.includes('addEventListener'), 'interactions must use addEventListener');
     assert.ok(script.includes('replaceChildren'), 're-rendering must replace the canvas children');
@@ -137,6 +175,19 @@ test('ships the required renderer and messaging hooks', () => {
         /\.page-content\s*\{[^}]*overflow:\s*hidden/,
         'content wider than the paper must be clipped'
     );
+});
+
+test('embeds the document version and handles a missing version', () => {
+    assert.ok(build().includes('const INITIAL_VERSION = 7;'));
+
+    const noVersion = buildDesignViewHtml({
+        model: model(),
+        fileName: 'Report.jrxml',
+        version: null,
+        nonce: NONCE,
+        cspSource: 'vscode-webview://test',
+    });
+    assert.ok(noVersion.includes('const INITIAL_VERSION = null;'));
 });
 
 test('embeds the model and file name as parseable JSON', () => {

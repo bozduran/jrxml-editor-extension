@@ -1,5 +1,5 @@
 // designModel.js
-// Pure, vscode-free builder for the read-only JRXML design view.
+// Pure, vscode-free builder for the JRXML design view (view and edit).
 //
 // Supports the Studio 7 / JasperReports 7 "element kind" JRXML format:
 //   <title height="81"><element kind="textField" x="0" y="0" width="100" height="30">…
@@ -16,6 +16,10 @@ const { scanXml } = require('./xmlspan');
 const MAX_ELEMENTS = 4000;
 const MAX_TEXT     = 400;
 const MAX_TOOLTIP  = 1500;
+const MAX_CONTENT  = 8000;
+
+// Element kinds whose text/expression content can be edited from the inspector.
+const CONTENT_KINDS = new Set(['statictext', 'textfield', 'image', 'subreport', 'chart']);
 
 const DEFAULT_PAGE_WIDTH   = 595;
 const DEFAULT_PAGE_HEIGHT  = 842;
@@ -105,6 +109,7 @@ function buildDesignModel(text) {
     }
 
     const styles = readStyles(root);
+    model.styles = styles.list;
     const ctx = {
         remaining: MAX_ELEMENTS,
         count:     0,
@@ -153,6 +158,7 @@ function emptyModel() {
             whenNoDataType:  'NoPages',
         },
         bands:     [],
+        styles:    [],
         warnings:  [],
         truncated: false,
         counts:    { bands: 0, elements: 0 },
@@ -331,9 +337,11 @@ function readElement(node, ctx, styles) {
         height:      geometry(node, 'height', ctx),
         displayText: '',
         tooltip:     '',
+        attrs:       readAttrs(node),
         style,
         box:         readBox(node, style),
         line:        null,
+        content:     readContent(node, key),
         children:    [],
     };
 
@@ -354,7 +362,7 @@ function readElement(node, ctx, styles) {
         element.displayText = nestedComponentKind(node) || kind;
         element.fullText    = '';
     } else if (key === 'line') {
-        element.line = readLine(node);
+        element.line = readLine(node, style);
     } else if (key === 'break') {
         element.displayText = '';
     } else {
@@ -362,13 +370,108 @@ function readElement(node, ctx, styles) {
         element.fullText    = '';
     }
 
-    if (key === 'frame') {
+    if (key === 'frame' || key === 'elementgroup') {
         element.children = readElements(node, ctx, styles);
     }
 
     element.tooltip = cap(buildTooltip(element), MAX_TOOLTIP);
     delete element.fullText;
     return element;
+}
+
+/**
+ * Metadata for an element's editable text/expression content. The raw text is
+ * kept separate from displayText so the inspector can edit what is really in
+ * the file (including markup) without sending the whole document to the webview.
+ */
+function readContent(node, key) {
+    if (!CONTENT_KINDS.has(key)) return null;
+
+    const expectedTag = key === 'statictext' ? 'text' : 'expression';
+    const contentNode = expectedTag === 'text'
+        ? directChild(node, 'text')
+        : findExpressionNode(node);
+
+    if (!contentNode) {
+        return {
+            tag:       expectedTag,
+            raw:       '',
+            cdata:     true,
+            nested:    false,
+            mixed:     false,
+            truncated: false,
+            missing:   true,
+            editable:  true,
+        };
+    }
+
+    const textNodes = [];
+    for (const descendant of contentNode.walk()) {
+        for (const textNode of descendant.textNodes) textNodes.push(textNode);
+    }
+    textNodes.sort((a, b) => a.start - b.start);
+
+    const meaningful = textNodes.filter(textNode => textNode.text.trim() !== '');
+    const hasCdata   = meaningful.some(textNode => textNode.cdata);
+    const hasPlain   = meaningful.some(textNode => !textNode.cdata);
+    const mixed      = hasCdata && hasPlain;
+    const cdata      = meaningful.length === 0 ? true : !hasPlain;
+    const nested     = contentNode.children.length > 0;
+
+    const full = textNodes.map(textNode => textNode.text).join('');
+    const raw  = cdata ? full : decodeXmlEntities(full);
+    const truncated = raw.length > MAX_CONTENT;
+
+    return {
+        tag:       localName(contentNode.tag),
+        raw:       cap(raw, MAX_CONTENT),
+        cdata,
+        nested,
+        mixed,
+        truncated,
+        missing:   false,
+        editable:  !nested && !mixed && !truncated,
+    };
+}
+
+/** First direct expression child (Studio 7 spelling, with the old names as a fallback). */
+function findExpressionNode(node) {
+    const wanted = ['expression', 'textfieldexpression', 'imageexpression', 'subreportexpression', 'chartexpression'];
+
+    for (const child of node.children) {
+        if (wanted.includes(localName(child.tag))) return child;
+    }
+    return null;
+}
+
+/**
+ * The element or band containing a source offset. The deepest element wins, so
+ * a cursor inside a frame child selects the child. Returns null for offsets
+ * outside every band (declarations, properties, …) or for an invalid model.
+ */
+function findSelectionTarget(model, offset) {
+    if (!model || model.error || !Array.isArray(model.bands)) return null;
+
+    for (const band of model.bands) {
+        if (!(offset >= band.offset && offset < band.end)) continue;
+
+        const element = deepestElementAt(band.elements || [], offset);
+        if (element) {
+            return { kind: 'element', offset: element.offset, end: element.end };
+        }
+        return { kind: 'band', offset: band.offset, end: band.end };
+    }
+    return null;
+}
+
+function deepestElementAt(elements, offset) {
+    for (const element of elements) {
+        if (!(offset >= element.offset && offset < element.end)) continue;
+
+        const child = deepestElementAt(element.children || [], offset);
+        return child || element;
+    }
+    return null;
 }
 
 function buildTooltip(element) {
@@ -398,21 +501,23 @@ function geometry(node, name, ctx) {
     return value;
 }
 
-function readLine(node) {
+function readLine(node, style) {
     const pen      = firstDescendant(node, 'pen');
     const widthRaw = attrValue(node, 'lineWidth') ?? (pen ? attrValue(pen, 'lineWidth') : undefined);
     const width    = nonNegativeOr(Number.parseFloat(widthRaw), 1);
 
-    const directionRaw = String(attrValue(node, 'direction') || '').toLowerCase();
-    let direction = 'horizontal';
-    if (directionRaw === 'topdown' || directionRaw === 'bottomup') direction = 'vertical';
-    else if (directionRaw === 'lefttoright' || directionRaw === 'righttoleft') direction = 'horizontal';
-    else if (directionRaw === '') direction = 'horizontal';
+    const direction = String(attrValue(node, 'direction') || '').toLowerCase() === 'bottomup'
+        ? 'BottomUp'
+        : 'TopDown';
 
     return {
         direction,
         width: Number.isFinite(width) && width > 0 ? width : 1,
-        color: normalizeColor(pen ? attrValue(pen, 'lineColor') : undefined, DEFAULT_TEXT_COLOR),
+        style: normalizeLineStyle(pen ? attrValue(pen, 'lineStyle') : undefined),
+        color: normalizeColor(
+            pen ? attrValue(pen, 'lineColor') : undefined,
+            style.forecolor === 'transparent' ? DEFAULT_TEXT_COLOR : style.forecolor
+        ),
     };
 }
 
@@ -422,6 +527,9 @@ function readBox(node, style) {
         right:     false,
         bottom:    false,
         left:      false,
+        border:    false,
+        width:     0,
+        padding:   0,
         color:     style.forecolor === 'transparent' ? DEFAULT_TEXT_COLOR : style.forecolor,
         lineStyle: 'solid',
     };
@@ -429,17 +537,28 @@ function readBox(node, style) {
     const boxNode = directChild(node, 'box');
     if (!boxNode) return box;
 
+    box.padding = nonNegativeOr(numberAttr(boxNode, 'padding', 0), 0);
+
     const generic = directChild(boxNode, 'pen');
 
     for (const side of ['top', 'right', 'bottom', 'left']) {
         const pen = directChild(boxNode, `${side}Pen`) || generic;
         if (!pen || !penEnabled(pen)) continue;
         box[side] = true;
+        box.border = true;
+        box.width = Math.max(box.width, nonNegativeOr(Number.parseFloat(attrValue(pen, 'lineWidth')), 1));
         box.color = normalizeColor(attrValue(pen, 'lineColor'), box.color);
         box.lineStyle = normalizeLineStyle(attrValue(pen, 'lineStyle'));
     }
 
+    if (!box.border) box.width = 1;
     return box;
+}
+
+function readAttrs(node) {
+    const out = {};
+    for (const attr of node.attrList) out[attr.name] = attr.value;
+    return out;
 }
 
 function penEnabled(pen) {
@@ -453,6 +572,7 @@ function penEnabled(pen) {
 
 function readStyles(root) {
     const byName = new Map();
+    const list   = [];
     let defaultProps = {};
 
     for (const node of directChildren(root, 'style')) {
@@ -460,11 +580,14 @@ function readStyles(root) {
         const props = pickStyleProps(node);
         const isDefault = String(attrValue(node, 'default') || '').toLowerCase() === 'true';
 
-        if (name) byName.set(name, { name, props });
+        if (name) {
+            byName.set(name, { name, props });
+            list.push({ name, default: isDefault });
+        }
         if (isDefault) defaultProps = { ...defaultProps, ...props };
     }
 
-    return { defaultProps, byName };
+    return { defaultProps, byName, list };
 }
 
 function resolveStyle(node, styles) {
@@ -731,6 +854,7 @@ function fmt(value) {
 
 module.exports = {
     buildDesignModel,
+    findSelectionTarget,
     decodeXmlEntities,
     flattenMarkup,
     prepareText,
@@ -738,4 +862,5 @@ module.exports = {
     MAX_ELEMENTS,
     MAX_TEXT,
     MAX_TOOLTIP,
+    MAX_CONTENT,
 };

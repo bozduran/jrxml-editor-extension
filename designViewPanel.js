@@ -1,5 +1,5 @@
 // designViewPanel.js
-// Host side of the read-only JRXML design view.
+// Host side of the JRXML design view (view and edit).
 //
 // The panel follows the last shown .jrxml document: it rebuilds the model after
 // a short debounce on edits, switches when another .jrxml becomes active, and
@@ -9,13 +9,27 @@
 const vscode = require('vscode');
 const path   = require('path');
 
-const { buildDesignModel } = require('./designModel');
+const { buildDesignModel, findSelectionTarget } = require('./designModel');
+const { buildElementPatch } = require('./designEdit');
 const { buildDesignViewHtml } = require('./designViewHtml');
 const { getNonce } = require('./expressionPanelHtml');
+const { isStale, STALE_MESSAGE } = require('./staleGuard');
+const { parseDeclarations } = require('./jrxmlParser');
+const { buildExpressionSuggestions } = require('./expressionSuggestions');
+const { getCustomJavaMethods } = require('./completionProvider');
 
 const VIEW_TYPE    = 'jrxmlDesignView';
 const TITLE_PREFIX = 'JRXML Design: ';
 const DEBOUNCE_MS  = 200;
+const SELECTION_DEBOUNCE_MS = 60;
+const MAX_COMPLETIONS = 300;
+
+const EMPTY_COMPLETIONS = {
+    mode:    'general',
+    prefix:  '',
+    replace: { start: 0, end: 0 },
+    items:   [],
+};
 
 function isJrxmlDocument(document) {
     return !!document
@@ -48,6 +62,79 @@ function safeModel(text) {
     }
 }
 
+/**
+ * Suggestions for an expression typed in the design inspector. Uses the same
+ * engine as the .jrxml editor, with declarations read from the open document.
+ * Exported for the Extension Host suite.
+ */
+function buildCompletionsForDocument(document, expression, offset) {
+    let decls;
+    try {
+        decls = parseDeclarations(document);
+    } catch (_) {
+        decls = {
+            allFields: [], allParameters: [], allVariables: [],
+            fields: [], parameters: [], variables: [],
+        };
+    }
+
+    const config = vscode.workspace.getConfiguration('jrxml');
+    const result = buildExpressionSuggestions({
+        text: expression,
+        offset,
+        declarations: decls,
+        options: {
+            typedCompletion: config.get('typeCompletion.enabled', true),
+            jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
+        },
+        customMethods: getCustomJavaMethods(),
+    });
+
+    result.items = result.items.slice(0, MAX_COMPLETIONS);
+    return result;
+}
+
+/**
+ * Validate and apply one webview edit request to `document`.
+ * Exported so the Extension Host suite can exercise the real WorkspaceEdit path.
+ *
+ * @returns {Promise<{ok:boolean, reason?:string, stale?:boolean, edits?:number}>}
+ */
+async function applyDesignPatch(document, message) {
+    if (!document) {
+        return { ok: false, reason: 'No report is open.' };
+    }
+    if (!message || !Number.isInteger(message.elementOffset)) {
+        return { ok: false, reason: 'The edit request is invalid.' };
+    }
+    if (isStale(message.baseVersion, document.version)) {
+        return { ok: false, stale: true, reason: STALE_MESSAGE };
+    }
+
+    const result = buildElementPatch(document.getText(), message.elementOffset, message.patch);
+    if (result.error) {
+        return { ok: false, reason: result.error };
+    }
+    if (result.edits.length === 0) {
+        return { ok: true, edits: 0 };
+    }
+
+    const workspaceEdit = new vscode.WorkspaceEdit();
+    for (const edit of result.edits) {
+        workspaceEdit.replace(
+            document.uri,
+            new vscode.Range(document.positionAt(edit.start), document.positionAt(edit.end)),
+            edit.replacement
+        );
+    }
+
+    const applied = await vscode.workspace.applyEdit(workspaceEdit);
+    if (!applied) {
+        return { ok: false, reason: 'The edit could not be applied.' };
+    }
+    return { ok: true, edits: result.edits.length };
+}
+
 class DesignViewPanel {
     static currentPanel = undefined;
     static viewType     = VIEW_TYPE;
@@ -58,8 +145,10 @@ class DesignViewPanel {
         this._disposables  = [];
         this._uri          = null;
         this._sourceColumn = vscode.ViewColumn.Beside;
-        this._cache        = { uri: '', version: -1 };
+        this._cache        = { uri: '', version: -1, model: null };
         this._timer        = null;
+        this._selectionTimer = null;
+        this._selectionTarget = null;
         this._webviewReady = false;
         this._pending      = null;
         this._lastUpdate   = null;
@@ -78,13 +167,22 @@ class DesignViewPanel {
             this._disposables
         );
         this._panel.onDidChangeViewState(
-            () => { if (this._panel.visible) this._refresh(false); },
+            () => {
+                if (!this._panel.visible) return;
+                this._refresh(false);
+                this._sendCurrentSelection();
+            },
             null,
             this._disposables
         );
 
         vscode.window.onDidChangeActiveTextEditor(
             active => this._onActiveEditor(active),
+            null,
+            this._disposables
+        );
+        vscode.window.onDidChangeTextEditorSelection(
+            event => this._onSelectionChanged(event),
             null,
             this._disposables
         );
@@ -138,6 +236,7 @@ class DesignViewPanel {
         this._uri = editor.document.uri;
         if (editor.viewColumn) this._sourceColumn = editor.viewColumn;
 
+        if (changed) this._selectionTarget = null;
         if (changed || force) this._refresh(force);
     }
 
@@ -166,14 +265,25 @@ class DesignViewPanel {
         let model    = null;
         let fileName = '';
 
+        const version = document ? document.version : null;
+
         if (document) {
             model    = safeModel(document.getText());
             fileName = baseName(document.fileName);
             this._cache = {
                 uri:     document.uri.toString(),
                 version: document.version,
+                model,
             };
             this._panel.title = TITLE_PREFIX + fileName;
+
+            const active = vscode.window.activeTextEditor;
+            if (active && active.document.uri.toString() === document.uri.toString()) {
+                this._selectionTarget = findSelectionTarget(
+                    model,
+                    document.offsetAt(active.selection.active)
+                );
+            }
         } else {
             this._panel.title = 'JRXML Design';
         }
@@ -181,11 +291,12 @@ class DesignViewPanel {
         this._panel.webview.html = buildDesignViewHtml({
             model,
             fileName,
+            version,
             nonce:     getNonce(),
             cspSource: this._panel.webview.cspSource,
         });
 
-        this._lastUpdate = { command: 'update', model, fileName };
+        this._lastUpdate = { command: 'update', model, fileName, version };
     }
 
     _refresh(force = false) {
@@ -193,7 +304,8 @@ class DesignViewPanel {
 
         const document = this._document();
         if (!document) {
-            this._cache = { uri: '', version: -1 };
+            this._cache = { uri: '', version: -1, model: null };
+            this._selectionTarget = null;
             this._sendUpdate(null, null);
             return;
         }
@@ -203,20 +315,22 @@ class DesignViewPanel {
         if (!force && upToDate) return;
 
         const model = safeModel(document.getText());
-        this._cache = { uri, version: document.version };
+        this._cache = { uri, version: document.version, model };
         this._sendUpdate(model, document);
     }
 
     _sendUpdate(model, document) {
         const fileName = document ? baseName(document.fileName) : '';
+        const version  = document ? document.version : null;
         this._panel.title = document ? TITLE_PREFIX + fileName : 'JRXML Design';
 
-        const message = { command: 'update', model, fileName };
+        const message = { command: 'update', model, fileName, version };
         this._lastUpdate = message;
 
         if (this._webviewReady) {
             this._panel.webview.postMessage(message);
             this._pending = null;
+            this._sendCurrentSelection();
         } else {
             this._pending = message;
         }
@@ -235,6 +349,94 @@ class DesignViewPanel {
         this._timer = setTimeout(() => this._refresh(false), DEBOUNCE_MS);
     }
 
+    // ── Source selection sync ───────────────────────────────────────────────
+
+    _onSelectionChanged(event) {
+        if (!this._panel.visible) return;
+        if (!this._uri) return;
+        if (event.textEditor.document.uri.toString() !== this._uri.toString()) return;
+
+        clearTimeout(this._selectionTimer);
+        this._selectionTimer = setTimeout(
+            () => this._syncSelection(event.textEditor),
+            SELECTION_DEBOUNCE_MS
+        );
+    }
+
+    _syncSelection(editor) {
+        if (!editor || !isJrxmlDocument(editor.document)) return;
+
+        const offset = editor.document.offsetAt(editor.selection.active);
+        const target = findSelectionTarget(this._cache.model, offset);
+        this._selectionTarget = target;
+
+        if (this._webviewReady) {
+            this._panel.webview.postMessage({ command: 'select', target });
+        }
+    }
+
+    _sendCurrentSelection() {
+        if (!this._webviewReady) return;
+
+        const editor = vscode.window.activeTextEditor;
+        if (editor && this._uri && editor.document.uri.toString() === this._uri.toString()) {
+            this._syncSelection(editor);
+            return;
+        }
+
+        this._panel.webview.postMessage({ command: 'select', target: this._selectionTarget || null });
+    }
+
+    // ── Edit application ────────────────────────────────────────────────────
+
+    async _applyEdit(message) {
+        const document = this._document();
+        const model = this._cache.model;
+        if (!model || model.error || model.unsupported) {
+            this._rejectEdit('This report cannot be edited.');
+            return;
+        }
+
+        const result = await applyDesignPatch(document, message);
+        if (!result.ok) {
+            if (result.stale) {
+                vscode.window.showWarningMessage(STALE_MESSAGE);
+                this._refresh(true);
+            }
+            this._rejectEdit(result.reason);
+            return;
+        }
+
+        this._refresh(true);
+    }
+
+    _rejectEdit(reason) {
+        if (!this._webviewReady) return;
+        this._panel.webview.postMessage({ command: 'editRejected', reason });
+    }
+
+    _sendCompletions(message) {
+        if (!this._webviewReady) return;
+
+        const requestId = message && message.requestId;
+        let result = EMPTY_COMPLETIONS;
+
+        try {
+            const document = this._document();
+            if (document && typeof message.expression === 'string') {
+                result = buildCompletionsForDocument(document, message.expression, message.offset);
+            }
+        } catch (err) {
+            console.error('[JRXML Design View] Completion failed:', err);
+        }
+
+        this._panel.webview.postMessage({
+            command: 'completions',
+            requestId,
+            result,
+        });
+    }
+
     // ── Event handlers ──────────────────────────────────────────────────────
 
     _onActiveEditor(editor) {
@@ -246,7 +448,10 @@ class DesignViewPanel {
         this._uri = editor.document.uri;
         if (editor.viewColumn) this._sourceColumn = editor.viewColumn;
 
-        if (changed) this._refresh(true);
+        if (changed) {
+            this._selectionTarget = null;
+            this._refresh(true);
+        }
     }
 
     _onDocumentChanged(event) {
@@ -265,6 +470,7 @@ class DesignViewPanel {
         if (isActive && !isTracked) {
             this._uri = event.document.uri;
             if (active.viewColumn) this._sourceColumn = active.viewColumn;
+            this._selectionTarget = null;
         }
 
         this._scheduleRefresh();
@@ -274,7 +480,8 @@ class DesignViewPanel {
         if (!this._uri || this._uri.toString() !== document.uri.toString()) return;
 
         this._uri   = null;
-        this._cache = { uri: '', version: -1 };
+        this._cache = { uri: '', version: -1, model: null };
+        this._selectionTarget = null;
 
         const active = vscode.window.activeTextEditor;
         if (active && isJrxmlDocument(active.document)) {
@@ -300,6 +507,7 @@ class DesignViewPanel {
                         this._panel.webview.postMessage(this._pending || this._lastUpdate);
                         this._pending = null;
                     }
+                    this._sendCurrentSelection();
                     break;
 
                 case 'refresh':
@@ -308,6 +516,16 @@ class DesignViewPanel {
 
                 case 'reveal':
                     this._reveal(message).catch(err => this._postError(err));
+                    break;
+
+                case 'applyEdit':
+                    this._applyEdit(message).catch(err => this._rejectEdit(
+                        err && err.message ? err.message : String(err)
+                    ));
+                    break;
+
+                case 'complete':
+                    this._sendCompletions(message);
                     break;
 
                 default:
@@ -346,6 +564,7 @@ class DesignViewPanel {
     dispose() {
         DesignViewPanel.currentPanel = undefined;
         clearTimeout(this._timer);
+        clearTimeout(this._selectionTimer);
         this._panel.dispose();
         this._disposables.forEach(disposable => disposable.dispose());
         this._disposables = [];
@@ -388,6 +607,8 @@ function register(context) {
 module.exports = {
     register,
     DesignViewPanel,
+    applyDesignPatch,
+    buildCompletionsForDocument,
     TITLE_PREFIX,
     isJrxmlDocument,
 };

@@ -226,7 +226,7 @@ suite('JRXML extension smoke', () => {
         await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     });
 
-    test('opens the read-only design view for the active report', async () => {
+    test('opens the design view for the active report', async () => {
         await openDocument(fixtureCopy('Blank_A4_1.jrxml'));
         await vscode.commands.executeCommand('jrxml.openDesignView');
 
@@ -236,6 +236,78 @@ suite('JRXML extension smoke', () => {
 
         assert.ok(tab, 'JRXML Design tab was not opened');
         await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+    });
+
+    test('applies a design-view patch and rejects a stale version', async () => {
+        const document = await openDocument(tempFile('DesignEdit.jrxml', [
+            '<jasperReport name="DesignEdit" pageWidth="300" pageHeight="400"',
+            ' columnWidth="260" leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">',
+            '\t<detail>',
+            '\t\t<band height="20">',
+            '\t\t\t<element kind="textField" uuid="aaaaaaaa-0000-0000-0000-000000000001" x="0" y="0" width="100" height="20">',
+            '\t\t\t\t<expression><![CDATA["x"]]></expression>',
+            '\t\t\t</element>',
+            '\t\t</band>',
+            '\t</detail>',
+            '</jasperReport>',
+        ].join('\n')));
+
+        const original = document.getText();
+        const offset = original.indexOf('<element');
+        const { applyDesignPatch } = require('../designViewPanel');
+
+        const applied = await applyDesignPatch(document, {
+            elementOffset: offset,
+            baseVersion: document.version,
+            patch: {
+                geometry:   { x: 25, width: 120 },
+                properties: { bold: true },
+                attributes: {
+                    set:    { 'data-test': 'v' },
+                    remove: ['uuid'],
+                },
+            },
+        });
+
+        assert.strictEqual(applied.ok, true, applied.reason || 'patch failed');
+        const updated = document.getText();
+        assert.ok(updated.includes('x="25"'), 'x was not written');
+        assert.ok(updated.includes('width="120"'), 'width was not written');
+        assert.ok(updated.includes('bold="true"'), 'property was not inserted');
+        assert.ok(updated.includes('data-test="v"'), 'free-form attribute was not added');
+        assert.ok(!updated.includes('uuid="'), 'attribute was not removed');
+
+        const stale = await applyDesignPatch(document, {
+            elementOffset: offset,
+            baseVersion: document.version - 1,
+            patch: { geometry: { x: 1 } },
+        });
+        assert.strictEqual(stale.ok, false);
+        assert.strictEqual(stale.stale, true);
+        assert.match(stale.reason, /changed/);
+
+        await vscode.commands.executeCommand('undo');
+        assert.strictEqual(document.getText(), original, 'one undo should revert the whole patch');
+    });
+
+    test('provides the editor completion engine to the design inspector', async () => {
+        const document = await openDocument(fixtureCopy('Blank_A4_1.jrxml'));
+        const { buildCompletionsForDocument } = require('../designViewPanel');
+
+        const fields = buildCompletionsForDocument(document, '$F{', 3);
+        assert.strictEqual(fields.mode, 'field');
+        assert.ok(fields.items.some(item => item.label === 'Field_4'), 'fields are missing');
+
+        const expression = '$F{Field_1}.';
+        const members = buildCompletionsForDocument(document, expression, expression.length);
+        assert.strictEqual(members.mode, 'member');
+        assert.ok(
+            members.items.some(item => (item.filterText || item.label) === 'substring'),
+            'typed String members are missing'
+        );
+
+        const general = buildCompletionsForDocument(document, 'TODAY', 5);
+        assert.ok(general.items.some(item => item.label === 'TODAY'), 'built-ins are missing');
     });
 
     test('resolves the include chain of the open report', async () => {

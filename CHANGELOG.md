@@ -7,14 +7,36 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [Unreleased]
 
 ### Added
-- **Read-only design view:** a Jaspersoft Studio-style visual canvas for Studio 7
-  JRXML, opened beside the source with **JRXML: Open Design View** (editor title
-  button and JRXML submenu). It shows the page, margins, columns, bands,
-  element geometry, local default/named styles, text, shapes and frames, labels
+- **Design view:** a Jaspersoft Studio-style visual canvas for Studio 7 JRXML,
+  opened beside the source with **JRXML: Open Design View** (editor title button
+  and JRXML submenu). It shows the page, margins, columns, bands, element
+  geometry, local default/named styles, text, shapes and frames, labels
   images/subreports/charts/tables, marks page breaks and supports click-to-reveal
   in the source. The panel follows the active report and updates as you type.
   Classic-format and malformed files show an explanatory banner; expressions are
   not evaluated and no data is loaded.
+- **Design view selection sync:** moving the source cursor highlights and scrolls
+  the matching element or band in the panel; **Follow** toggles the behaviour.
+- **Design view editing:** an opt-in **Edit** mode adds drag-to-move, eight resize
+  handles and an inspector for geometry, text/expression content (CDATA preserved),
+  font family/size/style, alignment, rotation, markup, colours and mode. Every
+  change is one undoable `WorkspaceEdit`, guarded by the document version so a
+  stale drag cannot overwrite newer source edits. Inherited styles are left
+  untouched and shared `<style>` definitions are never modified.
+- **Design view autocomplete:** the inspector's expression textarea now uses the
+  same suggestion engine as the `.jrxml` editor — fields, parameters, variables,
+  Jasper built-ins, Java types/statics, local static methods and typed members,
+  with snippet placeholders. `Ctrl+Space` opens the list; arrows navigate;
+  Enter/Tab inserts; Escape closes. Fields completed inside `$F{...}` add the
+  closing brace when it is missing.
+- **Design view inspector:** the property panel now also covers print/behaviour
+  (`positionType`, `stretchType`, repeated values, blank lines, print-on-overflow,
+  evaluation time/group, key, bookmark), named styles, text adjust/pattern/
+  blankWhenNull, image scale/alignment/error/cache/link settings, line
+  direction/width/style/colour, rectangle radius, break type, subreport options,
+  border/padding, and an **All attributes** editor for arbitrary element
+  attributes. Drawn lines now honour diagonal `TopDown`/`BottomUp` direction and
+  border widths, and `elementGroup` containers render their children.
 
 ## [0.1.2] - 2026-11-03
 
