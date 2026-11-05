@@ -199,3 +199,14 @@ test('walkthrough completion events reference declared commands', () => {
         }
     }
 });
+
+test('contributes the tutorial command and menu entry', () => {
+    const command = (pkg.contributes.commands || [])
+        .find(candidate => candidate.command === 'jrxml.openTutorial');
+    assert.ok(command, 'missing the open-tutorial command');
+    assert.match(command.title, /Tutorial/);
+
+    const entry = (pkg.contributes.menus.jrxml || [])
+        .find(candidate => candidate.command === 'jrxml.openTutorial');
+    assert.ok(entry, 'missing the tutorial entry in the JRXML submenu');
+});

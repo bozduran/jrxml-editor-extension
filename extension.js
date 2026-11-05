@@ -23,6 +23,7 @@ const {
 const { register: registerSort } = require('./sortProvider');
 const { register: registerClear } = require('./clearProvider');
 const { register: registerSettingsPanel } = require('./settingsPanel');
+const { register: registerTutorial } = require('./tutorialPanel');
 const { register: registerIncludeChain } = require('./includeChainView');
 const { register: registerIfElsePanel } = require('./ifElsePanel');
 const { register: registerExpressionActions } = require('./expressionActions');
@@ -97,6 +98,9 @@ function activate(context) {
 
     // ── Dedicated settings panel ─────────────────────────────────────────────
     registerSettingsPanel(context);
+
+    // ── Built-in tutorial (opened from Settings) ─────────────────────────────
+    registerTutorial(context);
 
     // ── If / Else expression builder panel (reads the open .jrxml schema) ────
     registerIfElsePanel(context);

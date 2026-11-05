@@ -95,6 +95,20 @@ function buildSettingsHtml({ groups, values, nonce, section = 'jrxml' }) {
   }
   button.secondary:hover { background: rgba(255,255,255,0.07); }
   button.small { padding: 2px 8px; font-size: 12px; }
+  .help-card {
+    margin: 16px 16px 0;
+    padding: 12px 14px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--vscode-sideBar-background, #252526);
+  }
+  .help-card h2 { margin: 0 0 2px; font-size: 13px; }
+  .help-card p { margin: 0; color: var(--muted); font-size: 12px; }
   .groups { padding: 8px 16px; }
   .group { margin: 16px 0 24px; }
   .group h2 {
@@ -160,6 +174,14 @@ function buildSettingsHtml({ groups, values, nonce, section = 'jrxml' }) {
   <button id="btnNative" class="secondary">Open VS Code settings</button>
   <button id="btnReset" class="secondary">Reset all to defaults</button>
 </div>
+
+<section class="help-card">
+  <div>
+    <h2>New to JRXML?</h2>
+    <p>Open the built-in tutorial for a tour of the editor, expression tools, design view, diagnostics and every setting.</p>
+  </div>
+  <button id="btnTutorial">Open tutorial</button>
+</section>
 
 <div id="groups" class="groups"></div>
 <div id="empty" class="empty" hidden>No settings match.</div>
@@ -293,6 +315,7 @@ function render() {
 searchEl.addEventListener('input', render);
 document.getElementById('btnNative').addEventListener('click', () => vscode.postMessage({ command: 'openNative' }));
 document.getElementById('btnReset').addEventListener('click', () => vscode.postMessage({ command: 'reset' }));
+document.getElementById('btnTutorial').addEventListener('click', () => vscode.postMessage({ command: 'openTutorial' }));
 
 window.addEventListener('message', event => {
   const message = event.data;

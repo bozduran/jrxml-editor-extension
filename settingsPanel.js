@@ -99,6 +99,10 @@ class SettingsPanel {
                     await vscode.commands.executeCommand('workbench.action.openSettings', SECTION);
                     break;
 
+                case 'openTutorial':
+                    await vscode.commands.executeCommand('jrxml.openTutorial');
+                    break;
+
                 default:
                     break;
             }

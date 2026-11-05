@@ -160,9 +160,10 @@ Date/time helpers: `jdatetoday` (format `TODAY()`), `jdateadd` (`TODAY()` + N da
 `jdatecompare` (two string dates), `jnow`, `jdatediff`, `jdatetodaytz` (report time zone)
 and `jdatetodaylocale` (report locale).
 
-### 10. Settings panel
+### 10. Settings panel and tutorial
 **JRXML: Open Settings** opens a dedicated panel with every `jrxml.*` setting grouped by area (Editor, Diagnostics, Formatting, Clear and migration, Sort, Best practices). Toggles are bound live to workspace settings — the panel, VS Code's own Settings UI and the running features always agree — with a filter box and "Reset all to defaults". The panel schema is cross-checked against `package.json` by a test, so it cannot drift.
 
+The panel also has an **Open tutorial** button. **JRXML: Open Tutorial** opens a built-in HTML guide that walks through the editor, Expression Editor, If / Else builder (including expression results), design view, Issues, formatting, best practices, clean-up and the include chain, with a reference for every command, shortcut and settings group. Its command and settings-group coverage is enforced by `test/tutorialHtml.test.js`, so adding a user-facing feature fails `npm test` until the guide is updated.
 
 ### 11. Include chain view
 The **Include Chain (JRXML)** view sits below Best Practices in the **JRXML** Activity Bar view and answers *"where is the report I have open called from?"*. For the active `.jrxml` it renders the chain **top-down**: the top template(s) that ultimately include it, nested down to the open file, which is highlighted as *(current file)*. Nodes are workspace-relative paths and open the file on click; a report nothing calls shows `(not referenced)`.
@@ -292,6 +293,9 @@ activates the extension for real and covers command registration, diagnostics,
 the sort/clear commands (preview disabled), document formatting and the settings
 panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
 
+When you add a command or a settings group, also update `tutorialHtml.js`;
+`test/tutorialHtml.test.js` fails until the tutorial documents it. The pull
+request template repeats the reminder.
 
 ---
 

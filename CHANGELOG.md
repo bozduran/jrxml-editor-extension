@@ -2,6 +2,10 @@
 
 All notable changes to the "jrxml-editor" extension will be documented in this file.
 
+<!-- When adding a user-facing feature, update tutorialHtml.js. New commands and
+     settings groups must be added to its DOCUMENTED_* lists; test/tutorialHtml.test.js
+     enforces them. -->
+
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
 ## [Unreleased]
@@ -43,6 +47,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   existing expression keeps arithmetic, concatenation, method calls and `new`
   expressions instead of failing. Conditions the builder cannot represent still
   load as Custom conditions.
+- **Tutorial:** a built-in HTML guide opened with **JRXML: Open Tutorial**, the
+  JRXML menu or the **Open tutorial** button in the Settings panel. It covers the
+  editor, Expression Editor, If / Else builder (including expression results),
+  design view, Issues, formatting, best practices, clean-up, include chain, every
+  command, shortcut and settings group, and has command links that open the
+  matching feature.
+- **Tutorial coverage guard:** `test/tutorialHtml.test.js` compares the
+  documented commands and settings groups with `package.json` and
+  `settingsSchema.js`, so adding a user-facing command or settings group fails
+  `npm test` until `tutorialHtml.js` is updated. A pull-request template repeats
+  the reminder.
 
 ### Fixed
 - **If / Else builder:** loading an expression whose results used arithmetic or

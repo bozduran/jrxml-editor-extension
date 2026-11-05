@@ -166,6 +166,11 @@
         "icon": "$(settings-gear)"
       },
       {
+        "command": "jrxml.openTutorial",
+        "title": "JRXML: Open Tutorial",
+        "icon": "$(book)"
+      },
+      {
         "command": "jrxml.refreshIncludeChain",
         "title": "JRXML: Refresh Include Chain",
         "icon": "$(refresh)"
@@ -271,6 +276,10 @@
         {
           "command": "jrxml.openSettingsPanel",
           "group": "9_settings@1"
+        },
+        {
+          "command": "jrxml.openTutorial",
+          "group": "9_settings@2"
         }
       ],
       "view/title": [
@@ -572,7 +581,7 @@
     "viewsWelcome": [
       {
         "view": "jrxmlIssues",
-        "contents": "Open a `.jrxml` file to see diagnostics here.\n[Open Expression Editor](command:jrxml.openExpressionEditor)\n[Build an if / else expression](command:jrxml.openIfElseBuilder)\n[Open Settings](command:jrxml.openSettingsPanel)"
+        "contents": "Open a `.jrxml` file to see diagnostics here.\n[Open Expression Editor](command:jrxml.openExpressionEditor)\n[Build an if / else expression](command:jrxml.openIfElseBuilder)\n[Open Settings](command:jrxml.openSettingsPanel)\n[Open the tutorial](command:jrxml.openTutorial)"
       }
     ],
     "walkthroughs": [
