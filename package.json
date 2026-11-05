@@ -325,13 +325,15 @@
       },
       {
         "command": "jrxml.nextIssue",
-        "key": "ctrl+alt+down",
-        "when": "editorTextFocus && resourceExtname == .jrxml"
+        "key": "ctrl+alt+n",
+        "when": "editorTextFocus && resourceExtname == .jrxml",
+        "mac": "cmd+alt+n"
       },
       {
         "command": "jrxml.previousIssue",
-        "key": "ctrl+alt+up",
-        "when": "editorTextFocus && resourceExtname == .jrxml"
+        "key": "ctrl+alt+p",
+        "when": "editorTextFocus && resourceExtname == .jrxml",
+        "mac": "cmd+alt+p"
       }
     ],
     "configuration": {

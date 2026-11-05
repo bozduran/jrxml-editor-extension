@@ -94,7 +94,9 @@ test('walks through the main surfaces', () => {
     assert.ok(html.includes('Expression'), 'expression results must be explained');
     assert.ok(html.includes('inserted verbatim'));
     assert.ok(html.includes('Ctrl+Alt+E'), 'shortcuts must be rendered readably');
-    assert.ok(html.includes('Ctrl+Alt+Down'));
+    assert.ok(html.includes('Ctrl+Alt+N'));
+    assert.ok(html.includes('Ctrl+Alt+P'));
+    assert.ok(!html.includes('Ctrl+Alt+Down'), 'the multi-cursor shortcut must not be overridden');
     assert.ok(html.includes('Cmd+Alt+E'), 'macOS shortcuts must be shown');
     assert.ok(html.includes(`v${pkg.version}`), 'the version must be shown');
 });

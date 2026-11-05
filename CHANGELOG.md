@@ -59,6 +59,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   `npm test` until `tutorialHtml.js` is updated. A pull-request template repeats
   the reminder.
 
+### Changed
+- **Navigation:** **Go to Next / Previous Issue** now use `Ctrl+Alt+N` / `Ctrl+Alt+P`
+  (`Cmd+Alt+N` / `Cmd+Alt+P` on macOS) instead of `Ctrl+Alt+Down` / `Ctrl+Alt+Up`,
+  which overrode VS Code's add-cursor-below/above shortcuts while a `.jrxml` editor
+  had focus.
+
 ### Removed
 - **Best Practices view:** its only rule (Boolean comparisons) now runs as the
   normal `jrxml.booleanEquals` diagnostic with a one-click `EQUALS(...)` fix in
