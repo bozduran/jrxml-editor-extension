@@ -234,78 +234,181 @@
         { "include": "#java_method_call" }
       ]
     },
-    "query": {
-      "comment": "SQL/JSONQL query body - highlighted without depending on an external SQL grammar",
-      "patterns": [
-        {
-          "match": "<query(?:\\s[^>]*)?/>",
-          "name": "meta.tag.xml"
-        },
-        {
-          "name": "meta.query.jrxml",
-          "begin": "(<query(?:\\s[^>]*)?>)\\s*(<!\\[CDATA\\[)?",
-          "end": "(\\]\\]>)?\\s*(</query>)",
-          "beginCaptures": {
-            "1": { "name": "entity.name.tag.jrxml" },
-            "2": { "name": "punctuation.definition.string.begin.xml" }
+      "query": {
+        "comment": "SQL/JSONQL query body - SQL rules apply only when language=\"sql\"",
+        "patterns": [
+          {
+            "match": "<query(?:\\s[^>]*)?/>",
+            "name": "meta.tag.xml"
           },
-          "endCaptures": {
-            "1": { "name": "punctuation.definition.string.end.xml" },
-            "2": { "name": "entity.name.tag.jrxml" }
+          {
+            "name": "meta.query.sql.jrxml",
+            "begin": "(<query(?=[^>]*\\blanguage\\s*=\\s*[\"']sql[\"'])[^>]*>)\\s*(<!\\[CDATA\\[)?",
+            "end": "(\\]\\]>)?\\s*(</query>)",
+            "beginCaptures": {
+              "1": {
+                "name": "entity.name.tag.jrxml"
+              },
+              "2": {
+                "name": "punctuation.definition.string.begin.xml"
+              }
+            },
+            "endCaptures": {
+              "1": {
+                "name": "punctuation.definition.string.end.xml"
+              },
+              "2": {
+                "name": "entity.name.tag.jrxml"
+              }
+            },
+            "patterns": [
+              {
+                "include": "#query_comment"
+              },
+              {
+                "include": "#query_string_sql"
+              },
+              {
+                "include": "#jasper_fragment"
+              },
+              {
+                "include": "#query_keyword"
+              },
+              {
+                "include": "#query_number"
+              },
+              {
+                "include": "#query_punctuation"
+              }
+            ]
           },
-          "patterns": [
-            { "include": "#query_comment" },
-            { "include": "#query_string" },
-            { "include": "#jasper_fragment" },
-            { "include": "#query_keyword" },
-            { "include": "#query_number" },
-            { "include": "#query_punctuation" }
-          ]
-        }
-      ]
-    },
-    "query_comment": {
-      "patterns": [
-        { "name": "comment.block.sql", "begin": "/\\*", "end": "\\*/" },
-        { "name": "comment.line.double-dash.sql", "begin": "--", "end": "$" }
-      ]
-    },
-    "query_string": {
-      "patterns": [
-        {
-          "name": "string.quoted.single.sql",
-          "begin": "'",
-          "end": "'(?!')",
-          "patterns": [
-            { "match": "''", "name": "constant.character.escape.sql" }
-          ]
-        },
-        {
-          "name": "string.quoted.double.json",
-          "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            { "match": "\\\\.", "name": "constant.character.escape.json" }
-          ]
-        }
-      ]
-    },
-    "jasper_fragment": {
-      "match": "\\$(?:[FPVRX]!?)\\{[^}]*\\}",
-      "name": "variable.other.jasper.jrxml"
-    },
-    "query_keyword": {
-      "match": "(?i)\\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|UNION|ALL|DISTINCT|AS|AND|OR|NOT|NULL|IS|IN|EXISTS|BETWEEN|LIKE|CASE|WHEN|THEN|ELSE|END|COUNT|SUM|AVG|MIN|MAX|ASC|DESC)\\b",
-      "name": "keyword.other.sql"
-    },
-    "query_number": {
-      "match": "\\b\\d+(?:\\.\\d+)?\\b",
-      "name": "constant.numeric.sql"
-    },
-    "query_punctuation": {
-      "match": "[{}()\\[\\],;]",
-      "name": "punctuation.separator.sql"
-    },
+          {
+            "name": "meta.query.jsonql.jrxml",
+            "begin": "(<query(?=[^>]*\\blanguage\\s*=\\s*[\"']jsonql[\"'])[^>]*>)\\s*(<!\\[CDATA\\[)?",
+            "end": "(\\]\\]>)?\\s*(</query>)",
+            "beginCaptures": {
+              "1": {
+                "name": "entity.name.tag.jrxml"
+              },
+              "2": {
+                "name": "punctuation.definition.string.begin.xml"
+              }
+            },
+            "endCaptures": {
+              "1": {
+                "name": "punctuation.definition.string.end.xml"
+              },
+              "2": {
+                "name": "entity.name.tag.jrxml"
+              }
+            },
+            "patterns": [
+              {
+                "include": "#query_string_json"
+              },
+              {
+                "include": "#jasper_fragment"
+              },
+              {
+                "include": "#query_number"
+              },
+              {
+                "include": "#query_punctuation"
+              }
+            ]
+          },
+          {
+            "name": "meta.query.jrxml",
+            "begin": "(<query(?:\\s[^>]*)?>)\\s*(<!\\[CDATA\\[)?",
+            "end": "(\\]\\]>)?\\s*(</query>)",
+            "beginCaptures": {
+              "1": {
+                "name": "entity.name.tag.jrxml"
+              },
+              "2": {
+                "name": "punctuation.definition.string.begin.xml"
+              }
+            },
+            "endCaptures": {
+              "1": {
+                "name": "punctuation.definition.string.end.xml"
+              },
+              "2": {
+                "name": "entity.name.tag.jrxml"
+              }
+            },
+            "patterns": [
+              {
+                "include": "#query_string_sql"
+              },
+              {
+                "include": "#query_string_json"
+              },
+              {
+                "include": "#jasper_fragment"
+              },
+              {
+                "include": "#query_number"
+              },
+              {
+                "include": "#query_punctuation"
+              }
+            ]
+          }
+        ]
+      },
+      "query_comment": {
+        "patterns": [
+          {
+            "name": "comment.block.sql",
+            "begin": "/\\*",
+            "end": "\\*/"
+          },
+          {
+            "name": "comment.line.double-dash.sql",
+            "begin": "--",
+            "end": "$"
+          }
+        ]
+      },
+      "query_string_sql": {
+        "name": "string.quoted.single.sql",
+        "begin": "'",
+        "end": "'(?!')",
+        "patterns": [
+          {
+            "match": "''",
+            "name": "constant.character.escape.sql"
+          }
+        ]
+      },
+      "query_string_json": {
+        "name": "string.quoted.double.json",
+        "begin": "\"",
+        "end": "\"",
+        "patterns": [
+          {
+            "match": "\\\\.",
+            "name": "constant.character.escape.json"
+          }
+        ]
+      },
+      "jasper_fragment": {
+        "match": "\\$(?:[FPVRX]!?)\\{[^}]*\\}",
+        "name": "variable.other.jasper.jrxml"
+      },
+      "query_keyword": {
+        "match": "(?i)\\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|UNION|ALL|DISTINCT|AS|AND|OR|NOT|NULL|IS|IN|EXISTS|BETWEEN|LIKE|CASE|WHEN|THEN|ELSE|END|COUNT|SUM|AVG|MIN|MAX|ASC|DESC)\\b",
+        "name": "keyword.other.sql"
+      },
+      "query_number": {
+        "match": "\\b\\d+(?:\\.\\d+)?\\b",
+        "name": "constant.numeric.sql"
+      },
+      "query_punctuation": {
+        "match": "[{}()\\[\\],;]",
+        "name": "punctuation.separator.sql"
+      },
     "xml_tag": {
       "patterns": [
         {

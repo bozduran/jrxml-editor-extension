@@ -124,6 +124,15 @@ test('the grammar highlights <query> content as an embedded language', () => {
     assert.ok(query, 'missing query begin/end rule');
     assert.doesNotThrow(() => new RegExp(query.begin));
     assert.doesNotThrow(() => new RegExp(query.end));
+
+    const sql = grammar.repository.query.patterns.find(pattern => pattern.name === 'meta.query.sql.jrxml');
+    const jsonql = grammar.repository.query.patterns.find(pattern => pattern.name === 'meta.query.jsonql.jrxml');
+    assert.ok(sql && jsonql, 'missing language-specific query rules');
+    assert.ok(sql.patterns.some(rule => rule.include === '#query_keyword'));
+    assert.ok(sql.patterns.some(rule => rule.include === '#query_comment'));
+    assert.ok(!jsonql.patterns.some(rule => rule.include === '#query_keyword'));
+    assert.ok(!jsonql.patterns.some(rule => rule.include === '#query_comment'));
+    assert.ok(jsonql.patterns.some(rule => rule.include === '#query_string_json'));
 });
 
 test('the expression editor recognizes every registry tag at the cursor', () => {
