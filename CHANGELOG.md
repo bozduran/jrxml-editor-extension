@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
 ### Added
 - **Design view:** a Jaspersoft Studio-style visual canvas for Studio 7 JRXML,
   opened beside the source with **JRXML: Open Design View** (editor title button
