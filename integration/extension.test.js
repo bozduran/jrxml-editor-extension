@@ -643,6 +643,15 @@ suite('JRXML extension smoke', () => {
         assert.match(found.message, /missing\.jrxml/);
     });
 
+    test('validates every JRXML file in the workspace', async () => {
+        const result = await vscode.commands.executeCommand('jrxml.validateWorkspace');
+
+        assert.ok(result, 'the command returned no summary');
+        assert.strictEqual(result.files, 4);
+        assert.strictEqual(result.errors, 0);
+        assert.ok(result.warnings >= 0);
+    });
+
     test('reports a layout overflow diagnostic', async () => {
         const uri = tempFile('LayoutOverflow.jrxml', [
             '<jasperReport name="LayoutOverflow" pageWidth="595" pageHeight="842"',

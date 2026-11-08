@@ -147,6 +147,11 @@
         "command": "jrxml.refreshIncludeChain",
         "title": "JRXML: Refresh Include Chain",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "jrxml.validateWorkspace",
+        "title": "JRXML: Validate Workspace",
+        "icon": "$(check-all)"
       }
     ],
     "submenus": [
@@ -245,6 +250,10 @@
         {
           "command": "jrxml.previousIssue",
           "group": "4_navigate@2"
+        },
+        {
+          "command": "jrxml.validateWorkspace",
+          "group": "5_validate@1"
         },
         {
           "command": "jrxml.openSettingsPanel",
@@ -596,6 +605,7 @@
     "test:integration": "vscode-test",
     "test:integration:headless": "vscode-test --config .vscode-test.headless.mjs",
     "lint": "eslint .",
+    "validate:workspace": "node tools/validate-workspace.js",
     "package": "vsce package --no-dependencies",
     "version": "node tools/update-changelog.js && git add CHANGELOG.md",
     "gen:jdk-index": "node tools/gen-jdk-index.js"
