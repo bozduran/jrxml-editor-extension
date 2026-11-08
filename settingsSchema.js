@@ -118,6 +118,11 @@ const SETTINGS_GROUPS = [
                 label: 'Duplicate declaration names',
                 description: 'Error when a field, parameter, variable, group, dataset or style name is declared more than once in the same scope.',
             },
+            {
+                key: 'lint.layout', type: 'boolean', default: true,
+                label: 'Layout validation',
+                description: 'Error when columns do not fit the page, band heights exceed the margins, or an element extends below its band.',
+            },
         ],
     },
     {
