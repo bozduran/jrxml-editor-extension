@@ -28,6 +28,7 @@ const { register: registerIfElsePanel } = require('./ifElsePanel');
 const { register: registerExpressionActions } = require('./expressionActions');
 const { register: registerDesignView } = require('./designViewPanel');
 const { register: registerWorkspaceValidation } = require('./workspaceValidation');
+const { register: registerBuildBridge } = require('./buildBridge');
 const { provider: previewProvider } = require('./preview');
 /**
  * @param {vscode.ExtensionContext} context
@@ -114,6 +115,7 @@ function activate(context) {
     // ── Read-only design view (Jaspersoft Studio style) ───────────────────────
     registerDesignView(context);
     registerWorkspaceValidation(context);
+    registerBuildBridge(context);
 
     // Diff previews for whole-file rewrites
     context.subscriptions.push(previewProvider);

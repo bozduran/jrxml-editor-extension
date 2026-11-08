@@ -201,6 +201,19 @@ const SETTINGS_GROUPS = [
             },
         ],
     },
+    {
+        id: 'build',
+        title: 'Build bridge',
+        description: 'Run the project\'s existing JasperReports build',
+        settings: [
+            {
+                key: 'build.command', type: 'string',
+                default: 'mvn -q -DskipTests jasperreports:compile',
+                label: 'Build command',
+                description: 'Shell command run by JRXML: Run Build; its output is parsed by the JRXML problem matchers.',
+            },
+        ],
+    },
 ];
 
 /** Flat list of every setting in panel order. */
