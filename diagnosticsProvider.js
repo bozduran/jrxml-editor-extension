@@ -16,6 +16,7 @@ const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
+const { checkLayout } = require('./layoutRules');
 const { reportLanguage } = require('./reportLanguage');
 const { resourcesForDocument } = require('./resourceIndex');
 const { analyseSubreports } = require('./subreportIndex');
@@ -312,6 +313,20 @@ function updateDiagnostics(document) {
         }
     } catch (err) {
         console.error('[JRXML] lint rules failed:', err);
+    }
+
+    // ── 4a. Layout (compile-time geometry errors) ─────────────────────────────
+    if (cfg.get('lint.layout', true)) {
+        try {
+            for (const issue of checkLayout(text)) {
+                diagnostics.push(makeDiagnostic(
+                    document, issue.offset, issue.length, issue.message,
+                    vscode.DiagnosticSeverity.Error, issue.code
+                ));
+            }
+        } catch (err) {
+            console.error('[JRXML] layout check failed:', err);
+        }
     }
 
     // ── 4b. Variable evaluation order (declared-later references) ─────────────

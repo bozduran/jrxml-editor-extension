@@ -446,3 +446,32 @@ test('dynamic subreport expressions are not diagnosed', () => {
         []
     );
 });
+
+const layoutIssues = diags => diags.filter(d => String(d.code).startsWith('jrxml.layout.'));
+
+test('layout violations are errors and can be switched off', () => {
+    const text = `<jasperReport name="R" pageWidth="595" pageHeight="842" columnWidth="555"
+      leftMargin="20" rightMargin="20" columnCount="2">
+  <detail><band height="20"/></detail>
+</jasperReport>`;
+
+    const diags = layoutIssues(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.layout.columns');
+    assert.strictEqual(diags[0].severity, 0); // Error
+
+    assert.deepStrictEqual(
+        layoutIssues(diagnose(text, { settings: { 'lint.layout': false } })),
+        []
+    );
+});
+
+test('a valid layout produces no layout diagnostics', () => {
+    const text = `<jasperReport name="R" pageWidth="595" pageHeight="842" columnWidth="555"
+      leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
+  <pageHeader height="20"/>
+  <detail><band height="40"><element kind="textField" x="0" y="0" width="100" height="20"/></band></detail>
+</jasperReport>`;
+
+    assert.deepStrictEqual(layoutIssues(diagnose(text)), []);
+});
