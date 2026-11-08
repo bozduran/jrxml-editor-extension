@@ -250,6 +250,7 @@ context-only actions are omitted.
 | `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
 | `jrxml.lint.nullDereference` | `true` | Warn on an unguarded `$F`/`$P`/`$V` method-call receiver |
 | `jrxml.lint.booleanEquals` | `true` | Warn on `==`/`!=` or `Boolean.TRUE/FALSE.equals` for Boolean values |
+| `jrxml.lint.duplicateNames` | `true` | Error when a field/parameter/variable/group/dataset/style name is declared more than once in the same scope |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |

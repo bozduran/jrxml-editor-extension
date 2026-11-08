@@ -71,6 +71,7 @@ function parseDeclarations(document) {
         allParameters: [...parameters, ...dsParameters].sort(byOffset),
         allVariables:  [...variables, ...dsVariables].sort(byOffset),
         groups:     extractGroups(text),
+        styles:     extractStyles(text),
         references: extractReferences(scan),
         outline:    extractOutline(text, { fields, parameters, variables }),
     };
@@ -94,11 +95,13 @@ function classifyDeclarationScopes(scan) {
 
     for (const node of scan.doc.walk()) {
         if (node.tag !== 'dataset' && node.tag !== 'subDataset') continue;
+        const nameAttr = node.attr('name');
         datasets.push({
-            name:   node.attrValue('name') || '',
-            offset: node.startTag,
-            end:    node.end,
-            sets:   emptyDeclarationSets(),
+            name:       node.attrValue('name') || '',
+            nameOffset: nameAttr ? nameAttr.valueStart : -1,
+            offset:     node.startTag,
+            end:        node.end,
+            sets:       emptyDeclarationSets(),
         });
     }
 
@@ -141,6 +144,7 @@ function buildDatasets(scopes, rawFields, rawParameters, rawVariables) {
     if (!scopes) return [];
     return scopes.datasets.map(ds => ({
         name:       ds.name,
+        nameOffset: ds.nameOffset,
         offset:     ds.offset,
         end:        ds.end,
         fields:     rawFields.filter(decl => ds.sets.field.has(decl.offset)),
@@ -385,6 +389,77 @@ function extractGroups(text) {
         });
     }
     return results;
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+function extractStyles(text) {
+    const results = [];
+    const tagRe = /<style(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/style>)/g;
+    let m;
+    while ((m = tagRe.exec(text)) !== null) {
+        const attrs = m[1] || '';
+        const named = readName(m, 'style', attrs);
+        if (!named) continue;
+
+        results.push({
+            name:        named.name,
+            type:        'Style',
+            fullType:    'Style',
+            description: 'Named report style',
+            offset:      m.index,
+            end:         m.index + m[0].length,
+            nameOffset:  named.nameOffset,
+        });
+    }
+    return results;
+}
+
+// ── Duplicate declaration names ──────────────────────────────────────────────
+
+/**
+ * Every declaration that repeats an earlier name within the same scope.
+ * Report and dataset scopes are checked separately: a dataset field may share
+ * its name with a master field, but not with another field of the same dataset.
+ *
+ * @param {ParseResult} parsed
+ * @returns {{kind:string,name:string,scope:string,offset:number,length:number}[]}
+ */
+function findDuplicateNames(parsed) {
+    const duplicates = [];
+
+    const check = (kind, list, scope) => {
+        const seen = new Set();
+        for (const declaration of list || []) {
+            if (!declaration.name || typeof declaration.nameOffset !== 'number') continue;
+            if (seen.has(declaration.name)) {
+                duplicates.push({
+                    kind,
+                    name:   declaration.name,
+                    scope,
+                    offset: declaration.nameOffset,
+                    length: declaration.name.length,
+                });
+            } else {
+                seen.add(declaration.name);
+            }
+        }
+    };
+
+    check('field', parsed.fields, '');
+    check('parameter', parsed.parameters, '');
+    check('variable', parsed.variables, '');
+    check('group', parsed.groups, '');
+    check('style', parsed.styles, '');
+    check('dataset', parsed.datasets, '');
+
+    for (const dataset of parsed.datasets || []) {
+        check('field', dataset.fields, dataset.name);
+        check('parameter', dataset.parameters, dataset.name);
+        check('variable', dataset.variables, dataset.name);
+    }
+
+    return duplicates;
 }
 
 // ── References ($F/$P/$V usages and declaration-equivalent usages) ────────────
@@ -698,6 +773,7 @@ function inSubreportRange(offset, ranges) {
 module.exports = {
     parseDeclarations,
     resolveDeclarationScope,
+    findDuplicateNames,
     clearCache,
     clearAllCaches,
 };

@@ -9,7 +9,7 @@
 //   WARNING  — Boolean comparisons that should use EQUALS()
 
 const vscode = require('vscode');
-const { parseDeclarations, resolveDeclarationScope, clearCache } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope, findDuplicateNames, clearCache } = require('./jrxmlParser');
 const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
@@ -160,6 +160,20 @@ function updateDiagnostics(document) {
         }
     }
 
+    // ── 2b. Duplicate declaration names ───────────────────────────────────────
+    // Checked per scope: a dataset field may share a master field's name, but
+    // not another declaration's name inside the same dataset.
+    if (cfg.get('lint.duplicateNames', true)) {
+        for (const duplicate of findDuplicateNames(parsed)) {
+            diagnostics.push(makeDiagnostic(
+                document, duplicate.offset, duplicate.length,
+                duplicateMessage(duplicate),
+                vscode.DiagnosticSeverity.Error,
+                'jrxml.duplicateName'
+            ));
+        }
+    }
+
     // ── 3. Expression syntax and style ───────────────────────────────────────
     if (checkExpr || checkBoolean) {
         forEachExpression(text, (rawExpr, exprOffset) => {
@@ -250,6 +264,19 @@ function updateDiagnostics(document) {
     }
 
     diagnosticCollection.set(document.uri, diagnostics);
+}
+
+/** Human-readable label for a duplicate-name diagnostic. */
+function duplicateMessage(duplicate) {
+    const labels = {
+        field: 'Field', parameter: 'Parameter', variable: 'Variable',
+        group: 'Group', dataset: 'Dataset', style: 'Style',
+    };
+    const label = labels[duplicate.kind] || 'Declaration';
+    const where = duplicate.scope
+        ? ` in dataset '${duplicate.scope}'`
+        : ' in this report';
+    return `${label} '${duplicate.name}' is declared more than once${where}.`;
 }
 
 // ── Scope helpers ─────────────────────────────────────────────────────────────

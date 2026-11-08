@@ -441,6 +441,11 @@
           "default": true,
           "description": "Warn when a Boolean field, parameter or variable is compared with == / != or Boolean.TRUE/FALSE.equals instead of EQUALS()."
         },
+        "jrxml.lint.duplicateNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Error when a field, parameter, variable, group, dataset or style name is declared more than once in the same scope."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,

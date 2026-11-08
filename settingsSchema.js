@@ -113,6 +113,11 @@ const SETTINGS_GROUPS = [
                 label: 'Boolean comparisons',
                 description: 'Warn when a Boolean field, parameter or variable is compared with == / != or Boolean.TRUE/FALSE.equals instead of EQUALS().',
             },
+            {
+                key: 'lint.duplicateNames', type: 'boolean', default: true,
+                label: 'Duplicate declaration names',
+                description: 'Error when a field, parameter, variable, group, dataset or style name is declared more than once in the same scope.',
+            },
         ],
     },
     {

@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const {
     parseDeclarations,
     resolveDeclarationScope,
+    findDuplicateNames,
     clearCache,
     clearAllCaches,
 } = require('../jrxmlParser');
@@ -365,3 +366,51 @@ test('caches per document version and clearCache forces a re-parse', () => {
 });
 
 module.exports = {};
+
+const DUPLICATES_REPORT = `<jasperReport name="R">
+  <field name="Amount" class="java.lang.Double"/>
+  <field name="Amount" class="java.lang.String"/>
+  <field name="Unique" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="Amount" class="java.lang.Double"/>
+    <field name="Amount" class="java.lang.String"/>
+    <parameter name="P" class="java.lang.String"/>
+    <parameter name="P" class="java.lang.String"/>
+    <variable name="V" class="java.lang.Integer" calculation="Count"/>
+    <variable name="V" class="java.lang.Integer" calculation="Count"/>
+  </dataset>
+  <dataset name="DS"/>
+  <group name="G"><groupExpression><![CDATA[1]]></groupExpression></group>
+  <group name="G"><groupExpression><![CDATA[2]]></groupExpression></group>
+  <style name="S" fontSize="10"/>
+  <style name="S" fontSize="12"/>
+</jasperReport>`;
+
+test('findDuplicateNames reports repeats inside a scope, not across scopes', () => {
+    const text = DUPLICATES_REPORT;
+    const duplicates = findDuplicateNames(parseDeclarations(makeDoc(text)));
+
+    const summary = duplicates.map(d => `${d.kind}:${d.name}@${d.scope}`).sort();
+    assert.deepStrictEqual(summary, [
+        'dataset:DS@',
+        'field:Amount@',
+        'field:Amount@DS',
+        'group:G@',
+        'parameter:P@DS',
+        'style:S@',
+        'variable:V@DS',
+    ]);
+
+    for (const duplicate of duplicates) {
+        assert.strictEqual(
+            text.slice(duplicate.offset, duplicate.offset + duplicate.length),
+            duplicate.name,
+            `span for ${duplicate.kind}:${duplicate.name}`
+        );
+    }
+});
+
+test('findDuplicateNames returns an empty list for unique declarations', () => {
+    const parsed = parseDeclarations(makeDoc(SAMPLE));
+    assert.deepStrictEqual(findDuplicateNames(parsed), []);
+});

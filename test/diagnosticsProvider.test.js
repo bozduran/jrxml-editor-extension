@@ -14,6 +14,7 @@ class FakeRange {
 }
 
 let currentDiags = [];
+let settings = {};
 const collection = {
     set(_uri, diags) { currentDiags = diags; },
     delete() {},
@@ -34,7 +35,7 @@ Module._load = function (request, ...rest) {
                 }
             },
             languages: { createDiagnosticCollection: () => collection },
-            workspace: { getConfiguration: () => ({ get: (_key, fallback) => fallback }) },
+            workspace: { getConfiguration: () => ({ get: (key, fallback) => (key in settings ? settings[key] : fallback) }) },
             window: {},
         };
     }
@@ -59,7 +60,8 @@ function fakeDocument(text) {
     };
 }
 
-function diagnose(text) {
+function diagnose(text, options = {}) {
+    settings = options.settings || {};
     currentDiags = [];
     updateDiagnostics(fakeDocument(text));
     return currentDiags;
@@ -268,4 +270,33 @@ test('golden: the DatasetScopeReport fixture has no scope errors', () => {
     const diags = diagnose(text);
     assert.deepStrictEqual(undeclared(diags), []);
     assert.deepStrictEqual(outOfScope(diags), []);
+});
+
+const duplicates = diags => diags.filter(d => d.code === 'jrxml.duplicateName');
+
+test('duplicate declarations are errors, and each duplicate points at its own name', () => {
+    const text = `<jasperReport name="R">
+  <field name="Amount" class="java.lang.String"/>
+  <field name="Amount" class="java.lang.String"/>
+  <dataset name="DS"><field name="X" class="java.lang.String"/></dataset>
+  <dataset name="DS"><field name="Y" class="java.lang.String"/></dataset>
+</jasperReport>`;
+
+    const diags = duplicates(diagnose(text));
+    assert.strictEqual(diags.length, 2);
+    assert.strictEqual(diags[0].severity, 0); // Error
+    assert.match(diags[0].message, /Field 'Amount' is declared more than once/);
+    assert.match(diags[1].message, /Dataset 'DS' is declared more than once/);
+});
+
+test('the duplicate-name rule can be turned off', () => {
+    const text = `<jasperReport name="R">
+  <field name="Amount" class="java.lang.String"/>
+  <field name="Amount" class="java.lang.String"/>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        duplicates(diagnose(text, { settings: { 'lint.duplicateNames': false } })),
+        []
+    );
 });
