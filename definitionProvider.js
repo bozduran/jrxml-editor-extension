@@ -3,18 +3,10 @@
 
 const vscode = require('vscode');
 const { parseDeclarations } = require('./jrxmlParser');
+const { findReferenceToken } = require('./expressionUtils');
 
 function detectReferenceAtPosition(document, position) {
-    const line = document.lineAt(position).text;
-    const col  = position.character;
-    const re   = /\$(F|P|V)\{([\w.]+)\}/g;
-    let m;
-    while ((m = re.exec(line)) !== null) {
-        if (m.index <= col && col <= m.index + m[0].length) {
-            return { sigil: m[1], name: m[2] };
-        }
-    }
-    return null;
+    return findReferenceToken(document.lineAt(position).text, position.character);
 }
 
 const provider = vscode.languages.registerDefinitionProvider(

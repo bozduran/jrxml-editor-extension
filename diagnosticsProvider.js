@@ -139,8 +139,11 @@ function updateDiagnostics(document) {
 
             if (!isDeclared) {
                 const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
-                // The full token is $X{name} — length = 4 + name.length
-                const tokenLen = 3 + ref.name.length + 1; // $F{ + name + }
+                // `end` spans the real token ($P!{name} included). Attribute-name
+                // markers (subreportParameter/returnValue) have no token length.
+                const tokenLen = typeof ref.end === 'number'
+                    ? ref.end - ref.offset
+                    : 4 + ref.name.length;
                 diagnostics.push(makeDiagnostic(
                     document, ref.offset, tokenLen,
                     `${kindName} '${ref.name}' is not declared in this report.`,

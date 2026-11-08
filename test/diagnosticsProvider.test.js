@@ -106,6 +106,27 @@ test('a genuinely undeclared $P{} is still flagged', () => {
     assert.match(diags[0].message, /Parameter 'Missing' is not declared/);
 });
 
+test('ignores $F{} inside XML comments and static text', () => {
+    const text = `<jasperReport name="R">
+  <!-- $F{inComment} -->
+  <text><![CDATA[$F{inStaticText}]]></text>
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+
+    assert.deepStrictEqual(undeclared(diagnose(text)), []);
+});
+
+test('validates $P!{} query fragments like any other parameter reference', () => {
+    const text = `<jasperReport name="R">
+  <parameter name="Clause" class="java.lang.String"/>
+  <query language="sql"><![CDATA[WHERE x = $P!{Clause} AND y = $P!{Missing}]]></query>
+</jasperReport>`;
+
+    const diags = undeclared(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.match(diags[0].message, /Parameter 'Missing' is not declared/);
+});
+
 test('an undeclared returnValue toVariable is still flagged', () => {
     const text = `<jasperReport name="R">
   <detail><band height="10">

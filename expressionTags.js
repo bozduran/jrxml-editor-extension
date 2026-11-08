@@ -28,4 +28,16 @@ const EXPRESSION_TAGS = [
     'chartTitleExpression', 'chartSubtitleExpression',
 ];
 
-module.exports = { EXPRESSION_TAGS };
+// Elements whose body can contain $F/$P/$V references for the purpose of
+// "is this declaration used?". Wider than the expression-tag set: queries,
+// property expressions and the classic subreport/dataset parameter expressions
+// carry real references too.
+const REFERENCE_CONTAINERS = new Set([
+    ...EXPRESSION_TAGS,
+    'query',
+    'propertyExpression',
+    'subreportParameterExpression',
+    'datasetParameterExpression',
+]);
+
+module.exports = { EXPRESSION_TAGS, REFERENCE_CONTAINERS };

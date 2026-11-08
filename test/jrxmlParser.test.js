@@ -119,6 +119,38 @@ test('collects $F/$P/$V references', () => {
     assert.deepStrictEqual(refs, ['F:a', 'P:b', 'V:c']);
 });
 
+test('references are collected from expression elements, not comments or static text', () => {
+    const text = `<jasperReport name="R">
+  <!-- $F{inComment} -->
+  <text><![CDATA[$F{inStaticText}]]></text>
+  <expression><![CDATA[$F{Real}]]></expression>
+</jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).references;
+
+    assert.deepStrictEqual(refs.map(r => `${r.sigil}:${r.name}`), ['F:Real']);
+});
+
+test('collects $P!{} query fragments with their exact span', () => {
+    const text = `<jasperReport name="R">
+  <query language="sql"><![CDATA[SELECT * FROM t WHERE x = $P!{Clause}]]></query>
+</jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).references;
+
+    assert.strictEqual(refs.length, 1);
+    assert.strictEqual(refs[0].sigil, 'P');
+    assert.strictEqual(refs[0].name, 'Clause');
+    assert.strictEqual(refs[0].bang, true);
+    assert.strictEqual(
+        text.slice(refs[0].offset, refs[0].end),
+        '$P!{Clause}'
+    );
+});
+
+test('does not invent references in a document that cannot be scanned', () => {
+    const text = '<jasperReport><expression><![CDATA[$F{a}]]></expression>';
+    assert.deepStrictEqual(parseDeclarations(makeDoc(text)).references, []);
+});
+
 test('treats subreportParameter as a used parameter reference', () => {
     const text = `<jasperReport name="R"><subreport><subreportParameter name="passed"/></subreport></jasperReport>`;
     const refs = parseDeclarations(makeDoc(text)).references;

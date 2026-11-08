@@ -71,9 +71,11 @@ const provider = vscode.languages.registerHoverProvider(
             // class names) must not be able to inject command: links or HTML.
             const md = new vscode.MarkdownString('', true);
 
+            const bang = ref.bang ? '!' : '';
+
             if (decl) {
                 const badge  = isBuiltin ? ' *(built-in)*' : '';
-                const sigStr = `$${ref.sigil}{${ref.name}}`;
+                const sigStr = `$${ref.sigil}${bang}{${ref.name}}`;
 
                 md.appendMarkdown(`### ${sigStr}\n\n`);
                 md.appendMarkdown(`| | |\n|---|---|\n`);
@@ -84,7 +86,7 @@ const provider = vscode.languages.registerHoverProvider(
                 }
                 md.appendMarkdown(`| **Used** | ${refCount} time${refCount !== 1 ? 's' : ''} in this file |\n`);
             } else {
-                md.appendMarkdown(`### $${ref.sigil}{${ref.name}}\n\n`);
+                md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
                 md.appendMarkdown(`⚠️ **${kind} not declared** in this file.\n\n`);
                 md.appendMarkdown(`No \`<${ref.sigil === 'F' ? 'field' : ref.sigil === 'P' ? 'parameter' : 'variable'} name="${ref.name}">\` declaration found.`);
             }

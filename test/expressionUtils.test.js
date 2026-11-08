@@ -214,7 +214,8 @@ test('findReferenceToken finds the token under the cursor', () => {
     const line = 'IF($F{status} == null, $P{fallback}, $V{PAGE_NUMBER})';
     const field = findReferenceToken(line, line.indexOf('$F{status}') + 3);
     assert.deepStrictEqual(field, {
-        sigil: 'F', name: 'status', start: line.indexOf('$F{status}'), end: line.indexOf('$F{status}') + '$F{status}'.length,
+        sigil: 'F', name: 'status', bang: false,
+        start: line.indexOf('$F{status}'), end: line.indexOf('$F{status}') + '$F{status}'.length,
     });
     assert.strictEqual(findReferenceToken(line, line.indexOf('$P{fallback}') + 2).sigil, 'P');
     assert.strictEqual(findReferenceToken(line, 0), null);
@@ -225,6 +226,20 @@ test('findReferenceToken supports dotted names', () => {
     const line = 'X.equals($F{customer.name})';
     const token = findReferenceToken(line, line.indexOf('$F{customer.name}') + 4);
     assert.strictEqual(token.name, 'customer.name');
+});
+
+test('findReferenceToken recognizes $P!{} query-parameter fragments', () => {
+    const line = 'WHERE region = $P!{RegionClause} AND id = $P!{Id}';
+    const first = line.indexOf('$P!{RegionClause}');
+    const token = findReferenceToken(line, first + 5);
+
+    assert.deepStrictEqual(token, {
+        sigil: 'P', name: 'RegionClause', bang: true,
+        start: first, end: first + '$P!{RegionClause}'.length,
+    });
+    // A cursor anywhere inside the token, including on the `!`, still matches.
+    assert.strictEqual(findReferenceToken(line, first + 2).name, 'RegionClause');
+    assert.strictEqual(findReferenceToken(line, line.indexOf('$P!{Id}') + 1).name, 'Id');
 });
 
 test('findDeclarationAtOffset finds declaration name attributes', () => {

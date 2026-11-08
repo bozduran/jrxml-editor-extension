@@ -28,7 +28,6 @@ const provider = vscode.languages.registerReferenceProvider(
                     ref = { sigil: declaration.sigil, name: declaration.name };
                 }
 
-                const text = document.getText();
                 const locations = [];
                 const seen = new Set();
 
@@ -36,9 +35,8 @@ const provider = vscode.languages.registerReferenceProvider(
                     if (reference.sigil !== ref.sigil || reference.name !== ref.name) continue;
 
                     // extractReferences() also records subreport attribute names;
-                    // only include real $X{name} tokens.
-                    const token = `$${reference.sigil}{${reference.name}}`;
-                    if (text.slice(reference.offset, reference.offset + token.length) !== token) continue;
+                    // only real $X{name} / $P!{name} tokens carry an `end`.
+                    if (typeof reference.end !== 'number') continue;
                     if (seen.has(reference.offset)) continue;
                     seen.add(reference.offset);
 
@@ -46,7 +44,7 @@ const provider = vscode.languages.registerReferenceProvider(
                         document.uri,
                         new vscode.Range(
                             document.positionAt(reference.offset),
-                            document.positionAt(reference.offset + token.length)
+                            document.positionAt(reference.end)
                         )
                     ));
                 }

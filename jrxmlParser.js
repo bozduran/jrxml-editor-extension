@@ -3,6 +3,7 @@
 // Results are cached per document version.
 
 const { scanXml } = require('./xmlspan');
+const { REFERENCE_CONTAINERS } = require('./expressionTags');
 
 const cache = new Map();
 
@@ -26,6 +27,7 @@ function parseDeclarations(document) {
     if (cached && cached.version === document.version) return cached.result;
 
     const text = document.getText();
+    const scan = scanXml(text);
 
     // Which <field>/<parameter>/<variable> offsets are report declarations
     // (direct children of <jasperReport>) versus dataset declarations (inside
@@ -34,7 +36,7 @@ function parseDeclarations(document) {
     // `null` when the document cannot be scanned: fall back to the old
     // whole-document regex behaviour so a malformed file still yields
     // declarations for the undeclared-reference check.
-    const scopes = classifyDeclarationScopes(text);
+    const scopes = classifyDeclarationScopes(scan);
 
     const rawFields     = extractFields(text);
     const rawParameters = extractParameters(text, !scopes);
@@ -62,7 +64,7 @@ function parseDeclarations(document) {
         allParameters: [...parameters, ...dsParameters].sort(byOffset),
         allVariables:  [...variables, ...dsVariables].sort(byOffset),
         groups:     extractGroups(text),
-        references: extractReferences(text),
+        references: extractReferences(scan),
         outline:    extractOutline(text, { fields, parameters, variables }),
     };
 
@@ -75,9 +77,8 @@ function parseDeclarations(document) {
  * report children or dataset children. Returns null when the document cannot
  * be scanned.
  */
-function classifyDeclarationScopes(text) {
-    const scan = scanXml(text);
-    if (scan.error) return null;
+function classifyDeclarationScopes(scan) {
+    if (!scan || scan.error) return null;
 
     const report  = { field: new Set(), parameter: new Set(), variable: new Set() };
     const dataset = { field: new Set(), parameter: new Set(), variable: new Set() };
@@ -242,43 +243,79 @@ function extractGroups(text) {
 }
 
 // ── References ($F/$P/$V usages and declaration-equivalent usages) ────────────
+//
+// Only expression-bearing nodes are scanned. A reference mentioned in an XML
+// comment or displayed as static text is not a usage: treating it as one
+// produced false "not declared" errors and inflated the hover/reference counts.
+//
+// `end` is the offset just past a real `$X{name}` token. Reference markers that
+// are attribute names rather than tokens (subreportParameter, returnValue,
+// a nested subreport <parameter>) have no `end`.
 
-function extractReferences(text) {
+const REFERENCE_RE = /\$(F|P|V)(!?)\{([\w.]+)\}/g;
+
+function extractReferences(scan) {
     const results = [];
+    if (!scan || scan.error) return results;
 
-    // $F{} $P{} $V{} usages inside expressions
-    const refRe = /\$(F|P|V)\{([\w.]+)\}/g;
-    let m;
-    while ((m = refRe.exec(text)) !== null) {
-        results.push({ sigil: m[1], name: m[2], offset: m.index });
-    }
-
-    // <subreportParameter name="..."> — classic format subreport parameter:
-    // the parameter is passed to a subreport, so it counts as used.
-    const subParamRe = /<subreportParameter\s[^>]*name\s*=\s*["']([^"']+)["']/g;
-    while ((m = subParamRe.exec(text)) !== null) {
-        results.push({ sigil: 'P', name: m[1], offset: m.index, fromSubreport: true });
-    }
-
-    // New format: <parameter name="..."> nested inside <element kind="subreport">.
-    // These pass values INTO the subreport — they are NOT declarations of THIS
-    // report's parameters, so register them as "used" references for any matching
-    // parameter name (prevents a false "declared but never used" warning).
-    const subreportRanges = buildSubreportRanges(text);
-    const nestedParamRe = /<parameter(\s[^>]*)(?:\/>|>[\s\S]*?<\/parameter>)/g;
-    while ((m = nestedParamRe.exec(text)) !== null) {
-        if (!inSubreportRange(m.index, subreportRanges)) continue;
-        const name = attrValue(m[1] || '', 'name');
-        if (name) results.push({ sigil: 'P', name, offset: m.index, fromSubreport: true });
-    }
-
-    // <returnValue toVariable="..."> — the variable is written to, counts as used
-    const returnVarRe = /<returnValue\s[^>]*toVariable\s*=\s*["']([^"']+)["']/g;
-    while ((m = returnVarRe.exec(text)) !== null) {
-        results.push({ sigil: 'V', name: m[1], offset: m.index, fromSubreport: true });
+    for (const node of scan.doc.walk()) {
+        if (REFERENCE_CONTAINERS.has(node.tag)) {
+            addTextNodeReferences(node, results);
+        } else if (node.tag === 'subreportParameter') {
+            // Classic format: the parameter is passed to a subreport, so it
+            // counts as used here.
+            addAttributeReference(results, 'P', node, 'name');
+        } else if (node.tag === 'returnValue') {
+            // <returnValue toVariable="..."> writes one of this report's variables.
+            addAttributeReference(results, 'V', node, 'toVariable');
+        } else if (node.tag === 'parameter' && insideSubreport(node)) {
+            // New format: <parameter name="..."> nested inside a subreport
+            // passes a value INTO it, so it is a usage of a parent parameter,
+            // not a declaration of this report.
+            addAttributeReference(results, 'P', node, 'name');
+        }
     }
 
     return results;
+}
+
+/** Scan the plain-text/CDATA spans of one expression-bearing element. */
+function addTextNodeReferences(node, results) {
+    for (const span of node.textNodes) {
+        REFERENCE_RE.lastIndex = 0;
+        let match;
+        while ((match = REFERENCE_RE.exec(span.text)) !== null) {
+            const name = match[3].trim();
+            if (!name) continue;
+            const offset = span.start + match.index;
+            results.push({
+                sigil: match[1],
+                name,
+                bang:  match[2] === '!',
+                offset,
+                end:   offset + match[0].length,
+            });
+        }
+    }
+}
+
+/** A name attribute that behaves like a reference but has no `$X{}` token. */
+function addAttributeReference(results, sigil, node, attribute) {
+    const attr = node.attr(attribute);
+    if (!attr || !attr.value) return;
+    results.push({
+        sigil,
+        name:          attr.value,
+        offset:        attr.valueStart,
+        fromSubreport: true,
+    });
+}
+
+function insideSubreport(node) {
+    return node.ancestors().some(ancestor =>
+        ancestor.tag === 'subreport' ||
+        ((ancestor.tag === 'element' || ancestor.tag === 'component') &&
+            ancestor.attrValue('kind') === 'subreport'));
 }
 
 // ── Outline (report structure for tree view) ──────────────────────────────────
@@ -403,11 +440,6 @@ function matchAttr(attrs, attrName) {
     if (!m) return null;
     const value = m[2];
     return { value, valueOffset: m.index + m[0].length - value.length - 1 };
-}
-
-function attrValue(attrs, attrName) {
-    const m = matchAttr(attrs, attrName);
-    return m ? m.value : '';
 }
 
 /**

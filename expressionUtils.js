@@ -87,20 +87,22 @@ function escapeRegExp(text) {
 
 /**
  * The `$F{name}` / `$P{name}` / `$V{name}` token under a cursor column, or null.
+ * Accepts the query-parameter form `$P!{name}` as well.
  * Pure: works on a line of text, so it can be shared by hover and references.
  *
  * @param {string} lineText
  * @param {number} character 0-based column
- * @returns {{sigil:'F'|'P'|'V', name:string, start:number, end:number}|null}
+ * @returns {{sigil:'F'|'P'|'V', name:string, bang:boolean, start:number, end:number}|null}
  */
 function findReferenceToken(lineText, character) {
-    const re = /\$(F|P|V)\{([\w.]+)\}/g;
+    const re = /\$(F|P|V)(!?)\{([\w.]+)\}/g;
     let match;
     while ((match = re.exec(lineText)) !== null) {
         if (match.index <= character && character <= match.index + match[0].length) {
             return {
                 sigil: match[1],
-                name: match[2],
+                name: match[3],
+                bang: match[2] === '!',
                 start: match.index,
                 end: match.index + match[0].length,
             };
