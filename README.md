@@ -234,9 +234,43 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `JRXML: Open Settings` | Open the dedicated JRXML settings panel |
 | `JRXML: Open Tutorial` | Open the built-in guide to the editor, panels and settings |
 | `JRXML: Refresh Include Chain` | Re-scan the workspace for the include-chain view |
+| `JRXML: Validate Workspace` | Run all static checks over every `.jrxml` in the workspace and report the results in Problems |
+| `JRXML: Run Build` | Run `jrxml.build.command` as a task and parse JasperReports errors into Problems |
 
 The table lists the primary commands; issue context-menu commands and other
 context-only actions are omitted.
+
+---
+
+## Build bridge
+
+`JRXML: Run Build` runs `jrxml.build.command` (default
+`mvn -q -DskipTests jasperreports:compile`) as a VS Code task and attaches the
+contributed `$jrxml-file-line`, `$jrxml-javac` and `$jrxml-compile` problem
+matchers, so compiler and verifier output lands in the Problems panel.
+
+To wire the same command into the standard build group, add this to
+`.vscode/tasks.json` (adjust `./mvnw` for Windows or for Ant):
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "JRXML: compile and verify",
+      "type": "shell",
+      "command": "./mvnw",
+      "args": ["-q", "-DskipTests", "jasperreports:compile"],
+      "problemMatcher": ["$jrxml-file-line", "$jrxml-javac", "$jrxml-compile"],
+      "group": "build"
+    }
+  ]
+}
+```
+
+The build bridge deliberately does not embed the JasperReports engine. Keep the
+project's Maven/Ant compile + `verifyDesign` as the authoritative gate; the
+static checks in this extension are a fast pre-check, not a replacement.
 
 ---
 
@@ -260,6 +294,7 @@ context-only actions are omitted.
 | `jrxml.lint.duplicateNames` | `true` | Error when a field/parameter/variable/group/dataset/style name is declared more than once in the same scope |
 | `jrxml.lint.layout` | `true` | Error when columns overflow the page, band heights exceed the margins, or an element extends below its band |
 | `jrxml.lint.queries` | `true` | Warn on an unclosed string literal or block comment inside `<query>` content |
+| `jrxml.build.command` | `mvn -q -DskipTests jasperreports:compile` | Shell command run by `JRXML: Run Build`, parsed by the JRXML problem matchers |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
@@ -299,6 +334,19 @@ the sort/clear commands (confirmation disabled), document formatting and the set
 panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`,
 or use `npm run test:integration:headless` when Electron's headless Ozone platform
 is available (CI containers and sandboxes without X/Wayland).
+
+### CI validation
+The same analysis runs outside VS Code over every `.jrxml` under the given path:
+
+```
+npm run validate:workspace -- path/to/reports
+npm run validate:workspace -- --json path/to/reports
+```
+
+It prints `file:line:column severity message [rule]` and exits `1` when any
+error-severity finding exists, so a pipeline can gate on it. `--json` emits the
+same findings with a `summary` block. This is a static gate: keep the project's
+Maven/Ant compile + `verifyDesign` step as the authoritative build gate.
 
 When you add a command or a settings group, also update `tutorialHtml.js`;
 `test/tutorialHtml.test.js` fails until the tutorial documents it. The pull

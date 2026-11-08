@@ -10,15 +10,23 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-11-08
+### Added
+- **Build bridge:** `JRXML: Run Build` runs the configured Maven/Ant command as
+  a VS Code task and parses its output with the contributed `$jrxml-*` problem
+  matchers into Problems, plus a documented `tasks.json` recipe. The engine is
+  not embedded; the project's compile + `verifyDesign` stays authoritative.
 
-## [0.6.0] - 2026-11-08
+## [0.7.0] - 2026-11-08
 
 ### Added
 - **Queries:** `<query>` content is highlighted as SQL/JSONQL (keywords,
   strings, comments, numbers and `$P!{}`/`$X{}` fragments), `$P!{` completes
   parameters, and unclosed string literals or block comments are diagnosed
   without flagging runtime fragments (`jrxml.lint.queries`).
+
+## [0.6.0] - 2026-11-08
+
+### Added
 - **Workspace validation:** `JRXML: Validate Workspace` runs every check over
   all `.jrxml` files in the workspace and reports them in Problems. The same
   pipeline is available for CI as `node tools/validate-workspace.js`
