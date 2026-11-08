@@ -2,7 +2,10 @@
 // Shows a tooltip when hovering over $F{name}, $P{name}, $V{name} in .jrxml files.
 
 const vscode = require('vscode');
+const path = require('path');
 const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
+const { resourcesForDocument } = require('./resourceIndex');
+const { bundleAttribute } = require('./resourceBundle');
 const { findReferenceToken } = require('./expressionUtils');
 const {
     BUILTIN_VARIABLES,
@@ -29,6 +32,41 @@ function mdCode(text) {
     return String(text ?? '').replace(/`/g, '\\`');
 }
 
+/** Hover for a `$R{key}` resource-bundle reference. */
+function resourceHover(document, position, ref) {
+    const text   = document.getText();
+    const bundle = bundleAttribute(text);
+    const index  = resourcesForDocument(document);
+    const md     = new vscode.MarkdownString('', true);
+
+    md.appendMarkdown(`### $R{${ref.name}}\n\n`);
+
+    if (!index) {
+        md.appendMarkdown(bundle
+            ? `⚠️ Resource bundle '${mdSafe(bundle.name)}' was not found next to the report or in the workspace.`
+            : '⚠️ No resource bundle is configured for this report.');
+    } else {
+        const entry = index.entries.get(ref.name);
+        if (!entry) {
+            md.appendMarkdown(`⚠️ Key '${mdSafe(ref.name)}' is not found in resource bundle '${mdSafe(index.name)}'.`);
+        } else {
+            md.appendMarkdown('| | |\n|---|---|\n');
+            md.appendMarkdown(`| **Value** | ${entry.defaultValue !== null ? mdSafe(entry.defaultValue) : '_no default value_'} |\n`);
+            if (entry.defaultFile) {
+                md.appendMarkdown(`| **Bundle** | ${mdSafe(path.basename(entry.defaultFile))} |\n`);
+            }
+            for (const [locale, located] of entry.locales) {
+                md.appendMarkdown(`| **${mdSafe(locale)}** | ${mdSafe(located.value)} |\n`);
+            }
+        }
+    }
+
+    return new vscode.Hover(md, new vscode.Range(
+        position.line, ref.start,
+        position.line, ref.end
+    ));
+}
+
 /** The report-scope declaration with this name, used to explain scope errors. */
 function reportDeclaration(parsed, sigil, name) {
     const list = sigil === 'F' ? parsed.fields
@@ -43,6 +81,7 @@ const provider = vscode.languages.registerHoverProvider(
         provideHover(document, position) {
             const ref = findReferenceToken(document.lineAt(position).text, position.character);
             if (!ref) return null;
+            if (ref.sigil === 'R') return resourceHover(document, position, ref);
 
             let decl   = null;
             let kind   = '';

@@ -5,12 +5,21 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const os     = require('node:os');
+const path   = require('node:path');
 const Module = require('node:module');
 
 class FakeRange {
-    constructor(start, end) {
-        this.start = start;
-        this.end = end;
+    // vscode.Range accepts either two Positions or four line/character numbers.
+    constructor(start, end, endLine, endCharacter) {
+        if (typeof start === 'number') {
+            this.start = { line: start, character: end };
+            this.end   = { line: endLine, character: endCharacter };
+        } else {
+            this.start = start;
+            this.end = end;
+        }
     }
 }
 
@@ -29,12 +38,14 @@ Module._load = function (request, ...rest) {
         return {
             Range: FakeRange,
             Location: FakeLocation,
+            Uri: { file: (fsPath) => ({ fsPath, toString: () => `file://${fsPath}` }) },
             languages: {
                 registerDefinitionProvider: (_selector, provider) => {
                     registered = provider;
                     return { dispose() {} };
                 },
             },
+            workspace: { workspaceFolders: null },
         };
     }
     return originalLoad.call(this, request, ...rest);
@@ -46,7 +57,7 @@ const provider = registered;
 let seq = 0;
 
 /** Minimal TextDocument stub with the line/position APIs the provider uses. */
-function makeDoc(text) {
+function makeDoc(text, fileName) {
     const uri = { toString: () => `file:///definition-${seq++}.jrxml` };
     const lineStarts = [0];
     for (let i = 0; i < text.length; i++) {
@@ -55,6 +66,7 @@ function makeDoc(text) {
 
     return {
         uri,
+        fileName: fileName || '/test/report.jrxml',
         version: 1,
         getText: () => text,
         positionAt(offset) {
@@ -133,4 +145,40 @@ test('returns null for an undeclared reference or outside a token', () => {
         null
     );
     assert.strictEqual(provider.provideDefinition(doc, { line: 0, character: 0 }), null);
+});
+
+test('go-to-definition jumps to the key line in the properties file', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-definition-'));
+    const properties = path.join(dir, 'messages.properties');
+    fs.writeFileSync(properties, '# header\ntitle = Welcome\nbody=Body\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <expression><![CDATA[$R{body}]]></expression>
+</jasperReport>`;
+    const location = provider.provideDefinition(
+        makeDoc(text, path.join(dir, 'report.jrxml')),
+        positionAt(text, text.indexOf('$R{body}') + 3)
+    );
+
+    assert.ok(location, 'expected a resource-key definition');
+    assert.strictEqual(location.uri.fsPath, properties);
+    assert.strictEqual(location.range.start.line, 2);
+    assert.strictEqual(location.range.start.character, 0);
+    assert.strictEqual(location.range.end.character, 'body'.length);
+});
+
+test('go-to-definition returns null for a missing resource key', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-definition-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <expression><![CDATA[$R{missing}]]></expression>
+</jasperReport>`;
+    assert.strictEqual(
+        provider.provideDefinition(
+            makeDoc(text, path.join(dir, 'report.jrxml')),
+            positionAt(text, text.indexOf('$R{missing}') + 3)
+        ),
+        null
+    );
 });

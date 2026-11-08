@@ -17,7 +17,7 @@ function resourcesForDocument(document) {
     const attr = bundleAttribute(document.getText());
     if (!attr) return null;
 
-    const roots = (vscode.workspace.workspaceFolders || [])
+    const roots = ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
         .map(folder => folder.uri && folder.uri.fsPath)
         .filter(Boolean);
 

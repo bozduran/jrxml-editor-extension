@@ -4,6 +4,7 @@
 const vscode = require('vscode');
 const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { findReferenceToken } = require('./expressionUtils');
+const { resourcesForDocument } = require('./resourceIndex');
 
 function detectReferenceAtPosition(document, position) {
     return findReferenceToken(document.lineAt(position).text, position.character);
@@ -15,6 +16,24 @@ const provider = vscode.languages.registerDefinitionProvider(
         provideDefinition(document, position) {
             const ref = detectReferenceAtPosition(document, position);
             if (!ref) return null;
+
+            // Resource keys live in .properties files, not in the report.
+            if (ref.sigil === 'R') {
+                const index = resourcesForDocument(document);
+                const entry = index && index.entries.get(ref.name);
+                if (!entry) return null;
+
+                const located = entry.defaultPosition || entry.locales.values().next().value;
+                if (!located) return null;
+
+                return new vscode.Location(
+                    vscode.Uri.file(located.file),
+                    new vscode.Range(
+                        located.line, located.character,
+                        located.line, located.character + entry.key.length
+                    )
+                );
+            }
 
             const parsed = parseDeclarations(document);
             // Resolve in the declaration scope that owns the reference, so a

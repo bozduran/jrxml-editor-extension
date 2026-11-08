@@ -252,6 +252,18 @@ test('findReferenceToken recognizes $P!{} query-parameter fragments', () => {
     assert.strictEqual(findReferenceToken(line, line.indexOf('$P!{Id}') + 1).name, 'Id');
 });
 
+test('findReferenceToken recognizes $R{} resource keys', () => {
+    const line = 'TEXT($R{title}, $R{greeting.hello})';
+    const first = line.indexOf('$R{title}');
+    const token = findReferenceToken(line, first + 3);
+
+    assert.deepStrictEqual(token, {
+        sigil: 'R', name: 'title', bang: false,
+        start: first, end: first + '$R{title}'.length,
+    });
+    assert.strictEqual(findReferenceToken(line, line.indexOf('$R{greeting.hello}') + 4).name, 'greeting.hello');
+});
+
 test('findDeclarationAtOffset finds declaration name attributes', () => {
     const text = '<field name="status"/><parameter name="limit"/><variable name="total"/>';
     const parsed = {

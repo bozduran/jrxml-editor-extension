@@ -5,6 +5,9 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const os     = require('node:os');
+const path   = require('node:path');
 const Module = require('node:module');
 
 class FakeRange {
@@ -41,6 +44,7 @@ Module._load = function (request, ...rest) {
                     return { dispose() {} };
                 },
             },
+            workspace: { workspaceFolders: null },
         };
     }
     return originalLoad.call(this, request, ...rest);
@@ -51,13 +55,14 @@ const provider = registered;
 
 let seq = 0;
 
-function makeDoc(text) {
+function makeDoc(text, fileName) {
     const lineStarts = [0];
     for (let i = 0; i < text.length; i++) {
         if (text[i] === '\n') lineStarts.push(i + 1);
     }
     return {
         uri: { toString: () => `file:///hover-${seq++}.jrxml` },
+        fileName: fileName || '/test/report.jrxml',
         version: 1,
         getText: () => text,
         offsetAt(position) { return lineStarts[position.line] + position.character; },
@@ -75,8 +80,8 @@ function positionAt(text, offset) {
     return { line: before.length - 1, character: before[before.length - 1].length };
 }
 
-function hoverAt(text, offset) {
-    return provider.provideHover(makeDoc(text), positionAt(text, offset));
+function hoverAt(text, offset, fileName) {
+    return provider.provideHover(makeDoc(text, fileName), positionAt(text, offset));
 }
 
 test('hover resolves the dataset declaration when a report and dataset name collide', () => {
@@ -119,4 +124,34 @@ test('hover shows the $P!{} form used by query fragments', () => {
     assert.ok(hover, 'expected a hover');
     assert.match(hover.contents.value, /\$P!\{Clause\}/);
     assert.match(hover.contents.value, /java\.lang\.String/);
+});
+
+test('hover shows the resource value for $R{} keys', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-hover-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome aboard\n');
+    fs.writeFileSync(path.join(dir, 'messages_fr.properties'), 'title=Bienvenue\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <expression><![CDATA[$R{title}]]></expression>
+</jasperReport>`;
+    const hover = hoverAt(text, text.indexOf('$R{title}') + 3, path.join(dir, 'report.jrxml'));
+
+    assert.ok(hover, 'expected a hover');
+    assert.match(hover.contents.value, /Welcome aboard/);
+    assert.match(hover.contents.value, /Bienvenue/);
+});
+
+test('hover explains a missing resource key or bundle', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-hover-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\n');
+
+    const missingKey = `<jasperReport name="R" resourceBundle="messages">
+  <expression><![CDATA[$R{missing}]]></expression>
+</jasperReport>`;
+    const hover = hoverAt(missingKey, missingKey.indexOf('$R{missing}') + 3, path.join(dir, 'report.jrxml'));
+    assert.match(hover.contents.value, /not found in resource bundle/i);
+
+    const noBundle = '<jasperReport name="R"><expression><![CDATA[$R{title}]]></expression></jasperReport>';
+    const noBundleHover = hoverAt(noBundle, noBundle.indexOf('$R{title}') + 3);
+    assert.match(noBundleHover.contents.value, /no resource bundle/i);
 });
