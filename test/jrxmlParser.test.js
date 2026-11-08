@@ -415,3 +415,20 @@ test('findDuplicateNames returns an empty list for unique declarations', () => {
     const parsed = parseDeclarations(makeDoc(SAMPLE));
     assert.deepStrictEqual(findDuplicateNames(parsed), []);
 });
+
+test('resolveDeclarationScope covers crosstab bucket and measure expressions', () => {
+    const text = `<jasperReport name="R">
+  <dataset name="DS"><field name="Amount" class="java.lang.Double"/></dataset>
+  <element kind="crosstab">
+    <datasetRun subDataset="DS"/>
+    <measure name="Total" class="java.lang.Double" calculation="Sum">
+      <expression><![CDATA[$F{Amount}]]></expression>
+    </measure>
+  </element>
+</jasperReport>`;
+    const cursor = text.indexOf('$F{Amount}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'dataset');
+    assert.strictEqual(scope.datasetName, 'DS');
+});

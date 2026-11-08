@@ -183,12 +183,12 @@ function buildScopeRanges(scan, scopes) {
     return ranges;
 }
 
-/** True for the component that renders a dataset (list/table), not its run. */
+/** True for the component that renders a dataset (list/table/crosstab). */
 function consumesDataset(run, parent) {
     if (!run.attrValue('subDataset')) return false;
     const kind = parent.attrValue('kind') || '';
     return (parent.tag === 'component' || parent.tag === 'element') &&
-        (kind === 'list' || kind === 'table');
+        (kind === 'list' || kind === 'table' || kind === 'crosstab');
 }
 
 /** The dataset scope that owns `offset` when it is inside a scoped region. */
