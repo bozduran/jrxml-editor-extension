@@ -643,6 +643,24 @@ suite('JRXML extension smoke', () => {
         assert.match(found.message, /missing\.jrxml/);
     });
 
+    test('reports a layout overflow diagnostic', async () => {
+        const uri = tempFile('LayoutOverflow.jrxml', [
+            '<jasperReport name="LayoutOverflow" pageWidth="595" pageHeight="842"',
+            '  columnWidth="555" leftMargin="20" rightMargin="20" columnCount="2">',
+            '  <detail><band height="20"/></detail>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        await openDocument(uri);
+
+        const found = await waitFor(() =>
+            vscode.languages.getDiagnostics(uri)
+                .find(diagnostic => diagnostic.code === 'jrxml.layout.columns'));
+
+        assert.ok(found, 'expected a layout column-overflow diagnostic');
+        assert.match(found.message, /595/);
+    });
+
     test('jumps from a subreport expression to its source', async () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-it-sub-'));
         const detail = path.join(dir, 'detail.jrxml');
