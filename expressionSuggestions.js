@@ -58,7 +58,7 @@ const JASPER_FUNCTIONS = [
     { label: 'STDEV',       detail: 'STDEV(value)',                   doc: 'Calculates standard deviation.',                                              snippet: 'STDEV(${1:value})' },
     { label: 'VAR',         detail: 'VAR(value)',                     doc: 'Calculates variance.',                                                        snippet: 'VAR(${1:value})' },
     { label: 'DATEFORMAT',  detail: 'DATEFORMAT(date, pattern)',      doc: 'Formats a date with a pattern.',                                              snippet: 'DATEFORMAT(${1:date}, "${2:yyyy-MM-dd}")' },
-    { label: 'DATERANGE',   detail: 'DATERANGE(date, start, end)',    doc: 'Returns true when date falls between start and end.',                         snippet: 'DATERANGE(${1:date}, ${2:start}, ${3:end})' },
+    { label: 'DATERANGE',   detail: 'DATERANGE(value)',               doc: 'Creates a DateRange from a string expression or a Date.',                     snippet: 'DATERANGE(${1:value})' },
     { label: 'DAYS',        detail: 'DAYS(date1, date2)',             doc: 'Returns the number of days between two dates.',                               snippet: 'DAYS(${1:date1}, ${2:date2})' },
     { label: 'NETWORKDAYS', detail: 'NETWORKDAYS(start, end)',        doc: 'Returns the number of working days between two dates.',                       snippet: 'NETWORKDAYS(${1:start}, ${2:end})' },
     { label: 'WORKDAY',     detail: 'WORKDAY(start, days)',           doc: 'Returns the date that is a number of working days after start.',              snippet: 'WORKDAY(${1:start}, ${2:days})' },
