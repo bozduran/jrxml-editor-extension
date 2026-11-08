@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-08
+
 ### Added
 - **CI:** a GitHub Actions workflow runs lint, the unit suite, the Extension Host
   integration suite and the static workspace validator on every push and PR.
