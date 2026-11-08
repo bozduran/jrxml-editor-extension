@@ -23,6 +23,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   `"javascript"` gets a warning that only Java expressions are modeled, and Java
   typed member completion is disabled for it.
 
+- **Resource bundles:** `$R{` completion from the report's `resourceBundle`
+  (base file plus locale variants), hover with the default and localized values,
+  go-to-definition into the `.properties` file, and warnings for a missing key
+  or a bundle that cannot be found.
+
 ### Fixed
 - References are collected from expression elements only: `$F{}` inside an XML
   comment or static `<text>` no longer raises a false "not declared" error or

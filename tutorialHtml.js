@@ -57,7 +57,7 @@ const DOCUMENTED_COMMANDS = [
 const DOCUMENTED_SETTING_GROUPS = [
     { id: 'editor', summary: 'Indent size, auto-open, auto-format, typed completion and the target Java version.' },
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
-    { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, expression validation, structural lint rules and the Boolean-comparison style rule.' },
+    { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, expression validation, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
     { id: 'clear', summary: 'The SQL migration target language and whether to confirm clear fixes.' },
     { id: 'sort', summary: 'Whether the geometry sort asks for confirmation (the diff preview always opens).' },
@@ -540,7 +540,7 @@ Class&lt;? extends Number&gt;</code></div>
   <h2>Issues and quick fixes</h2>
   <p>The <strong>Issues (JRXML)</strong> view mirrors the diagnostics for the open report, grouped by severity. The same diagnostics appear as squiggles in the editor.</p>
   <ul>
-    <li>Undeclared <code>$F{}</code>/<code>$P{}</code>/<code>$V{}</code>/<code>$P!{}</code> references, dataset-scope and duplicate-name errors, a report-language warning when only Java is modeled, unbalanced parentheses, unclosed strings, unused declarations, the structural lint rules and text-check findings.</li>
+    <li>Undeclared <code>$F{}</code>/<code>$P{}</code>/<code>$V{}</code>/<code>$P!{}</code>/<code>$R{}</code> references, dataset-scope and duplicate-name errors, a report-language warning when only Java is modeled, missing resource keys, unbalanced parentheses, unclosed strings, unused declarations, the structural lint rules and text-check findings.</li>
     <li>Boolean comparisons such as <code>$F{active} == true</code> and bare Boolean references used as conditions (for example <code>$F{active}</code>) offer a one-click <code>EQUALS(...)</code> fix (<code>jrxml.lint.booleanEquals</code>).</li>
     <li>Open an issue’s context menu to jump to it, apply its quick fix, copy the message/rule id, or open the expression in the Expression Editor or If / Else Builder.</li>
     <li><strong>Fix All Issues in File</strong> applies the preferred fixes where they do not overlap.</li>

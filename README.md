@@ -72,6 +72,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - **Dataset scope** — completion, hover and diagnostics resolve against the report or the enclosing `<dataset>`/`<subDataset>` (and a list/table's dataset run). A master declaration used inside a dataset is an error, and dataset members are not offered at report scope
 - **Duplicate names** — a field, parameter, variable, group, dataset or style name declared more than once in the same scope (`jrxml.lint.duplicateNames`)
 - **Report language** — a `language="groovy"` or `"javascript"` report warns that only Java is modeled and loses Java typed member completion
+- **Resource bundles** — `$R{` completes keys from the report's `resourceBundle` (base and locale `.properties`), hover shows the default and localized values, go-to-definition opens the key in the properties file, and a missing key or unresolvable bundle is reported
 - Unbalanced parentheses and unclosed string literals
 - **Structural lint rules** ported from the project's commit-time `myhooks` hook:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
