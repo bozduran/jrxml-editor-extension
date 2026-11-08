@@ -68,7 +68,10 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 
 ### 5. Diagnostics
 - Unused fields, parameters and variables
-- Undeclared `$F`/`$P`/`$V` references
+- Undeclared `$F`/`$P`/`$V`/`$P!` references
+- **Dataset scope** — completion, hover and diagnostics resolve against the report or the enclosing `<dataset>`/`<subDataset>` (and a list/table's dataset run). A master declaration used inside a dataset is an error, and dataset members are not offered at report scope
+- **Duplicate names** — a field, parameter, variable, group, dataset or style name declared more than once in the same scope (`jrxml.lint.duplicateNames`)
+- **Report language** — a `language="groovy"` or `"javascript"` report warns that only Java is modeled and loses Java typed member completion
 - Unbalanced parentheses and unclosed string literals
 - **Structural lint rules** ported from the project's commit-time `myhooks` hook:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
@@ -82,7 +85,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   fix and its own setting. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
-- Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}`
+- Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}` / `$P!{}`, resolved in the declaration's own scope
 - **Act on issues** — right-click an issue (or use its lightbulb) to open the offending
   expression in the Expression Editor or the If / Else Builder
 
@@ -329,7 +332,11 @@ The editor activates for cursor positions inside any of these tags:
 `printWhenExpression`, `initialValueExpression`, `filterExpression`, `expression`,
 `jr:expression`, `defaultValueExpression`, `hyperlinkReferenceExpression`,
 `subreportExpression`, `bucketExpression`, `keyExpression`, `valueExpression`,
-`categoryExpression`, `seriesExpression`, `labelExpression`, and more.
+`categoryExpression`, `seriesExpression`, `labelExpression`, `crosstabExpression`,
+`bookmarkLevelExpression`, `chartTitleExpression`, `chartSubtitleExpression`,
+`timePeriodExpression`, and more. The canonical list lives in
+[expressionTags.js](expressionTags.js); `test/expressionUtils.test.js` fails if it
+drifts from the TextMate grammar.
 
 ---
 
