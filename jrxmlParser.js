@@ -449,7 +449,9 @@ function findDuplicateNames(parsed) {
     check('field', parsed.fields, '');
     check('parameter', parsed.parameters, '');
     check('variable', parsed.variables, '');
-    check('group', parsed.groups, '');
+    // parsed.groups also contains dataset groups (they are declared inside a
+    // <dataset>); those belong to that dataset's scope, not the report's.
+    check('group', (parsed.groups || []).filter(group => !insideAnyDataset(parsed, group.offset)), '');
     check('style', parsed.styles, '');
     check('dataset', parsed.datasets, '');
 
@@ -460,6 +462,11 @@ function findDuplicateNames(parsed) {
     }
 
     return duplicates;
+}
+
+function insideAnyDataset(parsed, offset) {
+    return (parsed.datasets || []).some(dataset =>
+        dataset.offset <= offset && offset < dataset.end);
 }
 
 // ── References ($F/$P/$V usages and declaration-equivalent usages) ────────────

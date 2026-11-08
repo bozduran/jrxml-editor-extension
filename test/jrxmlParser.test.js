@@ -378,6 +378,7 @@ const DUPLICATES_REPORT = `<jasperReport name="R">
     <parameter name="P" class="java.lang.String"/>
     <variable name="V" class="java.lang.Integer" calculation="Count"/>
     <variable name="V" class="java.lang.Integer" calculation="Count"/>
+    <group name="G"><groupExpression><![CDATA[1]]></groupExpression></group>
   </dataset>
   <dataset name="DS"/>
   <group name="G"><groupExpression><![CDATA[1]]></groupExpression></group>
