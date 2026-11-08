@@ -81,10 +81,17 @@ function checkBandHeights(root, page, findings) {
     ));
 }
 
-/** Height of a direct report section, 0 when absent. */
+/** Height of a direct report section, reading a classic wrapper's <band>. */
 function sectionHeight(root, tag) {
     const node = root.children.find(child => child.tag === tag);
-    return node ? (intAttr(node, 'height') ?? 0) : 0;
+    if (!node) return 0;
+
+    const direct = intAttr(node, 'height');
+    if (direct !== null) return direct;
+
+    return Math.max(0, ...node.children
+        .filter(child => child.tag === 'band')
+        .map(band => intAttr(band, 'height') ?? 0));
 }
 
 /** The tallest detail band; detail bands are alternatives, not a sum. */
@@ -106,7 +113,7 @@ function checkElementBounds(doc, findings) {
         const height = intAttr(node, 'height');
         if (y === null || height === null) continue;
 
-        const container = nearestHeightAncestor(node);
+        const container = nearestContainer(node);
         if (!container) {
             if (!hasBandAncestor(node)) {
                 findings.push(finding(
@@ -118,22 +125,40 @@ function checkElementBounds(doc, findings) {
             continue;
         }
 
-        const available = intAttr(container, 'height');
-        if (available === null || y + height <= available) continue;
+        if (y + height <= container.height) continue;
 
         findings.push(finding(
             'jrxml.layout.elementOutsideBand',
-            `Element ends at ${y + height}px but its ${container.tag} is only ${available}px tall.`,
+            `Element ends at ${y + height}px but its ${container.label} is only ${container.height}px tall.`,
             node
         ));
     }
 }
 
-/** Nearest ancestor carrying a height attribute (band, frame, contents…). */
-function nearestHeightAncestor(node) {
+/**
+ * Nearest ancestor that bounds the element: anything with a height attribute
+ * (band, contents, Studio 7 frame), or a classic <frame> whose <reportElement>
+ * carries the height.
+ *
+ * @returns {{height:number, label:string}|null}
+ */
+function nearestContainer(node) {
     let parent = node.parent;
     while (parent) {
-        if (intAttr(parent, 'height') !== null) return parent;
+        const height = intAttr(parent, 'height');
+        if (height !== null) {
+            const label = parent.tag === 'element'
+                ? (parent.attrValue('kind') || 'element')
+                : parent.tag;
+            return { height, label };
+        }
+
+        if (parent.tag === 'frame') {
+            const reportElement = parent.children.find(child => child.tag === 'reportElement');
+            const frameHeight = reportElement ? intAttr(reportElement, 'height') : null;
+            if (frameHeight !== null) return { height: frameHeight, label: 'frame' };
+        }
+
         parent = parent.parent;
     }
     return null;

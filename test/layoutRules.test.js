@@ -139,3 +139,29 @@ test('every shipped fixture passes the layout checks', () => {
         assert.deepStrictEqual(findings, [], file);
     }
 });
+
+test('classic <band> heights count toward the page budget', () => {
+    const text = `<jasperReport name="C" pageWidth="595" pageHeight="200" columnWidth="555"
+      leftMargin="20" rightMargin="20" topMargin="10" bottomMargin="10">
+  <pageHeader><band height="100"/></pageHeader>
+  <detail><band height="100"/></detail>
+</jasperReport>`;
+
+    assert.deepStrictEqual(codes(checkLayout(text)), ['jrxml.layout.bandHeight']);
+});
+
+test('classic frame children are measured against the frame', () => {
+    const text = report(`
+  <detail>
+    <band height="300">
+      <frame>
+        <reportElement x="0" y="0" width="100" height="100"/>
+        <textField>
+          <reportElement x="0" y="90" width="50" height="20"/>
+        </textField>
+      </frame>
+    </band>
+  </detail>`);
+
+    assert.deepStrictEqual(codes(checkLayout(text)), ['jrxml.layout.elementOutsideBand']);
+});
