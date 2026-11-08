@@ -12,14 +12,20 @@
 // and unit-tested with plain Node.
 
 const { scanXml } = require('./xmlspan');
+const {
+    MAX_CONTENT,
+    CONTENT_TAG_BY_KIND,
+    CONTENT_KINDS,
+    EXPRESSION_CONTENT_TAGS,
+    localName,
+    attrValue,
+    directChild,
+    numericAttr,
+} = require('./designSpec');
 
 const MAX_ELEMENTS = 4000;
 const MAX_TEXT     = 400;
 const MAX_TOOLTIP  = 1500;
-const MAX_CONTENT  = 8000;
-
-// Element kinds whose text/expression content can be edited from the inspector.
-const CONTENT_KINDS = new Set(['statictext', 'textfield', 'image', 'subreport', 'chart']);
 
 const DEFAULT_PAGE_WIDTH   = 595;
 const DEFAULT_PAGE_HEIGHT  = 842;
@@ -168,14 +174,14 @@ function emptyModel() {
 // ── Report attributes ────────────────────────────────────────────────────────
 
 function readReport(root) {
-    const pageWidth   = numberAttr(root, 'pageWidth', DEFAULT_PAGE_WIDTH);
-    const pageHeight  = numberAttr(root, 'pageHeight', DEFAULT_PAGE_HEIGHT);
-    const leftMargin  = numberAttr(root, 'leftMargin', DEFAULT_MARGIN);
-    const rightMargin = numberAttr(root, 'rightMargin', DEFAULT_MARGIN);
-    const columnCountRaw = numberAttr(root, 'columnCount', 1);
+    const pageWidth   = numericAttr(root, 'pageWidth', DEFAULT_PAGE_WIDTH);
+    const pageHeight  = numericAttr(root, 'pageHeight', DEFAULT_PAGE_HEIGHT);
+    const leftMargin  = numericAttr(root, 'leftMargin', DEFAULT_MARGIN);
+    const rightMargin = numericAttr(root, 'rightMargin', DEFAULT_MARGIN);
+    const columnCountRaw = numericAttr(root, 'columnCount', 1);
     const columnCount = Math.max(1, Math.round(columnCountRaw));
 
-    let columnWidth = numberAttr(root, 'columnWidth', NaN);
+    let columnWidth = numericAttr(root, 'columnWidth', NaN);
     if (!Number.isFinite(columnWidth) || columnWidth <= 0) {
         columnWidth = pageWidth - leftMargin - rightMargin;
     }
@@ -186,10 +192,10 @@ function readReport(root) {
         pageHeight:     positiveOr(pageHeight, DEFAULT_PAGE_HEIGHT),
         leftMargin:     nonNegativeOr(leftMargin, DEFAULT_MARGIN),
         rightMargin:    nonNegativeOr(rightMargin, DEFAULT_MARGIN),
-        topMargin:      nonNegativeOr(numberAttr(root, 'topMargin', DEFAULT_MARGIN), DEFAULT_MARGIN),
-        bottomMargin:   nonNegativeOr(numberAttr(root, 'bottomMargin', DEFAULT_MARGIN), DEFAULT_MARGIN),
+        topMargin:      nonNegativeOr(numericAttr(root, 'topMargin', DEFAULT_MARGIN), DEFAULT_MARGIN),
+        bottomMargin:   nonNegativeOr(numericAttr(root, 'bottomMargin', DEFAULT_MARGIN), DEFAULT_MARGIN),
         columnWidth:    nonNegativeOr(columnWidth, 0),
-        columnSpacing:  nonNegativeOr(numberAttr(root, 'columnSpacing', 0), 0),
+        columnSpacing:  nonNegativeOr(numericAttr(root, 'columnSpacing', 0), 0),
         columnCount,
         orientation:    String(attrValue(root, 'orientation') || 'Portrait'),
         language:       String(attrValue(root, 'language') || 'java'),
@@ -294,7 +300,7 @@ function readBand(descriptor, ctx, styles) {
         key:      descriptor.key,
         label:    descriptor.label,
         group:    descriptor.group || '',
-        height:   nonNegativeOr(numberAttr(node, 'height', 0), 0),
+        height:   nonNegativeOr(numericAttr(node, 'height', 0), 0),
         offset:   node.startTag,
         end:      node.end,
         elements: readElements(node, ctx, styles),
@@ -387,7 +393,7 @@ function readElement(node, ctx, styles) {
 function readContent(node, key) {
     if (!CONTENT_KINDS.has(key)) return null;
 
-    const expectedTag = key === 'statictext' ? 'text' : 'expression';
+    const expectedTag = CONTENT_TAG_BY_KIND[key];
     const contentNode = expectedTag === 'text'
         ? directChild(node, 'text')
         : findExpressionNode(node);
@@ -436,10 +442,8 @@ function readContent(node, key) {
 
 /** First direct expression child (Studio 7 spelling, with the old names as a fallback). */
 function findExpressionNode(node) {
-    const wanted = ['expression', 'textfieldexpression', 'imageexpression', 'subreportexpression', 'chartexpression'];
-
     for (const child of node.children) {
-        if (wanted.includes(localName(child.tag))) return child;
+        if (EXPRESSION_CONTENT_TAGS.includes(localName(child.tag))) return child;
     }
     return null;
 }
@@ -537,7 +541,7 @@ function readBox(node, style) {
     const boxNode = directChild(node, 'box');
     if (!boxNode) return box;
 
-    box.padding = nonNegativeOr(numberAttr(boxNode, 'padding', 0), 0);
+    box.padding = nonNegativeOr(numericAttr(boxNode, 'padding', 0), 0);
 
     const generic = directChild(boxNode, 'pen');
 
@@ -794,28 +798,9 @@ function cap(value, max) {
 
 // ── XML helpers ─────────────────────────────────────────────────────────────
 
-function localName(tag) {
-    const text = String(tag ?? '');
-    const colon = text.indexOf(':');
-    return (colon === -1 ? text : text.slice(colon + 1)).toLowerCase();
-}
-
-function attrValue(node, name) {
-    const attr = node.attr(name);
-    return attr ? attr.value : undefined;
-}
-
 function directChildren(node, tag) {
     const wanted = tag.toLowerCase();
     return node.children.filter(child => localName(child.tag) === wanted);
-}
-
-function directChild(node, tag) {
-    const wanted = tag.toLowerCase();
-    for (const child of node.children) {
-        if (localName(child.tag) === wanted) return child;
-    }
-    return null;
 }
 
 function findChild(node, tags) {
@@ -832,13 +817,6 @@ function firstDescendant(node, tag) {
         if (localName(child.tag) === wanted) return child;
     }
     return null;
-}
-
-function numberAttr(node, name, fallback) {
-    const attr = node.attr(name);
-    if (!attr) return fallback;
-    const value = Number.parseFloat(attr.value);
-    return Number.isFinite(value) ? value : fallback;
 }
 
 function isTrue(value) {
