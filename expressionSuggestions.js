@@ -107,7 +107,7 @@ function suggestionOptions(config) {
  * @param {Array} [opts.customMethods]
  * @returns {{mode:string,prefix:string,replace:{start:number,end:number},items:Array}}
  */
-function buildExpressionSuggestions({ text, offset, declarations, options = {}, customMethods = [] }) {
+function buildExpressionSuggestions({ text, offset, declarations, options = {}, customMethods = [], resources = null }) {
     const expression = typeof text === 'string' ? text : '';
     const caret = Math.max(0, Math.min(Number.isInteger(offset) ? offset : expression.length, expression.length));
     const before = expression.slice(0, caret);
@@ -116,6 +116,7 @@ function buildExpressionSuggestions({ text, offset, declarations, options = {}, 
     const typed = options.typedCompletion !== false;
     const baseline = normalizeBaseline(options.jdkBaseline);
     const custom = Array.isArray(customMethods) ? customMethods : [];
+    const resourceEntries = Array.isArray(resources) ? resources : null;
 
     if (typed) {
         const member = detectMemberContext(expression, caret);
@@ -138,19 +139,22 @@ function buildExpressionSuggestions({ text, offset, declarations, options = {}, 
         const prefix = brace[2];
 
         if (sigil === 'R') {
-            // No resource bundle index exists; mirror the editor's general fallback.
-            return generalResult(linePrefix, caret, decls, custom);
+            if (!resourceEntries || resourceEntries.length === 0) {
+                // No bundle index exists; mirror the editor's general fallback.
+                return generalResult(linePrefix, caret, decls, custom);
+            }
+            const items = resourceItems(resourceEntries);
+            completeBrace(items, expression, caret);
+            return {
+                mode:    'resource',
+                prefix,
+                replace: { start: caret - prefix.length, end: caret },
+                items,
+            };
         }
 
         const items = braceItems(decls, sigil);
-        if (!expression.slice(caret).includes('}')) {
-            // The user is typing inside an unclosed $X{...}; complete the brace.
-            for (const item of items) {
-                item.insertTextPlain += '}';
-                const caretPosition = item.insertTextPlain.length - 1;
-                item.placeholder = { start: caretPosition, end: caretPosition };
-            }
-        }
+        completeBrace(items, expression, caret);
         return {
             mode:    sigil === 'F' ? 'field' : sigil === 'P' ? 'param' : 'variable',
             prefix,
@@ -217,6 +221,52 @@ function braceItems(decls, sigil) {
             .map(decl => declarationSuggestion(decl, sigil, true, kind, '0_'));
     }
     return [];
+}
+
+/**
+ * Close an unclosed `$X{...}` for every suggestion: the caret lands before the
+ * inserted closing brace.
+ */
+function completeBrace(items, expression, caret) {
+    if (expression.slice(caret).includes('}')) return;
+    for (const item of items) {
+        item.insertTextPlain += '}';
+        const caretPosition = item.insertTextPlain.length - 1;
+        item.placeholder = { start: caretPosition, end: caretPosition };
+    }
+}
+
+/** `$R{key}` suggestions from the report's resource bundle. */
+function resourceItems(resources) {
+    return resources.map(resource => {
+        const value = resource && typeof resource.defaultValue === 'string'
+            ? resource.defaultValue
+            : null;
+        const hasValue = value !== null && value !== '';
+        const detail = hasValue
+            ? (value.length > 80 ? `${value.slice(0, 77)}…` : value)
+            : 'No default value';
+
+        return withPlain({
+            label:             resource.key,
+            detail,
+            documentation:     hasValue
+                ? `**${resource.key}**\n\n${markdownSafe(value)}`
+                : `**${resource.key}**\n\n_No default value in the default bundle._`,
+            insertTextSnippet: String(resource.key).replace(/\$/g, '\\$'),
+            kind:              'reference',
+            sortText:          '0_' + resource.key,
+        }, resource.key);
+    });
+}
+
+/** Keep property-file content from injecting markdown while it is rendered. */
+function markdownSafe(text) {
+    return String(text ?? '')
+        .replace(/\\/g, '\\\\')
+        .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
+        .replace(/\r?\n+/g, ' ')
+        .trim();
 }
 
 function shortcutItems() {

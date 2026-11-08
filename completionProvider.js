@@ -13,6 +13,7 @@ const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { reportLanguage } = require('./reportLanguage');
+const { resourceEntriesForDocument } = require('./resourceIndex');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -210,6 +211,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 declarations: resolveDeclarationScope(decls, offset),
                 options,
                 customMethods: getCustomJavaMethods(),
+                resources: resourceEntriesForDocument(document),
             });
 
             return result.items.map(toCompletionItem);

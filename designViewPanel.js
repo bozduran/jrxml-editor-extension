@@ -16,6 +16,7 @@ const { getNonce } = require('./expressionPanelHtml');
 const { isStale, STALE_MESSAGE } = require('./staleGuard');
 const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { reportLanguage } = require('./reportLanguage');
+const { resourceEntriesForDocument } = require('./resourceIndex');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { getCustomJavaMethods } = require('./completionProvider');
 
@@ -90,6 +91,7 @@ function buildCompletionsForDocument(document, expression, offset) {
         declarations: resolveDeclarationScope(decls, -1),
         options,
         customMethods: getCustomJavaMethods(),
+        resources: resourceEntriesForDocument(document),
     });
 
     result.items = result.items.slice(0, MAX_COMPLETIONS);

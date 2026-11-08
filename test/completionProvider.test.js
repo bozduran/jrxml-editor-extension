@@ -6,6 +6,9 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const os     = require('node:os');
+const path   = require('node:path');
 const Module = require('node:module');
 
 let settings = {};
@@ -72,7 +75,7 @@ const provider = registered;
 let seq = 0;
 
 /** Build a document stub with the offset/line APIs the provider uses. */
-function makeDoc(text) {
+function makeDoc(text, fileName) {
     const id = `file:///completion-${seq++}.jrxml`;
     const lineStarts = [0];
     for (let i = 0; i < text.length; i++) {
@@ -80,6 +83,7 @@ function makeDoc(text) {
     }
     return {
         uri: { toString: () => id },
+        fileName: fileName || '/test/report.jrxml',
         version: 1,
         getText: () => text,
         offsetAt: (position) => lineStarts[position.line] + position.character,
@@ -377,4 +381,27 @@ test('typed member completion is disabled for a non-Java report', () => {
 
     assert.ok(find(items, 'TODAY'), 'the language-neutral list is still offered');
     assert.ok(!find(items, 'toUpperCase'), 'no Java member list');
+});
+
+test('$R{ completes keys from the report resource bundle', () => {
+    settings = {};
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-completion-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\nbody=Body text\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <detail><band><textField>
+    <reportElement x="0" y="0" width="100" height="20"/>
+    <textFieldExpression><![CDATA[$R{]]></textFieldExpression>
+  </textField></band></detail>
+</jasperReport>`;
+    const open = '<![CDATA[$R{';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(
+        makeDoc(text, path.join(dir, 'report.jrxml')),
+        positionAt(text, cursor),
+        {}
+    );
+
+    assert.deepStrictEqual(labels(items).sort(), ['body', 'title']);
+    assert.strictEqual(find(items, 'title').detail, 'Welcome');
 });

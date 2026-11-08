@@ -65,6 +65,31 @@ test('offers parameters and variables, including built-ins', () => {
     assert.ok(labels(vars.items).includes('PAGE_NUMBER'));
 });
 
+test('offers resource keys inside $R{ when a bundle is indexed', () => {
+    const resources = [
+        { key: 'title', defaultValue: 'Welcome' },
+        { key: 'body', defaultValue: 'Body text' },
+    ];
+    const result = suggest('$R{ti', 5, { resources });
+
+    assert.strictEqual(result.mode, 'resource');
+    assert.strictEqual(result.prefix, 'ti');
+    assert.deepStrictEqual(result.replace, { start: 3, end: 5 });
+    assert.deepStrictEqual(labels(result.items), ['title', 'body']);
+    assert.strictEqual(result.items[0].insertTextPlain, 'title}');
+    assert.strictEqual(result.items[0].detail, 'Welcome');
+
+    const closed = suggest('$R{ti}', 5, { resources });
+    assert.strictEqual(closed.items[0].insertTextPlain, 'title');
+});
+
+test('falls back to the general list when no resource bundle is indexed', () => {
+    const result = suggest('$R{', 3);
+
+    assert.strictEqual(result.mode, 'general');
+    assert.ok(labels(result.items).includes('TODAY'));
+});
+
 test('offers the dollar shortcuts and replaces the typed dollar', () => {
     const result = suggest('$', 1);
 
