@@ -93,6 +93,29 @@ test('offers the full general list with fields, functions and Java statics', () 
     );
 });
 
+test('keeps the suggestion counts and plain insertion for each category', () => {
+    const result = suggest('', 0, {
+        customMethods: [
+            { label: 'Util.trim', detail: 'Util.trim(String value) : String', doc: '**Class:** `Util`', snippet: 'Util.trim(${1:value})' },
+            { label: 'Util.isEmpty', detail: 'Util.isEmpty(String value) : boolean', doc: '**Class:** `Util`', snippet: 'Util.isEmpty(${1:value})' },
+        ],
+    });
+
+    assert.strictEqual(result.items.filter(item => item.kind === 'function').length, 41);
+    assert.strictEqual(result.items.filter(item => item.kind === 'class').length, 22);
+    assert.strictEqual(result.items.filter(item => item.kind === 'method').length, 2);
+
+    for (const [label, plain] of [
+        ['IF', 'IF(condition, trueVal, falseVal)'],
+        ['String', 'String'],
+        ['Util.trim', 'Util.trim(value)'],
+    ]) {
+        const item = result.items.find(candidate => candidate.label === label);
+        assert.ok(item, `missing ${label}`);
+        assert.strictEqual(item.insertTextPlain, plain, label);
+    }
+});
+
 test('offers typed members after a declared receiver', () => {
     const expression = '$F{CustomerName}.sub';
     const result = suggest(expression, expression.length);
