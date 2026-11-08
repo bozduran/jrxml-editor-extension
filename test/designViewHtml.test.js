@@ -5,6 +5,7 @@ const test   = require('node:test');
 const assert = require('node:assert');
 
 const { buildDesignViewHtml } = require('../designViewHtml');
+const { PROPERTY_SPECS } = require('../designSpec');
 
 const NONCE = 'deadbeefdeadbeefdeadbeefdeadbeef';
 
@@ -66,6 +67,17 @@ test('declares a nonce-based Content-Security-Policy', () => {
 test('applies the nonce to the style and script tags', () => {
     const html = build();
     assert.strictEqual((html.match(new RegExp(`nonce="${NONCE}"`, 'g')) || []).length, 2);
+});
+
+test('the stretch select matches the shared property spec', () => {
+    const html = build();
+    const select = /<select id="prop-stretch-type">([\s\S]*?)<\/select>/.exec(html);
+    assert.ok(select, 'missing the stretch type select');
+
+    const values = [...select[1].matchAll(/<option value="([^"]*)"/g)]
+        .map(match => match[1])
+        .filter(Boolean);
+    assert.deepStrictEqual(values, PROPERTY_SPECS.stretchType.values);
 });
 
 test('contains no inline event handlers, innerHTML or eval', () => {

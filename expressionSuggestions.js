@@ -85,6 +85,20 @@ const JAVA_TYPES = [
 ];
 
 /**
+ * Read the completion options shared by the editor provider and the design
+ * inspector from a WorkspaceConfiguration-like object.
+ *
+ * @param {{get:(key:string, fallback:any)=>any}} config
+ * @returns {{typedCompletion:boolean, jdkBaseline:(string|number)}}
+ */
+function suggestionOptions(config) {
+    return {
+        typedCompletion: config.get('typeCompletion.enabled', true),
+        jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
+    };
+}
+
+/**
  * @param {object} opts
  * @param {string} opts.text full expression text
  * @param {number} opts.offset caret offset
@@ -422,5 +436,6 @@ function plainFromSnippet(snippet) {
 
 module.exports = {
     buildExpressionSuggestions,
+    suggestionOptions,
     plainFromSnippet,
 };

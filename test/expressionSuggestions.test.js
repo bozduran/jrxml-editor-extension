@@ -7,6 +7,7 @@ const assert = require('node:assert');
 
 const {
     buildExpressionSuggestions,
+    suggestionOptions,
     plainFromSnippet,
 } = require('../expressionSuggestions');
 
@@ -91,6 +92,27 @@ test('offers the full general list with fields, functions and Java statics', () 
         result.items.find(item => item.label === '$F{CustomerName}').insertTextPlain,
         '$F{CustomerName}'
     );
+});
+
+test('reads the shared completion options from configuration', () => {
+    const requested = [];
+    const config = {
+        get(key, fallback) {
+            requested.push(key);
+            if (key === 'typeCompletion.enabled') return false;
+            if (key === 'typeCompletion.jdkBaseline') return '17';
+            return fallback;
+        },
+    };
+
+    assert.deepStrictEqual(suggestionOptions(config), {
+        typedCompletion: false,
+        jdkBaseline: '17',
+    });
+    assert.deepStrictEqual(requested, [
+        'typeCompletion.enabled',
+        'typeCompletion.jdkBaseline',
+    ]);
 });
 
 test('keeps the suggestion counts and plain insertion for each category', () => {

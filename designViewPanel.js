@@ -15,7 +15,7 @@ const { buildDesignViewHtml } = require('./designViewHtml');
 const { getNonce } = require('./expressionPanelHtml');
 const { isStale, STALE_MESSAGE } = require('./staleGuard');
 const { parseDeclarations } = require('./jrxmlParser');
-const { buildExpressionSuggestions } = require('./expressionSuggestions');
+const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { getCustomJavaMethods } = require('./completionProvider');
 
 const VIEW_TYPE    = 'jrxmlDesignView';
@@ -83,10 +83,7 @@ function buildCompletionsForDocument(document, expression, offset) {
         text: expression,
         offset,
         declarations: decls,
-        options: {
-            typedCompletion: config.get('typeCompletion.enabled', true),
-            jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
-        },
+        options: suggestionOptions(config),
         customMethods: getCustomJavaMethods(),
     });
 
