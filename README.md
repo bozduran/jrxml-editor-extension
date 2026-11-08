@@ -75,7 +75,9 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   - `jrxml.lint.uncheckedNullDereference` — a `$F`/`$P`/`$V` reference used as a method-call receiver without a dominating null check (short-circuit aware: `!= null &&`, `== null ||`, ternaries, `EQUALS(x, null)`, `Objects.nonNull`/`isNull`/`equals`)
 - **Boolean comparison style** — `==` / `!=` on a declared Boolean value, `Boolean.TRUE`/`FALSE.equals(...)`, or a bare Boolean reference used as a condition, with a one-click `EQUALS(...)` fix (`jrxml.lint.booleanEquals`)
 
-  The first three have quick fixes and can be switched off individually. The hook's structural
+  The `constantPrintWhen`, `removeLineWhenBlank` and `markupTagWithoutMarkup` rules above
+  have quick fixes and can be switched off individually; the Boolean rule also has a quick
+  fix and its own setting. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
 - Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}`
