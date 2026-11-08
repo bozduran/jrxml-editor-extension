@@ -7,8 +7,9 @@
 // project's Maven/Ant compile + verifyDesign as the authoritative gate.
 
 const vscode = require('vscode');
+const { defaults } = require('./settingsSchema');
 
-const DEFAULT_COMMAND = 'mvn -q -DskipTests jasperreports:compile';
+const DEFAULT_COMMAND = defaults()['build.command'];
 const PROBLEM_MATCHERS = ['$jrxml-file-line', '$jrxml-javac', '$jrxml-compile'];
 
 /** The configured build command, trimmed; empty means "not configured". */

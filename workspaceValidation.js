@@ -7,8 +7,7 @@
 
 const vscode = require('vscode');
 const { updateDiagnostics } = require('./diagnosticsProvider');
-
-const EXCLUDE = '**/{node_modules,.git,out,target,bin,dist,.vscode-test,.dsh,coverage}/**';
+const { EXCLUDE_GLOB } = require('./workspaceFiles');
 
 /**
  * Validate every JRXML file in the workspace.
@@ -21,7 +20,7 @@ async function validateWorkspace() {
         return { files: 0, errors: 0, warnings: 0 };
     }
 
-    const uris = await vscode.workspace.findFiles('**/*.jrxml', EXCLUDE);
+    const uris = await vscode.workspace.findFiles('**/*.jrxml', EXCLUDE_GLOB);
     if (uris.length === 0) {
         vscode.window.showInformationMessage('No .jrxml files found in the workspace.');
         return { files: 0, errors: 0, warnings: 0 };
@@ -46,11 +45,9 @@ async function validateWorkspace() {
                     continue; // deleted or unreadable since findFiles ran
                 }
 
-                updateDiagnostics(document);
-
-                for (const diagnostic of vscode.languages.getDiagnostics(uris[index])) {
-                    if (diagnostic.severity === vscode.DiagnosticSeverity.Error) errors++;
-                    else if (diagnostic.severity === vscode.DiagnosticSeverity.Warning) warnings++;
+                for (const finding of updateDiagnostics(document)) {
+                    if (finding.severity === 'error') errors++;
+                    else warnings++;
                 }
             }
         }
@@ -69,4 +66,4 @@ function register(context) {
     );
 }
 
-module.exports = { register, validateWorkspace, EXCLUDE };
+module.exports = { register, validateWorkspace };

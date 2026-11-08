@@ -62,7 +62,7 @@ function toDiagnostic(document, finding) {
 function updateDiagnostics(document) {
     if (!isJrxmlDocument(document)) {
         diagnosticCollection.delete(document.uri);
-        return;
+        return [];
     }
 
     const findings = collectFindings({
@@ -76,6 +76,7 @@ function updateDiagnostics(document) {
         document.uri,
         findings.map(finding => toDiagnostic(document, finding))
     );
+    return findings;
 }
 
 // ── Registration helper ───────────────────────────────────────────────────────
@@ -125,4 +126,4 @@ function register(context) {
     );
 }
 
-module.exports = { register, updateDiagnostics, settingsFromConfig };
+module.exports = { register, updateDiagnostics };

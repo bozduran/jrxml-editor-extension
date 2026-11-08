@@ -10,7 +10,7 @@ const { buildIndex, buildTree } = require('./includeGraph');
 
 const VIEW_ID     = 'jrxmlIncludeChain';
 const GLOB        = '**/*.jrxml';
-const EXCLUDE     = '**/{node_modules,out,target,bin,.git,.vscode-test}/**';
+const { EXCLUDE_GLOB: EXCLUDE } = require('./workspaceFiles');
 const DEBOUNCE_MS = 300;
 
 /** uriString → { mtime, text }; lets a refresh skip unchanged files. */
