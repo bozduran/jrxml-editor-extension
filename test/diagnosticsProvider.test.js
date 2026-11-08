@@ -327,3 +327,15 @@ test('a Java report, or one without a language attribute, does not warn', () => 
     assert.deepStrictEqual(languageWarnings(diagnose(java)), []);
     assert.deepStrictEqual(languageWarnings(diagnose(implicit)), []);
 });
+
+test('every newly registered expression tag is scanned for syntax errors', () => {
+    for (const tag of [
+        'crosstabExpression', 'bookmarkLevelExpression', 'chartTitleExpression',
+        'chartSubtitleExpression', 'timePeriodExpression',
+    ]) {
+        const text = `<jasperReport name="R"><${tag}><![CDATA[($F{a}]]></${tag}></jasperReport>`;
+        const diags = diagnose(text).filter(d => d.code === 'jrxml.unbalancedParen');
+
+        assert.strictEqual(diags.length, 1, `no syntax error for <${tag}>`);
+    }
+});

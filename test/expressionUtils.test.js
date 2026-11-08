@@ -106,6 +106,16 @@ test('the grammar opens and closes the same expression tags', () => {
     assert.deepStrictEqual(end, begin);
 });
 
+test('the expression formatter can rewrite every registry tag', () => {
+    for (const tag of EXPRESSION_TAGS) {
+        const text = `<jasperReport><${tag}><![CDATA[$F{a}]]></${tag}></jasperReport>`;
+        const replacement = findTagReplacement(text, tag, 0, '$F{b}');
+
+        assert.ok(replacement, `no replacement for <${tag}>`);
+        assert.ok(replacement.newTag.includes('$F{b}'), tag);
+    }
+});
+
 test('the expression editor recognizes every registry tag at the cursor', () => {
     for (const tag of EXPRESSION_TAGS) {
         const text = `<jasperReport><${tag}><![CDATA[$F{x}]]></${tag}></jasperReport>`;
