@@ -15,7 +15,7 @@ project's existing Maven/Ant build instead of embedding the report engine.
 - **Not supported:** report filling/preview, parameter prompting, PDF/HTML/XLSX
   export, data adapters, JDBC schema introspection, visual chart/table/crosstab
   designers, classic JasperReports 6 rendering, and full Groovy/JavaScript
-  semantics. See [ROADMAP.md](ROADMAP.md) for what is planned after 1.0.0.
+  semantics. Post-1.0 work is planned outside this repository.
 
 From 1.0.0, the contributed command ids and every `jrxml.*` setting are a
 compatibility contract; changes to them follow semver.
