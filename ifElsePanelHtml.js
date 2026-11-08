@@ -299,7 +299,7 @@ function buildIfElsePanelHtml({
       <p class="note" id="fnote" hidden>IF(), AND() and OR() evaluate every argument. Null-safe guards are written as inline (x != null ? … : false) so nothing throws.</p>
       <hr>
       <label for="rev"><b>Paste an expression to load it</b></label>
-      <textarea id="rev" rows="5" spellcheck="false" placeholder='IF($F{status}.equals("PAID"), "Paid", "Unknown")'></textarea>
+      <textarea id="rev" rows="5" spellcheck="false" placeholder='IF(EQUALS($F{status}, "PAID"), "Paid", "Unknown")'></textarea>
       <p class="warn" id="rerr" hidden></p>
       <button id="load">Load into builder</button>
       <p class="note"><b>Text</b> results are quoted automatically; <b>Expression</b> results are inserted verbatim, so fields, operators and method calls are allowed. Java ternaries still need compatible result types in every branch.</p>

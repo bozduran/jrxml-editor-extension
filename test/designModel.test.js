@@ -389,7 +389,7 @@ test('keeps markup raw for editing and disables unsupported content', () => {
     assert.strictEqual(long.editable, false);
 });
 
-test('exposes raw attributes, report styles and box metadata', () => {
+test('exposes element attributes, report styles and box metadata', () => {
     const styled = buildDesignModel(report(`
         <style name="Big" fontName="Arial" fontSize="20" bold="true"/>
         <detail>
@@ -438,6 +438,32 @@ test('exposes raw attributes, report styles and box metadata', () => {
     assert.strictEqual(group.kind, 'elementGroup');
     assert.strictEqual(group.children.length, 1);
     assert.strictEqual(group.children[0].displayText, 'Inside');
+});
+
+test('decodes entity-bearing attribute values for display and editing', () => {
+    const text = report(`
+        <detail><band height="40">
+            <element kind="textField" key="a &amp; b &lt;c&gt; &quot;d&quot; &#65; &#x42;" x="0" y="0" width="10" height="10">
+                <expression><![CDATA["x"]]></expression>
+            </element>
+        </band></detail>
+    `);
+    const element = buildDesignModel(text).bands.find(band => band.key === 'detail').elements[0];
+
+    assert.strictEqual(element.attrs.key, 'a & b <c> "d" A B');
+});
+
+test('keeps a literal ampersand in an attribute value as literal text', () => {
+    const text = report(`
+        <detail><band height="40">
+            <element kind="textField" key="a & b" x="0" y="0" width="10" height="10">
+                <expression><![CDATA["x"]]></expression>
+            </element>
+        </band></detail>
+    `);
+    const element = buildDesignModel(text).bands.find(band => band.key === 'detail').elements[0];
+
+    assert.strictEqual(element.attrs.key, 'a & b');
 });
 
 test('findSelectionTarget resolves elements, frame children and bands', () => {

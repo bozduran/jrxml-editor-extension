@@ -11,78 +11,24 @@
 
 const { scanXml, nodeStartingAt, attrInsertOffset } = require('./xmlspan');
 const { findOverlap } = require('./edits');
+const {
+    MAX_CONTENT,
+    CONTENT_TAG_BY_KIND,
+    EXPRESSION_CONTENT_TAGS,
+    PROPERTY_SPECS,
+    localName,
+    attrValue,
+    directChild,
+    numericAttr,
+    escapeXmlAttr,
+    escapeXmlText,
+} = require('./designSpec');
 
-const MAX_CONTENT = 8000;
 const MAX_GEOMETRY = 100000;
 
 const GEOMETRY_FIELDS = ['x', 'y', 'width', 'height'];
 const ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 const LINE_STYLES = ['Solid', 'Dashed', 'Dotted', 'Double'];
-
-const PROPERTY_SPECS = {
-    fontName:       { type: 'fontName' },
-    fontSize:       { type: 'fontSize' },
-    bold:           { type: 'boolean' },
-    italic:         { type: 'boolean' },
-    underline:      { type: 'boolean' },
-    strikeThrough:  { type: 'boolean' },
-    forecolor:      { type: 'color' },
-    backcolor:      { type: 'color' },
-    hTextAlign:     { type: 'enum', values: ['Left', 'Center', 'Right', 'Justify'] },
-    vTextAlign:     { type: 'enum', values: ['Top', 'Middle', 'Bottom'] },
-    rotation:       { type: 'enum', values: ['None', 'Left', 'Right', 'UpsideDown'] },
-    markup:         { type: 'enum', values: ['none', 'styled', 'html', 'rtf'] },
-    mode:           { type: 'enum', values: ['Transparent', 'Opaque'] },
-    style:          { type: 'text' },
-
-    // Layout / print behaviour.
-    positionType:             { type: 'enum', values: ['Float', 'FixRelativeToTop', 'FixRelativeToBottom'] },
-    stretchType:              {
-        type: 'enum',
-        values: [
-            'NoStretch', 'ElementGroupHeight', 'ElementGroupBottom',
-            'ContainerHeight', 'ContainerBottom',
-            'RelativeToTallestObject', 'RelativeToBandHeight',
-        ],
-    },
-    printRepeatedValues:      { type: 'boolean' },
-    removeLineWhenBlank:      { type: 'boolean' },
-    printInFirstWholeBand:    { type: 'boolean' },
-    printWhenDetailOverflows: { type: 'boolean' },
-    printWhenGroupChanges:    { type: 'text' },
-    evaluationTime:           { type: 'enum', values: ['Now', 'Report', 'Page', 'Column', 'Group', 'Band', 'Auto', 'Master'] },
-    evaluationGroup:          { type: 'text' },
-    bookmarkLevel:            { type: 'integer', min: 0, max: 100000 },
-    key:                      { type: 'text' },
-
-    // Text-specific.
-    textAdjust:    { type: 'enum', values: ['CutText', 'StretchHeight', 'ScaleFont'] },
-    pattern:       { type: 'rawString' },
-    blankWhenNull: { type: 'boolean' },
-
-    // Image-specific.
-    scaleImage:   { type: 'enum', values: ['Clip', 'FillFrame', 'RetainShape', 'RealSize', 'RealHeight', 'RealWidth'] },
-    hImageAlign:  { type: 'enum', values: ['Left', 'Center', 'Right'] },
-    vImageAlign:  { type: 'enum', values: ['Top', 'Middle', 'Bottom'] },
-    onErrorType:  { type: 'enum', values: ['Error', 'Blank', 'Icon'] },
-    usingCache:   { type: 'boolean' },
-    lazy:         { type: 'boolean' },
-    linkType:     { type: 'enum', values: ['None', 'Reference', 'LocalAnchor', 'LocalPage', 'RemoteAnchor', 'RemotePage'] },
-
-    // Element-specific.
-    runToBottom: { type: 'boolean' },
-    direction:   { type: 'enum', values: ['TopDown', 'BottomUp'] },
-    radius:      { type: 'integer', min: 0, max: 100000 },
-    type:        { type: 'enum', values: ['Page', 'Column'] },
-};
-
-const CONTENT_KINDS = {
-    statictext: 'text',
-    textfield:  'expression',
-    image:      'expression',
-    subreport:  'expression',
-    chart:      'expression',
-};
 
 /**
  * Build source edits for one design-view patch.
@@ -450,7 +396,7 @@ function planAttributeRemoval(node, name, text, edits) {
 // ── Box (border + padding) ──────────────────────────────────────────────────
 
 function applyBox(text, node, patch, edits, insertions) {
-    const existing = directChildLocal(node, 'box');
+    const existing = directChild(node, 'box');
     const existingPen = existing ? firstPen(existing) : null;
     const has = key => Object.prototype.hasOwnProperty.call(patch, key);
 
@@ -534,7 +480,7 @@ function rebuildAttrValue(value) {
 // ── Line pen ────────────────────────────────────────────────────────────────
 
 function applyLine(text, node, patch, edits, insertions) {
-    const existing = directChildLocal(node, 'pen');
+    const existing = directChild(node, 'pen');
     const has = key => Object.prototype.hasOwnProperty.call(patch, key);
 
     const width = has('width')
@@ -567,7 +513,7 @@ function applyContent(text, node, value, edits, insertions) {
     }
 
     const kind = String(node.attrValue('kind') || '').toLowerCase();
-    const expectedTag = CONTENT_KINDS[kind];
+    const expectedTag = CONTENT_TAG_BY_KIND[kind];
     if (!expectedTag) return 'This element does not have editable content.';
 
     const contentNode = findContentNode(node, expectedTag);
@@ -639,7 +585,7 @@ function applyContent(text, node, value, edits, insertions) {
 
 function findContentNode(node, expectedTag) {
     const wanted = expectedTag === 'expression'
-        ? ['expression', 'textfieldexpression', 'imageexpression', 'subreportexpression', 'chartexpression']
+        ? EXPRESSION_CONTENT_TAGS
         : [expectedTag];
 
     for (const child of node.children) {
@@ -681,44 +627,8 @@ function insertChild(text, node, markup, edits, insertions) {
     return null;
 }
 
-function directChildLocal(node, name) {
-    for (const child of node.children) {
-        if (localName(child.tag) === name) return child;
-    }
-    return null;
-}
-
-function attrValue(node, name) {
-    const attr = node.attr(name);
-    return attr ? attr.value : undefined;
-}
-
-function numericAttr(node, name, fallback) {
-    const raw = attrValue(node, name);
-    if (raw === undefined) return fallback;
-    const value = Number.parseFloat(raw);
-    return Number.isFinite(value) ? value : fallback;
-}
-
 function formatNumber(value) {
     return String(Math.round(Number(value) * 100) / 100);
-}
-
-// ── XML escaping ────────────────────────────────────────────────────────────
-
-function escapeXmlAttr(value) {
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function escapeXmlText(value) {
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
 }
 
 /** Split a CDATA terminator so user content cannot close the section early. */
@@ -734,12 +644,6 @@ function fail(error) {
 
 function isPlainObject(value) {
     return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function localName(tag) {
-    const text = String(tag ?? '');
-    const colon = text.indexOf(':');
-    return (colon === -1 ? text : text.slice(colon + 1)).toLowerCase();
 }
 
 module.exports = {

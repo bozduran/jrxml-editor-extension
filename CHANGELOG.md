@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-08
+
 ### Added
 - **Design view:** a Jaspersoft Studio-style visual canvas for Studio 7 JRXML,
   opened beside the source with **JRXML: Open Design View** (editor title button
@@ -60,6 +62,14 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   the reminder.
 
 ### Changed
+- **If / Else builder and snippets:** String and Boolean equality now emit the
+  JasperReports `EQUALS(...)` / `NOT(EQUALS(...))` helpers instead of
+  `.equals(...)`. The `jequals` snippet gained the `jrequals` alias and inserts
+  `EQUALS(value, expected)`.
+- **Settings:** `jrxml.clear.preview` / `jrxml.sort.preview` are now
+  `jrxml.clear.confirm` / `jrxml.sort.confirm`. The names match the behaviour:
+  the diff preview always opens, and the setting controls whether the destructive
+  apply asks for confirmation.
 - **Navigation:** **Go to Next / Previous Issue** now use `Ctrl+Alt+N` / `Ctrl+Alt+P`
   (`Cmd+Alt+N` / `Cmd+Alt+P` on macOS) instead of `Ctrl+Alt+Down` / `Ctrl+Alt+Up`,
   which overrode VS Code's add-cursor-below/above shortcuts while a `.jrxml` editor
@@ -70,9 +80,15 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   normal `jrxml.booleanEquals` diagnostic with a one-click `EQUALS(...)` fix in
   the Issues view. The separate view, diagnostics collection,
   `jrxml.suppressedBestPractices` setting, and the `jrxml.bp.*` /
-  `jrxml.refreshBestPractices` commands were removed.
+  `jrxml.refreshBestPractices` commands were removed. The view's inline
+  “Elements are not sorted by position” item went with it; the sort command
+  itself remains in the **JRXML** menu and the Command Palette.
 
 ### Fixed
+- **Design view autocomplete:** the inspector no longer stops requesting
+  suggestions while typing inside `$F{…}` / `$P{…}` / `$V{…}` or after a dot. The
+  client script is now a real JavaScript asset, so its regex escapes are not
+  consumed by the host template literal.
 - **If / Else builder:** loading an expression whose results used arithmetic or
   concatenation (`$F{a} + " " + $F{b}`) failed with "Cannot read near…"; results
   are now captured as opaque source.

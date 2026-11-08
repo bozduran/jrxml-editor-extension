@@ -85,6 +85,20 @@ const JAVA_TYPES = [
 ];
 
 /**
+ * Read the completion options shared by the editor provider and the design
+ * inspector from a WorkspaceConfiguration-like object.
+ *
+ * @param {{get:(key:string, fallback:any)=>any}} config
+ * @returns {{typedCompletion:boolean, jdkBaseline:(string|number)}}
+ */
+function suggestionOptions(config) {
+    return {
+        typedCompletion: config.get('typeCompletion.enabled', true),
+        jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
+    };
+}
+
+/**
  * @param {object} opts
  * @param {string} opts.text full expression text
  * @param {number} opts.offset caret offset
@@ -251,6 +265,25 @@ function declarationSuggestion(decl, sigil, alreadyInsideBrace, kind, sortPrefix
     }, plain);
 }
 
+/**
+ * Push snippet-backed suggestions, parsing each snippet once.
+ * `describe(entry)` supplies the category-specific detail/documentation.
+ */
+function pushSnippetSuggestions(target, entries, kind, sortPrefix, describe) {
+    for (const entry of entries) {
+        const plain = plainFromSnippet(entry.snippet);
+        const meta  = describe(entry);
+        target.push(withPlain({
+            label:             entry.label,
+            detail:            meta.detail,
+            documentation:     meta.documentation,
+            insertTextSnippet: entry.snippet,
+            kind,
+            sortText:          sortPrefix + entry.label,
+        }, plain.text, plain.placeholder));
+    }
+}
+
 function generalItems(decls, customMethods) {
     const items = [];
 
@@ -264,38 +297,18 @@ function generalItems(decls, customMethods) {
         items.push(declarationSuggestion(decl, 'V', false, 'variable', '1_V_'));
     }
 
-    for (const fn of JASPER_FUNCTIONS) {
-        items.push(withPlain({
-            label:             fn.label,
-            detail:            fn.detail,
-            documentation:     `**JasperReports built-in**\n\n${fn.doc}`,
-            insertTextSnippet: fn.snippet,
-            kind:              'function',
-            sortText:          '2_' + fn.label,
-        }, plainFromSnippet(fn.snippet).text, plainFromSnippet(fn.snippet).placeholder));
-    }
-
-    for (const type of JAVA_TYPES) {
-        items.push(withPlain({
-            label:             type.label,
-            detail:            type.label,
-            documentation:     '',
-            insertTextSnippet: type.snippet,
-            kind:              'class',
-            sortText:          '3_' + type.label,
-        }, plainFromSnippet(type.snippet).text, plainFromSnippet(type.snippet).placeholder));
-    }
-
-    for (const method of customMethods) {
-        items.push(withPlain({
-            label:             method.label,
-            detail:            method.detail,
-            documentation:     method.doc,
-            insertTextSnippet: method.snippet,
-            kind:              'method',
-            sortText:          '4_' + method.label,
-        }, plainFromSnippet(method.snippet).text, plainFromSnippet(method.snippet).placeholder));
-    }
+    pushSnippetSuggestions(items, JASPER_FUNCTIONS, 'function', '2_', fn => ({
+        detail:        fn.detail,
+        documentation: `**JasperReports built-in**\n\n${fn.doc}`,
+    }));
+    pushSnippetSuggestions(items, JAVA_TYPES, 'class', '3_', type => ({
+        detail:        type.label,
+        documentation: '',
+    }));
+    pushSnippetSuggestions(items, customMethods, 'method', '4_', method => ({
+        detail:        method.detail,
+        documentation: method.doc,
+    }));
 
     return items;
 }
@@ -423,7 +436,6 @@ function plainFromSnippet(snippet) {
 
 module.exports = {
     buildExpressionSuggestions,
+    suggestionOptions,
     plainFromSnippet,
-    JASPER_FUNCTIONS,
-    JAVA_TYPES,
 };

@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations } = require('./jrxmlParser');
-const { buildExpressionSuggestions } = require('./expressionSuggestions');
+const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -198,10 +198,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 text: document.getText(),
                 offset: document.offsetAt(position),
                 declarations: decls,
-                options: {
-                    typedCompletion: config.get('typeCompletion.enabled', true),
-                    jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
-                },
+                options: suggestionOptions(config),
                 customMethods: getCustomJavaMethods(),
             });
 
@@ -215,5 +212,4 @@ module.exports = {
     provider,
     clearCustomJavaCache,
     getCustomJavaMethods,
-    toCompletionItem,
 };

@@ -45,7 +45,9 @@ A visual builder for conditional expressions, opened on demand:
   **Text**, a **Number**, `null`, or an **Expression** — expressions are inserted
   verbatim, so `$F{first} + " " + $F{last}`, method calls and `new Date()` work.
 - **Two output styles** — a nested ternary or the Jaspersoft `IF()` / `AND()` / `OR()`
-  functions. Null-safe guards are written as inline ternaries in function style.
+  functions. String and Boolean equality use the Jaspersoft `EQUALS(...)` /
+  `NOT(EQUALS(...))` helpers instead of `.equals(...)`. Null-safe guards are written as
+  inline ternaries in function style.
 - **Apply or copy** — Apply writes the expression back into the expression tag the
   builder was opened from (CDATA preserved, one undoable edit); Copy puts it on the
   clipboard.
@@ -73,9 +75,11 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing `removeLineWhenBlank="true"` (or with another value)
   - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField expression while `markup` is not `styled`, `html` or `rtf`
   - `jrxml.lint.uncheckedNullDereference` — a `$F`/`$P`/`$V` reference used as a method-call receiver without a dominating null check (short-circuit aware: `!= null &&`, `== null ||`, ternaries, `EQUALS(x, null)`, `Objects.nonNull`/`isNull`/`equals`)
-- **Boolean comparison style** — `==` / `!=` on a declared Boolean value, or `Boolean.TRUE`/`FALSE.equals(...)`, with a one-click `EQUALS(...)` fix (`jrxml.lint.booleanEquals`)
+- **Boolean comparison style** — `==` / `!=` on a declared Boolean value, `Boolean.TRUE`/`FALSE.equals(...)`, or a bare Boolean reference used as a condition, with a one-click `EQUALS(...)` fix (`jrxml.lint.booleanEquals`)
 
-  The first three have quick fixes and can be switched off individually. The hook's structural
+  The `constantPrintWhen`, `removeLineWhenBlank` and `markupTagWithoutMarkup` rules above
+  have quick fixes and can be switched off individually; the Boolean rule also has a quick
+  fix and its own setting. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
 - Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}`
@@ -101,7 +105,7 @@ Formatting only runs when you ask for it (Format Document, the fix-all action, o
 `jrxml.formatOnSave`) and never reorders elements or deletes declarations.
 
 ### 7. Clear fixes and geometry sort
-Two destructive steps are opt-in commands, always previewed as a diff before applying:
+Two destructive steps are opt-in commands. Each always opens a diff preview and, unless confirmation is disabled, asks before applying:
 
 - **Clear fixes** (`JRXML: Apply Clear Fixes`) — delete unused declarations (never the
   built-in parameters), sync field descriptions with their jsonql property, and fix the
@@ -141,7 +145,8 @@ The member table ships with the extension (`data/jdk-members.json`, generated fr
 `jrxml.typeCompletion.enabled` (default `true`) turns the whole thing off and restores the previous behaviour.
 
 **Expression snippets.** Type a snippet prefix in an expression to insert a common pattern:
-`jif` (`IF(...)`), `jternary`, `jnullsafe`, `jand`, `jor`, `jnot`, `jequals`, `jtext`,
+`jif` (`IF(...)`), `jternary`, `jnullsafe`, `jand`, `jor`, `jnot`,
+`jequals`/`jrequals` (`EQUALS(...)`), `jtext`,
 `jstring`, `jdecimal` and `jdate`.
 
 Date/time helpers: `jdatetoday` (format `TODAY()`), `jdateadd` (`TODAY()` + N days),
@@ -220,7 +225,11 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `JRXML: Apply Clear Fixes` | Delete unused declarations, sync descriptions, fix jsonql (previewed) |
 | `JRXML: Migrate SQL Query to jsonql` | Prompt for jsonql and rewrite the `<query>` element |
 | `JRXML: Open Settings` | Open the dedicated JRXML settings panel |
+| `JRXML: Open Tutorial` | Open the built-in guide to the editor, panels and settings |
 | `JRXML: Refresh Include Chain` | Re-scan the workspace for the include-chain view |
+
+The table lists the primary commands; issue context-menu commands and other
+context-only actions are omitted.
 
 ---
 
@@ -248,8 +257,8 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `jrxml.textcheck.enabled` | `true` | Rendered-text rules in text and string literals |
 | `jrxml.textcheck.diagnostics` | `true` | Show warnings + quick fixes for text-check problems |
 | `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
-| `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
-| `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |
+| `jrxml.sort.confirm` | `true` | Ask before applying the geometry sort (the diff preview always opens) |
+| `jrxml.clear.confirm` | `true` | Ask before applying clear fixes or a SQL migration (the diff preview always opens) |
 | `jrxml.migrate.targetLanguage` | `jsonql` | Language written to `<query language="...">` when migrating a SQL query |
 
 ---
@@ -275,7 +284,7 @@ npm run lint             # eslint
 ```
 The unit suite runs on plain Node with no VS Code needed. The integration suite
 activates the extension for real and covers command registration, diagnostics,
-the sort/clear commands (preview disabled), document formatting and the settings
+the sort/clear commands (confirmation disabled), document formatting and the settings
 panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
 
 When you add a command or a settings group, also update `tutorialHtml.js`;
@@ -325,4 +334,4 @@ The editor activates for cursor positions inside any of these tags:
 
 ## Security notes
 
-The expression editor and If / Else builder webviews are rendered with a nonce-based Content-Security-Policy and no inline event handlers or style attributes. Expression text, file names and declaration names are escaped (or embedded as JSON-escaped data) before they reach the panel, so `.jrxml` content cannot inject script. The builder loads no remote resources and reads the report schema in the extension host, not in the webview. Hovers are rendered as untrusted markdown.
+The expression editor, If / Else builder and design view webviews are rendered with a nonce-based Content-Security-Policy and no inline event handlers or style attributes. Expression text, report layout data, file names and declaration names are escaped (or embedded as JSON-escaped data) before they reach a panel, so `.jrxml` content cannot inject script. The panels load no remote resources and read report data in the extension host, not in the webview. Hovers are rendered as untrusted markdown.

@@ -59,8 +59,8 @@ const DOCUMENTED_SETTING_GROUPS = [
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
     { id: 'diagnostics', summary: 'Unused warnings, expression validation, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
-    { id: 'clear', summary: 'The SQL migration target language and whether to preview clear fixes.' },
-    { id: 'sort', summary: 'Whether the geometry sort opens a diff before applying.' },
+    { id: 'clear', summary: 'The SQL migration target language and whether to confirm clear fixes.' },
+    { id: 'sort', summary: 'Whether the geometry sort asks for confirmation (the diff preview always opens).' },
 ];
 
 /**
@@ -484,7 +484,7 @@ function buildTutorialHtml({ nonce }) {
   <h3>Branches and conditions</h3>
   <ul>
     <li>Each branch is an <strong>if</strong> or <strong>else if</strong>; conditions can be joined with AND or OR.</li>
-    <li>Value types are String, Number, Boolean or a raw Boolean expression. Null checks, string methods, comparisons and boolean guards are written with the null-safety you choose.</li>
+    <li>Value types are String, Number, Boolean or a raw Boolean expression. Null checks, string methods, comparisons and boolean guards are written with the null-safety you choose; String and Boolean equality use the Jaspersoft <code>EQUALS(...)</code> / <code>NOT(EQUALS(...))</code> helpers instead of <code>.equals(...)</code>.</li>
     <li>Two output styles are available: a nested ternary or the Jaspersoft <code>IF()</code> / <code>AND()</code> / <code>OR()</code> functions.</li>
   </ul>
 
@@ -541,7 +541,7 @@ Class&lt;? extends Number&gt;</code></div>
   <p>The <strong>Issues (JRXML)</strong> view mirrors the diagnostics for the open report, grouped by severity. The same diagnostics appear as squiggles in the editor.</p>
   <ul>
     <li>Undeclared <code>$F{}</code>/<code>$P{}</code>/<code>$V{}</code> references, unbalanced parentheses, unclosed strings, unused declarations, the structural lint rules and text-check findings.</li>
-    <li>Boolean comparisons such as <code>$F{active} == true</code> offer a one-click <code>EQUALS(...)</code> fix (<code>jrxml.lint.booleanEquals</code>).</li>
+    <li>Boolean comparisons such as <code>$F{active} == true</code> and bare Boolean references used as conditions (for example <code>$F{active}</code>) offer a one-click <code>EQUALS(...)</code> fix (<code>jrxml.lint.booleanEquals</code>).</li>
     <li>Open an issue’s context menu to jump to it, apply its quick fix, copy the message/rule id, or open the expression in the Expression Editor or If / Else Builder.</li>
     <li><strong>Fix All Issues in File</strong> applies the preferred fixes where they do not overlap.</li>
     <li><strong>Go to Next Issue</strong> and <strong>Go to Previous Issue</strong> move between problems without leaving the keyboard.</li>
@@ -570,7 +570,7 @@ Class&lt;? extends Number&gt;</code></div>
     <li><strong>Sort Band/Frame Elements by Position</strong> reorders each container by <code>y</code> then <code>x</code>, keeping comments attached to their element.</li>
     <li><strong>Migrate SQL Query to jsonql</strong> rewrites a <code>&lt;query language="sql"&gt;</code> into the configured target language.</li>
   </ul>
-  <p>The previews can be disabled with <code>jrxml.clear.preview</code> or <code>jrxml.sort.preview</code>, but the confirmation remains the safe default.</p>
+  <p>The confirmation can be disabled with <code>jrxml.clear.confirm</code> or <code>jrxml.sort.confirm</code>; the diff preview always opens.</p>
 </section>
 
 <section id="include-chain">

@@ -7,7 +7,7 @@
 // surface. Kept vscode-free for unit testing.
 
 const CODE = 'jrxml.booleanEquals';
-const MESSAGE = 'Prefer EQUALS($ref, true/false) or NOT(EQUALS(...)) instead of == / != on Boolean values.';
+const MESSAGE = 'Prefer EQUALS($ref, true/false) or NOT(EQUALS(...)) instead of == / != or a bare Boolean reference.';
 
 function isBoolean(type) {
     if (!type) return false;
@@ -103,4 +103,4 @@ function checkBooleanEquals(expression, declarations) {
     return hits;
 }
 
-module.exports = { CODE, MESSAGE, checkBooleanEquals, isBoolean };
+module.exports = { CODE, MESSAGE, checkBooleanEquals };

@@ -1,7 +1,7 @@
 Build branches visually:
 
 ```java
-IF($F{status}.equals("PAID"), "Paid", "Unknown")
+IF(EQUALS($F{status}, "PAID"), "Paid", "Unknown")
 ```
 
 Run **JRXML: Open If / Else Builder** (or `Ctrl+Alt+B`) with the cursor inside the

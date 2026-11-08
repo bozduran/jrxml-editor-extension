@@ -48,6 +48,24 @@ test('snippet prefixes are unique', () => {
     }
 });
 
+test('the equals snippets use the JasperReports EQUALS function', () => {
+    const snippets = JSON.parse(fs.readFileSync(snippetFile, 'utf8'));
+    const byPrefix = new Map();
+
+    for (const snippet of Object.values(snippets)) {
+        const body = Array.isArray(snippet.body) ? snippet.body.join('\n') : String(snippet.body);
+        const prefixes = Array.isArray(snippet.prefix) ? snippet.prefix : [snippet.prefix];
+        for (const prefix of prefixes) byPrefix.set(prefix, { body });
+    }
+
+    for (const prefix of ['jequals', 'jrequals', 'jr-equals']) {
+        assert.ok(byPrefix.has(prefix), `missing equals snippet ${prefix}`);
+        const body = byPrefix.get(prefix).body;
+        assert.match(body, /^EQUALS\(/, `${prefix} must use the JasperReports EQUALS function`);
+        assert.ok(!body.includes('.equals('), `${prefix} must not use a Java .equals() call`);
+    }
+});
+
 test('ships the common date helpers', () => {
     const snippets = JSON.parse(fs.readFileSync(snippetFile, 'utf8'));
     const byPrefix = new Map();

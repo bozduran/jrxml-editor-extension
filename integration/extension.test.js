@@ -61,14 +61,14 @@ suite('JRXML extension smoke', () => {
         await extension.activate();
         assert.strictEqual(extension.isActive, true);
 
-        // The destructive commands are exercised without their modal preview.
-        await setConfig('sort.preview', false);
-        await setConfig('clear.preview', false);
+        // The destructive commands are exercised without their modal confirmation.
+        await setConfig('sort.confirm', false);
+        await setConfig('clear.confirm', false);
     });
 
     suiteTeardown(async () => {
-        await setConfig('sort.preview', true);
-        await setConfig('clear.preview', true);
+        await setConfig('sort.confirm', true);
+        await setConfig('clear.confirm', true);
     });
 
     test('registers every contributed command', async () => {

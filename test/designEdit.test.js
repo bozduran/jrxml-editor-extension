@@ -11,6 +11,7 @@ const {
     splitCdata,
     MAX_CONTENT,
 } = require('../designEdit');
+const { buildDesignModel } = require('../designModel');
 const { applyEdits } = require('../edits');
 const { scanXml } = require('../xmlspan');
 
@@ -321,6 +322,64 @@ test('sets and removes arbitrary attributes', () => {
     assert.ok(out.includes(' data-custom="a &amp; &quot;b&quot;"'), 'new attribute was not escaped');
     assert.ok(out.includes(' x="5"'), 'existing attribute was not set');
     assert.ok(!out.includes(' id="a"'), 'attribute was not removed');
+    assert.strictEqual(scanXml(out).error, null);
+});
+
+test('round-trips entity-bearing attributes without re-encoding them', () => {
+    const text = report(
+        '<element kind="textField" key="a &amp; b &lt;c&gt; &quot;d&quot;" x="0" y="0" width="10" height="10">' +
+        '<expression><![CDATA["x"]]></expression></element>'
+    );
+    const element = buildDesignModel(text).bands[0].elements[0];
+    assert.strictEqual(element.attrs.key, 'a & b <c> "d"');
+
+    const unchanged = buildElementPatch(text, elementOffset(text), {
+        attributes: { set: { key: element.attrs.key } },
+    });
+    assert.strictEqual(unchanged.error, null);
+    assert.deepStrictEqual(unchanged.edits, [], 'resubmitting a decoded value must not rewrite the source');
+
+    const out = run(text, { attributes: { set: { key: 'a & <b> "c"' } } });
+    assert.ok(out.includes('key="a &amp; &lt;b&gt; &quot;c&quot;"'), 'changed values must be escaped exactly once');
+    assert.strictEqual(buildDesignModel(out).bands[0].elements[0].attrs.key, 'a & <b> "c"');
+    assert.strictEqual(scanXml(out).error, null);
+});
+
+test('encodes a literal source ampersand once when an attribute is edited', () => {
+    const text = report(
+        '<element kind="textField" key="a & b" x="0" y="0" width="10" height="10">' +
+        '<expression><![CDATA["x"]]></expression></element>'
+    );
+    const element = buildDesignModel(text).bands[0].elements[0];
+    assert.strictEqual(element.attrs.key, 'a & b');
+
+    const out = run(text, { attributes: { set: { key: element.attrs.key } } });
+    assert.ok(out.includes('key="a &amp; b"'), 'the literal ampersand must be encoded once');
+    assert.ok(!out.includes('&amp;amp;'));
+});
+
+test('round-trips inspector text properties with entities', () => {
+    const text = report(
+        '<element kind="textField" key="a &amp; b" printWhenGroupChanges="G &amp; H"' +
+        ' x="0" y="0" width="10" height="10">' +
+        '<expression><![CDATA["x"]]></expression></element>'
+    );
+    const element = buildDesignModel(text).bands[0].elements[0];
+    assert.strictEqual(element.attrs.key, 'a & b');
+    assert.strictEqual(element.attrs.printWhenGroupChanges, 'G & H');
+
+    const unchanged = buildElementPatch(text, elementOffset(text), {
+        properties: { key: element.attrs.key, printWhenGroupChanges: element.attrs.printWhenGroupChanges },
+    });
+    assert.strictEqual(unchanged.error, null);
+    assert.deepStrictEqual(unchanged.edits, []);
+
+    const out = run(text, {
+        properties: { key: 'x & y', printWhenGroupChanges: 'G < H' },
+    });
+    assert.ok(out.includes('key="x &amp; y"'));
+    assert.ok(out.includes('printWhenGroupChanges="G &lt; H"'));
+    assert.ok(!out.includes('&amp;amp;'));
     assert.strictEqual(scanXml(out).error, null);
 });
 
