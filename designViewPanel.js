@@ -91,7 +91,7 @@ function buildCompletionsForDocument(document, expression, offset) {
         declarations: resolveDeclarationScope(decls, -1),
         options,
         customMethods: getCustomJavaMethods(),
-        resources: resourceEntriesForDocument(document),
+        resources: resourceEntriesForDocument(document, decls.resourceBundle),
     });
 
     result.items = result.items.slice(0, MAX_COMPLETIONS);

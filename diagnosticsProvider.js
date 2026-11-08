@@ -17,6 +17,7 @@ const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
 const { reportLanguage } = require('./reportLanguage');
+const { resourcesForDocument } = require('./resourceIndex');
 const {
     CODE: BOOLEAN_EQUALS_CODE,
     MESSAGE: BOOLEAN_EQUALS_MESSAGE,
@@ -73,6 +74,33 @@ function updateDiagnostics(document) {
             vscode.DiagnosticSeverity.Warning,
             'jrxml.unsupportedLanguage'
         ));
+    }
+
+    // ── 0b. Resource-bundle references ───────────────────────────────────────
+    // A missing key fails only at fill time, so this is exactly the check a
+    // static editor can own. It runs only when the report declares a bundle.
+    if (parsed.resourceBundle) {
+        const bundle    = parsed.resourceBundle;
+        const resources = resourcesForDocument(document, bundle);
+
+        if (!resources) {
+            diagnostics.push(makeDiagnostic(
+                document, bundle.offset, bundle.length,
+                `Resource bundle '${bundle.name}' was not found next to the report or in the workspace.`,
+                vscode.DiagnosticSeverity.Warning,
+                'jrxml.missingResourceBundle'
+            ));
+        } else {
+            for (const ref of parsed.resourceReferences || []) {
+                if (resources.entries.has(ref.name)) continue;
+                diagnostics.push(makeDiagnostic(
+                    document, ref.offset, ref.end - ref.offset,
+                    `Resource key '${ref.name}' is not defined in resource bundle '${bundle.name}'.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.missingResourceKey'
+                ));
+            }
+        }
     }
 
     // ── 1. Unused declarations ────────────────────────────────────────────────

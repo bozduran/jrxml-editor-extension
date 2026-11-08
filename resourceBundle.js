@@ -20,8 +20,12 @@ const cache = new Map();
  * @returns {{name:string, offset:number, length:number}|null}
  */
 function bundleAttribute(text) {
-    const scan = scanXml(text);
-    if (!scan || scan.error || scan.doc.root.tag !== 'jasperReport') return null;
+    return bundleAttributeOfScan(scanXml(text));
+}
+
+/** The same from an existing scan, so callers that parsed the document do not scan twice. */
+function bundleAttributeOfScan(scan) {
+    if (!scan || scan.error || !scan.doc || scan.doc.root.tag !== 'jasperReport') return null;
 
     const attr = scan.doc.root.attr('resourceBundle');
     if (!attr || !attr.value.trim()) return null;
@@ -170,6 +174,7 @@ function clearResourceBundleCache() {
 
 module.exports = {
     bundleAttribute,
+    bundleAttributeOfScan,
     loadResourceBundle,
     findBundleFiles,
     clearResourceBundleCache,

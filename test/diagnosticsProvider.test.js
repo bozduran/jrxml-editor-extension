@@ -7,6 +7,7 @@ const test   = require('node:test');
 const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
+const os     = require('node:os');
 const Module = require('node:module');
 
 class FakeRange {
@@ -46,10 +47,10 @@ const { updateDiagnostics } = require('../diagnosticsProvider');
 
 let docSeq = 0;
 
-function fakeDocument(text) {
+function fakeDocument(text, fileName = '/test/report.jrxml') {
     const uri = `file:///test/report-${docSeq++}.jrxml`;
     return {
-        fileName: '/test/report.jrxml',
+        fileName,
         uri: { toString: () => uri },
         version: 1,
         getText: () => text,
@@ -63,7 +64,7 @@ function fakeDocument(text) {
 function diagnose(text, options = {}) {
     settings = options.settings || {};
     currentDiags = [];
-    updateDiagnostics(fakeDocument(text));
+    updateDiagnostics(fakeDocument(text, options.fileName));
     return currentDiags;
 }
 
@@ -338,4 +339,40 @@ test('every newly registered expression tag is scanned for syntax errors', () =>
 
         assert.strictEqual(diags.length, 1, `no syntax error for <${tag}>`);
     }
+});
+
+const resourceIssues = diags => diags.filter(d =>
+    d.code === 'jrxml.missingResourceKey' || d.code === 'jrxml.missingResourceBundle');
+
+test('a missing $R{} key is diagnosed against the report bundle', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-diagnostics-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <expression><![CDATA[$R{title} + $R{missing}]]></expression>
+</jasperReport>`;
+    const diags = diagnose(text, { fileName: path.join(dir, 'report.jrxml') });
+
+    const keyIssues = diags.filter(d => d.code === 'jrxml.missingResourceKey');
+    assert.strictEqual(keyIssues.length, 1);
+    assert.strictEqual(keyIssues[0].severity, 1); // Warning
+    assert.match(keyIssues[0].message, /missing/);
+    assert.match(keyIssues[0].message, /messages/);
+});
+
+test('a declared bundle whose files are missing is reported once', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-diagnostics-'));
+    const text = `<jasperReport name="R" resourceBundle="nope">
+  <expression><![CDATA[$R{title}]]></expression>
+</jasperReport>`;
+
+    const diags = resourceIssues(diagnose(text, { fileName: path.join(dir, 'report.jrxml') }));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.missingResourceBundle');
+    assert.match(diags[0].message, /nope/);
+});
+
+test('no resource diagnostics without a resourceBundle attribute', () => {
+    const text = '<jasperReport name="R"><expression><![CDATA[$R{anything}]]></expression></jasperReport>';
+    assert.deepStrictEqual(resourceIssues(diagnose(text)), []);
 });

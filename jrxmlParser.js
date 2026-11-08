@@ -5,6 +5,7 @@
 const { scanXml } = require('./xmlspan');
 const { REFERENCE_CONTAINERS } = require('./expressionTags');
 const { languageOfScan } = require('./reportLanguage');
+const { bundleAttributeOfScan } = require('./resourceBundle');
 
 const cache = new Map();
 
@@ -12,7 +13,7 @@ const cache = new Map();
  * @typedef {{ name:string, type:string, fullType:string, typeSource:'declared'|'inferred', description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
  * @typedef {{ sigil:string, name:string, offset:number, fromSubreport?:boolean }} Reference
  * @typedef {{ kind:string, name:string, offset:number, end:number, children:OutlineNode[] }} OutlineNode
- * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, datasets:{name:string,offset:number,end:number,fields:Declaration[],parameters:Declaration[],variables:Declaration[]}[], scopeRanges:{datasetName:string,start:number,end:number}[], allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
+ * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, datasets:{name:string,offset:number,end:number,fields:Declaration[],parameters:Declaration[],variables:Declaration[]}[], scopeRanges:{datasetName:string,start:number,end:number}[], allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], resourceReferences:{name:string,offset:number,end:number}[], resourceBundle:{name:string,offset:number,length:number}|null, outline:OutlineNode[] }} ParseResult
  */
 
 const COMMON_TYPES = new Set([
@@ -62,6 +63,7 @@ function parseDeclarations(document) {
             variables:  dsVariables,
         },
         language:    languageOfScan(scan),
+        resourceBundle: bundleAttributeOfScan(scan),
         datasets:    buildDatasets(scopes, rawFields, rawParameters, rawVariables),
         // Ranges where a dataset's declarations are the visible scope: the
         // <dataset>/<subDataset> definition itself and, inside list/table
@@ -75,6 +77,7 @@ function parseDeclarations(document) {
         groups:     extractGroups(text),
         styles:     extractStyles(text),
         references: extractReferences(scan),
+        resourceReferences: extractResourceReferences(scan),
         outline:    extractOutline(text, { fields, parameters, variables }),
     };
 
@@ -545,6 +548,35 @@ function insideSubreport(node) {
         ancestor.tag === 'subreport' ||
         ((ancestor.tag === 'element' || ancestor.tag === 'component') &&
             ancestor.attrValue('kind') === 'subreport'));
+}
+
+// ── Resource-bundle references ($R{key}) ─────────────────────────────────────
+
+const RESOURCE_REFERENCE_RE = /\$R\{([\w.\-]+)\}/g;
+
+/** `$R{key}` tokens inside expression-bearing elements (for missing-key checks). */
+function extractResourceReferences(scan) {
+    const results = [];
+    if (!scan || scan.error) return results;
+
+    for (const node of scan.doc.walk()) {
+        if (!REFERENCE_CONTAINERS.has(node.tag)) continue;
+
+        for (const span of node.textNodes) {
+            RESOURCE_REFERENCE_RE.lastIndex = 0;
+            let match;
+            while ((match = RESOURCE_REFERENCE_RE.exec(span.text)) !== null) {
+                const offset = span.start + match.index;
+                results.push({
+                    name: match[1],
+                    offset,
+                    end: offset + match[0].length,
+                });
+            }
+        }
+    }
+
+    return results;
 }
 
 // ── Outline (report structure for tree view) ──────────────────────────────────

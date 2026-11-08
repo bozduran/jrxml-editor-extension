@@ -437,3 +437,14 @@ test('exposes the report expression language on the parse result', () => {
     const text = '<jasperReport name="R" language="groovy"><expression><![CDATA["x"]]></expression></jasperReport>';
     assert.strictEqual(parseDeclarations(makeDoc(text)).language.language, 'groovy');
 });
+
+test('collects $R{} resource references from expression elements only', () => {
+    const text = `<jasperReport name="R">
+  <!-- $R{commented} -->
+  <expression><![CDATA[$R{title} + $R{greeting.hello}]]></expression>
+</jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).resourceReferences;
+
+    assert.deepStrictEqual(refs.map(ref => ref.name), ['title', 'greeting.hello']);
+    assert.strictEqual(text.slice(refs[0].offset, refs[0].end), '$R{title}');
+});

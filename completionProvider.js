@@ -211,7 +211,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 declarations: resolveDeclarationScope(decls, offset),
                 options,
                 customMethods: getCustomJavaMethods(),
-                resources: resourceEntriesForDocument(document),
+                resources: resourceEntriesForDocument(document, decls.resourceBundle),
             });
 
             return result.items.map(toCompletionItem);
