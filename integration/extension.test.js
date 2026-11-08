@@ -643,6 +643,30 @@ suite('JRXML extension smoke', () => {
         assert.match(found.message, /missing\.jrxml/);
     });
 
+    test('language features work in an untitled JRXML document', async () => {
+        const document = await vscode.workspace.openTextDocument({
+            language: 'jrxml',
+            content: [
+                '<jasperReport name="Untitled">',
+                '  <field name="CustomerName" class="java.lang.String"/>',
+                '  <detail><band><textField>',
+                '    <textFieldExpression><![CDATA[$F{]]></textFieldExpression>',
+                '  </textField></band></detail>',
+                '</jasperReport>',
+            ].join('\n'),
+        });
+
+        const text = document.getText();
+        const position = document.positionAt(text.indexOf('$F{') + 3);
+        const result = await vscode.commands.executeCommand(
+            'vscode.executeCompletionItemProvider', document.uri, position
+        );
+        const items = Array.isArray(result) ? result : result.items || [];
+        const labels = items.map(item => (typeof item.label === 'string' ? item.label : item.label.label));
+
+        assert.ok(labels.includes('CustomerName'), 'completion did not run for the untitled document');
+    });
+
     test('reports an unclosed query literal', async () => {
         const uri = tempFile('QueryBroken.jrxml', [
             '<jasperReport name="QueryBroken">',

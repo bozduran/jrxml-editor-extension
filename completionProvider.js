@@ -182,7 +182,7 @@ function toCompletionItem(suggestion) {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 const provider = vscode.languages.registerCompletionItemProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideCompletionItems(document, position) {
             if (!isInsideExpressionTag(document, position)) return [];
