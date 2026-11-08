@@ -2,7 +2,7 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "JasperReports JRXML authoring: expressions, diagnostics, design view, resource bundles, queries and workspace validation.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "license": "MIT",
   "repository": {
     "type": "git",

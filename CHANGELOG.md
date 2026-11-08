@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-08
+
 ### Fixed
 - The “Add declaration” quick fix for an undeclared `$P{}`/`$F{}`/`$V{}`
   reference now inserts at report level, in schema order, instead of after a
