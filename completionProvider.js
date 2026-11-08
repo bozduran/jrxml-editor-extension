@@ -9,7 +9,7 @@
 const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
-const { EXPRESSION_TAGS } = require('./expressionUtils');
+const { EXPRESSION_TAGS, findExpressionRegionAt } = require('./expressionUtils');
 const { parseDeclarations } = require('./jrxmlParser');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { reportLanguage } = require('./reportLanguage');
@@ -122,26 +122,13 @@ function extractStaticMethods(filePath, results) {
 // <query> is not an expression element for formatting, but it carries $P!{}
 // fragments, so completion must activate inside it too.
 const COMPLETION_TAGS = [...EXPRESSION_TAGS, 'query'];
-const OPEN_TAGS_RE  = new RegExp(`<(${COMPLETION_TAGS.join('|')})(?:\\s[^>]*)?>`, 'g');
-const CLOSE_TAGS_RE = new RegExp(`</(${COMPLETION_TAGS.join('|')})>`, 'g');
 
 function isInsideExpressionTag(document, position) {
-    const text   = document.getText();
-    const offset = document.offsetAt(position);
-    OPEN_TAGS_RE.lastIndex  = 0;
-    CLOSE_TAGS_RE.lastIndex = 0;
-
-    let lastOpen = -1, m;
-    while ((m = OPEN_TAGS_RE.exec(text)) !== null) {
-        if (m.index + m[0].length <= offset) lastOpen = m.index + m[0].length;
-    }
-    if (lastOpen === -1) return false;
-
-    let lastClose = -1;
-    while ((m = CLOSE_TAGS_RE.exec(text)) !== null) {
-        if (m.index < offset) lastClose = m.index;
-    }
-    return lastOpen > lastClose;
+    return !!findExpressionRegionAt(
+        document,
+        document.offsetAt(position),
+        COMPLETION_TAGS
+    );
 }
 
 // ── Mapping suggestions to CompletionItems ──────────────────────────────────

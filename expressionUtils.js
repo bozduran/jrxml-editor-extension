@@ -3,11 +3,27 @@
 
 const { EXPRESSION_TAGS } = require('./expressionTags');
 const { findReferenceToken } = require('./referenceTokens');
+const { scanXml } = require('./xmlspan');
+const { regions, regionAt } = require('./expressionRegions');
 
-const TAG_PATTERN = new RegExp(
-    `<(${EXPRESSION_TAGS.join('|')})(\\s[^>]*)?>([\\s\\S]*?)<\\/\\1>`,
-    'g'
-);
+const scanCache = new WeakMap();
+
+function scanOf(document) {
+    const text = document.getText();
+    const cached = scanCache.get(document);
+    if (cached && cached.version === document.version && cached.text === text) return cached.scan;
+    const scan = scanXml(text);
+    scanCache.set(document, { version: document.version, text, scan });
+    return scan;
+}
+
+/** The expression region at an offset, or null. */
+function findExpressionRegionAt(document, offset, tags = EXPRESSION_TAGS) {
+    const text = document.getText();
+    const found = regions(scanOf(document), text)
+        .filter(region => tags.includes(region.tag));
+    return regionAt(found, offset);
+}
 
 /**
  * Find the expression element the cursor is inside.
@@ -17,38 +33,22 @@ const TAG_PATTERN = new RegExp(
  * @param {import('vscode').Position} position
  */
 function findExpressionAtCursor(document, position) {
-    const text = document.getText();
     const offset = document.offsetAt(position);
+    const region = findExpressionRegionAt(document, offset);
 
-    TAG_PATTERN.lastIndex = 0;
-    let match;
+    if (!region) return null;
 
-    while ((match = TAG_PATTERN.exec(text)) !== null) {
-        const start = match.index;
-        const end   = match.index + match[0].length;
-
-        if (offset >= start && offset <= end) {
-            const tagName   = match[1];
-            const rawInner  = match[3]; // content between tags
-
-            // Strip CDATA wrappers
-            const expression = stripCdata(rawInner).trim();
-
-            const rangeStart = document.positionAt(start);
-            const rangeEnd   = document.positionAt(end);
-
-            return {
-                tagName,
-                expression,
-                range: new (require('vscode').Range)(rangeStart, rangeEnd),
-                fullMatch: match[0],
-                innerStart: start + match[0].indexOf(rawInner),
-                innerEnd:   start + match[0].indexOf(rawInner) + rawInner.length
-            };
-        }
-    }
-
-    return null;
+    return {
+        tagName: region.tag,
+        expression: region.expression,
+        range: new (require('vscode').Range)(
+            document.positionAt(region.start),
+            document.positionAt(region.end)
+        ),
+        fullMatch: region.fullMatch,
+        innerStart: region.innerStart,
+        innerEnd: region.innerEnd,
+    };
 }
 
 /**
@@ -163,6 +163,7 @@ function findTagReplacement(text, tagName, originalOffset, newExpression) {
 
 module.exports = {
     findExpressionAtCursor,
+    findExpressionRegionAt,
     findTagReplacement,
     findReferenceToken,
     findDeclarationAtOffset,

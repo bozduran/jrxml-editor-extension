@@ -12,7 +12,8 @@
 const { parseDeclarations, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
 const { analyse } = require('./analysisContext');
 const { declaredNames, declarationInAnyScope } = require('./reportSymbols');
-const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
+const { EXPRESSION_TAGS } = require('./expressionUtils');
+const { regions, forEachRegion } = require('./expressionRegions');
 const { isFragmentStart, skipFragment } = require('./jasperTokens');
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
@@ -235,7 +236,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
 
     // ── 3. Expression syntax and style ───────────────────────────────────────
     if (enabled.expressions || enabled.booleanEquals) {
-        forEachExpression(text, (rawExpr, exprOffset) => {
+        forEachExpression(context.scan, text, (rawExpr, exprOffset) => {
             if (enabled.expressions) {
                 const parenError = checkParens(rawExpr);
                 if (parenError) {
@@ -413,19 +414,14 @@ function checkUnclosedString(expr) {
 }
 
 /** Run `callback(rawExpression, startOffset)` for every non-empty expression. */
-function forEachExpression(text, callback) {
-    const expressionRe = new RegExp(
-        `(<(?<tag>${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>)([\\s\\S]*?)<\\/\\k<tag>>`,
-        'g'
-    );
+function forEachExpression(scan, text, callback) {
+    const expressionRegions = regions(scan, text)
+        .filter(region => EXPRESSION_TAGS.includes(region.tag));
 
-    let match;
-    while ((match = expressionRe.exec(text)) !== null) {
-        const inner = match[3];
-        const raw = stripCdata(inner);
-        if (!raw) continue;
-        callback(raw, match.index + match[1].length + inner.indexOf(raw));
-    }
+    forEachRegion(expressionRegions, region => {
+        if (!region.expression) return;
+        callback(region.expression, region.contentStart);
+    });
 }
 
 module.exports = { collectFindings };
