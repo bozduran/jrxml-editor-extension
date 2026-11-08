@@ -3,7 +3,7 @@
 // Results are cached per document version.
 
 const { scanXml } = require('./xmlspan');
-const { REFERENCE_CONTAINERS } = require('./expressionTags');
+const { EXPRESSION_TAGS, REFERENCE_CONTAINERS } = require('./expressionTags');
 const { languageOfScan } = require('./reportLanguage');
 const { bundleAttributeOfScan } = require('./resourceBundle');
 
@@ -78,7 +78,7 @@ function parseDeclarations(document) {
         styles:     extractStyles(text),
         references: extractReferences(scan),
         resourceReferences: extractResourceReferences(scan),
-        outline:    extractOutline(text, { fields, parameters, variables }),
+        outline:    extractOutline(scan, { fields, parameters, variables }),
     };
 
     cache.set(key, { version: document.version, result });
@@ -581,107 +581,207 @@ function extractResourceReferences(scan) {
 
 // ── Outline (report structure for tree view) ──────────────────────────────────
 
-const BANDS = [
-    'title','pageHeader','columnHeader','detail','columnFooter',
-    'pageFooter','lastPageFooter','summary','noData','background'
+const REPORT_SECTIONS = [
+    'background', 'title', 'pageHeader', 'columnHeader', 'detail',
+    'columnFooter', 'pageFooter', 'lastPageFooter', 'summary', 'noData',
 ];
 
-function extractOutline(text, declarations = {}) {
-    const nodes = [];
-    const fields     = declarations.fields     || [];
-    const parameters = declarations.parameters || [];
-    const variables  = declarations.variables  || [];
+const CLASSIC_ELEMENTS = new Set([
+    'textField', 'staticText', 'image', 'line', 'rectangle', 'ellipse',
+    'frame', 'subreport', 'chart', 'table', 'list', 'crosstab', 'component',
+    'break',
+]);
 
-    // Report name
-    const reportMatch = text.match(/<jasperReport[^>]*\sname="([^"]+)"/);
-    const reportName  = reportMatch ? reportMatch[1] : 'Report';
+/**
+ * Build the outline from the scanner tree: report → declarations → datasets →
+ * groups (with header/footer bands) → bands with every element kind → styles.
+ *
+ * @param {{doc:object|null,error:string|null}} scan
+ * @param {{fields?:Declaration[],parameters?:Declaration[],variables?:Declaration[]}} declarations
+ * @returns {OutlineNode[]}
+ */
+function extractOutline(scan, declarations = {}) {
+    if (!scan || scan.error) return [];
+    const root = scan.doc.root;
+    if (root.tag !== 'jasperReport') return [];
 
     const reportNode = {
         kind: 'report',
-        name: reportName,
-        offset: reportMatch ? reportMatch.index : 0,
-        end: Math.max(text.length, reportMatch ? reportMatch.index : 0),
+        name: root.attrValue('name') || 'Report',
+        offset: root.startTag,
+        end: root.end,
         children: [],
     };
 
-    // ── Declarations group ────────────────────────────────────────────────────
+    // ── Declarations ─────────────────────────────────────────────────────────
     const declChildren = [];
-
-    for (const f of fields) {
-        declChildren.push({
-            kind: 'field', name: `${f.name} : ${f.type}`,
-            offset: f.offset, end: f.end, children: []
-        });
+    for (const field of declarations.fields || []) {
+        declChildren.push(leaf('field', `${field.name} : ${field.type}`, field));
     }
-
-    for (const p of parameters) {
-        if (p.isSystem) continue;
-        declChildren.push({
-            kind: 'parameter', name: `${p.name} : ${p.type}`,
-            offset: p.offset, end: p.end, children: []
-        });
+    for (const parameter of declarations.parameters || []) {
+        if (parameter.isSystem) continue;
+        declChildren.push(leaf('parameter', `${parameter.name} : ${parameter.type}`, parameter));
     }
-
-    for (const v of variables) {
-        declChildren.push({
-            kind: 'variable', name: `${v.name} : ${v.type}`,
-            offset: v.offset, end: v.end, children: []
-        });
+    for (const variable of declarations.variables || []) {
+        declChildren.push(leaf('variable', `${variable.name} : ${variable.type}`, variable));
     }
-
     if (declChildren.length > 0) {
-        // The group must span all of its children so the symbol tree is valid.
-        const start = Math.min(...declChildren.map(c => c.offset));
-        const end   = Math.max(...declChildren.map(c => c.end));
-        reportNode.children.push({
-            kind: 'group', name: 'Declarations', offset: start, end, children: declChildren
-        });
+        reportNode.children.push(container('group', 'Declarations', declChildren));
     }
 
-    // ── Bands ─────────────────────────────────────────────────────────────────
-    for (const band of BANDS) {
-        const bandRe = new RegExp(`<${band}[\\s>]`, 'g');
-        let bm;
-        while ((bm = bandRe.exec(text)) !== null) {
-            const closeIdx = text.indexOf(`</${band}>`, bm.index);
-            if (closeIdx === -1) continue;
-            const bandEnd  = closeIdx + `</${band}>`.length;
-            const bandText = text.slice(bm.index, closeIdx);
+    // ── Datasets ─────────────────────────────────────────────────────────────
+    const datasets = root.children.filter(child => child.tag === 'dataset' || child.tag === 'subDataset');
+    if (datasets.length > 0) {
+        reportNode.children.push(container('group', 'Datasets',
+            datasets.map(datasetNode), datasets[0].startTag, datasets[datasets.length - 1].end));
+    }
 
-            const bandNode = { kind: 'band', name: band, offset: bm.index, end: bandEnd, children: [] };
+    // ── Groups ───────────────────────────────────────────────────────────────
+    for (const group of root.children.filter(child => child.tag === 'group')) {
+        reportNode.children.push(groupNode(group));
+    }
 
-            // textField elements — `(?=[\s>])` keeps `<textFieldExpression>` out.
-            const tfRe = /<textField(?=[\s>])[^>]*>/g;
-            let tfm;
-            let tfIdx = 0;
-            while ((tfm = tfRe.exec(bandText)) !== null) {
-                tfIdx++;
-                const exprMatch = bandText.slice(tfm.index)
-                    .match(/<textFieldExpression[^>]*>([\s\S]*?)<\/textFieldExpression>/);
-                const label = exprMatch
-                    ? exprMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim().slice(0, 60)
-                    : `textField #${tfIdx}`;
-                bandNode.children.push({
-                    kind: 'textField', name: label,
-                    offset: bm.index + tfm.index, end: bm.index + tfm.index + tfm[0].length,
-                    children: []
+    // ── Bands ────────────────────────────────────────────────────────────────
+    for (const tag of REPORT_SECTIONS) {
+        for (const section of root.children.filter(child => child.tag === tag)) {
+            const bands = section.children.filter(child => child.tag === 'band');
+            if (bands.length > 0) {
+                bands.forEach((band, index) => {
+                    const label = bands.length > 1 ? `${tag} ${index + 1}` : tag;
+                    reportNode.children.push(bandNode(band, label));
                 });
+            } else {
+                reportNode.children.push(bandNode(section, tag));
             }
-
-            reportNode.children.push(bandNode);
         }
     }
 
-    // ── Groups ────────────────────────────────────────────────────────────────
-    for (const g of extractGroups(text)) {
-        reportNode.children.push({
-            kind: 'group', name: `Group: ${g.name}`,
-            offset: g.offset, end: g.end, children: []
-        });
+    // ── Styles ───────────────────────────────────────────────────────────────
+    const styles = root.children.filter(child => child.tag === 'style' && child.attrValue('name'));
+    if (styles.length > 0) {
+        reportNode.children.push(container('group', 'Styles',
+            styles.map(style => leaf('style', `Style: ${style.attrValue('name')}`, nodeSpan(style))),
+            styles[0].startTag, styles[styles.length - 1].end));
     }
 
-    nodes.push(reportNode);
+    return [reportNode];
+}
+
+function nodeSpan(node) {
+    return { offset: node.startTag, end: node.end };
+}
+
+function leaf(kind, name, span) {
+    return { kind, name, offset: span.offset, end: span.end, children: [] };
+}
+
+function container(kind, name, children, offset, end) {
+    return {
+        kind,
+        name,
+        offset: offset ?? Math.min(...children.map(child => child.offset)),
+        end: end ?? Math.max(...children.map(child => child.end)),
+        children,
+    };
+}
+
+function datasetNode(dataset) {
+    const name = dataset.attrValue('name') || 'Dataset';
+    const children = [];
+
+    for (const child of dataset.children) {
+        if (child.tag === 'field' || child.tag === 'parameter' || child.tag === 'variable') {
+            children.push(leaf(child.tag, child.attrValue('name') || child.tag, nodeSpan(child)));
+        } else if (child.tag === 'group') {
+            children.push(groupNode(child));
+        }
+    }
+
+    return {
+        kind: 'dataset',
+        name: `Dataset: ${name}`,
+        offset: dataset.startTag,
+        end: dataset.end,
+        children,
+    };
+}
+
+function groupNode(group) {
+    const name = group.attrValue('name') || 'Group';
+    const children = [];
+
+    for (const part of group.children.filter(child =>
+        child.tag === 'groupHeader' || child.tag === 'groupFooter')) {
+        const bands = part.children.filter(child => child.tag === 'band');
+        if (bands.length > 0) {
+            for (const band of bands) children.push(bandNode(band, part.tag));
+        } else {
+            children.push(bandNode(part, part.tag));
+        }
+    }
+
+    return {
+        kind: 'group',
+        name: `Group: ${name}`,
+        offset: group.startTag,
+        end: group.end,
+        children,
+    };
+}
+
+function bandNode(node, label) {
+    return {
+        kind: 'band',
+        name: label,
+        offset: node.startTag,
+        end: node.end,
+        children: elementsIn(node),
+    };
+}
+
+/** Top-level elements inside a band/frame, with nested elements as children. */
+function elementsIn(containerNode) {
+    const nodes = [];
+
+    for (const child of containerNode.children) {
+        if (isElementNode(child)) nodes.push(elementNode(child));
+        else nodes.push(...elementsIn(child));
+    }
     return nodes;
+}
+
+function isElementNode(node) {
+    if (node.tag === 'element') return true;
+    return CLASSIC_ELEMENTS.has(node.tag)
+        && node.children.some(child => child.tag === 'reportElement');
+}
+
+function elementNode(node) {
+    return {
+        kind: node.tag === 'element' ? (node.attrValue('kind') || 'element') : node.tag,
+        name: elementLabel(node),
+        offset: node.startTag,
+        end: node.end,
+        children: elementsIn(node),
+    };
+}
+
+function elementLabel(node) {
+    const kind = node.tag === 'element' ? (node.attrValue('kind') || 'element') : node.tag;
+    const expression = node.children.find(child => EXPRESSION_TAGS.includes(child.tag));
+    const expressionText = expression ? expression.textContent().trim() : '';
+    if (expressionText) return truncateLabel(expressionText);
+
+    const text = node.children.find(child => child.tag === 'text');
+    const textValue = text ? text.textContent().trim() : '';
+    if (textValue) return `${kind}: ${truncateLabel(textValue)}`;
+
+    return kind;
+}
+
+function truncateLabel(text) {
+    const singleLine = text.replace(/\s+/g, ' ').trim();
+    return singleLine.length > 60 ? `${singleLine.slice(0, 57)}…` : singleLine;
 }
 
 // ── XML helpers ───────────────────────────────────────────────────────────────

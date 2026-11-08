@@ -14,6 +14,20 @@ const KIND_MAP = {
     parameter:  vscode.SymbolKind.TypeParameter,
     variable:   vscode.SymbolKind.Variable,
     textField:  vscode.SymbolKind.String,
+    staticText: vscode.SymbolKind.String,
+    dataset:    vscode.SymbolKind.Namespace,
+    style:      vscode.SymbolKind.Interface,
+    frame:      vscode.SymbolKind.Module,
+    image:      vscode.SymbolKind.File,
+    subreport:  vscode.SymbolKind.File,
+    line:       vscode.SymbolKind.Object,
+    rectangle:  vscode.SymbolKind.Object,
+    ellipse:    vscode.SymbolKind.Object,
+    break:      vscode.SymbolKind.Event,
+    chart:      vscode.SymbolKind.Array,
+    table:      vscode.SymbolKind.Array,
+    list:       vscode.SymbolKind.Array,
+    crosstab:   vscode.SymbolKind.Array,
 };
 
 /**
@@ -51,7 +65,7 @@ function nodesToSymbols(nodes, document) {
 }
 
 const provider = vscode.languages.registerDocumentSymbolProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideDocumentSymbols(document) {
             try {
