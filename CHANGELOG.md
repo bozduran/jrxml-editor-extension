@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-08
+
 ## [0.8.0] - 2026-11-08
 
 ### Added
