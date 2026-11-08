@@ -73,7 +73,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   - `jrxml.lint.removeLineWhenBlank` — a `textField`/`subreport` missing `removeLineWhenBlank="true"` (or with another value)
   - `jrxml.lint.markupTagWithoutMarkup` — markup tags inside a textField expression while `markup` is not `styled`, `html` or `rtf`
   - `jrxml.lint.uncheckedNullDereference` — a `$F`/`$P`/`$V` reference used as a method-call receiver without a dominating null check (short-circuit aware: `!= null &&`, `== null ||`, ternaries, `EQUALS(x, null)`, `Objects.nonNull`/`isNull`/`equals`)
-- **Boolean comparison style** — `==` / `!=` on a declared Boolean value, or `Boolean.TRUE`/`FALSE.equals(...)`, with a one-click `EQUALS(...)` fix (`jrxml.lint.booleanEquals`)
+- **Boolean comparison style** — `==` / `!=` on a declared Boolean value, `Boolean.TRUE`/`FALSE.equals(...)`, or a bare Boolean reference used as a condition, with a one-click `EQUALS(...)` fix (`jrxml.lint.booleanEquals`)
 
   The first three have quick fixes and can be switched off individually. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).

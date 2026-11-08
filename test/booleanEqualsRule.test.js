@@ -22,6 +22,7 @@ function check(expression, decls = declarations()) {
 test('exposes a stable diagnostic code and message', () => {
     assert.strictEqual(CODE, 'jrxml.booleanEquals');
     assert.match(MESSAGE, /EQUALS/);
+    assert.match(MESSAGE, /bare Boolean reference/, 'the message must cover the bare-reference case');
 });
 
 test('rewrites Boolean.TRUE/FALSE.equals in both directions', () => {

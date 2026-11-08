@@ -541,7 +541,7 @@ Class&lt;? extends Number&gt;</code></div>
   <p>The <strong>Issues (JRXML)</strong> view mirrors the diagnostics for the open report, grouped by severity. The same diagnostics appear as squiggles in the editor.</p>
   <ul>
     <li>Undeclared <code>$F{}</code>/<code>$P{}</code>/<code>$V{}</code> references, unbalanced parentheses, unclosed strings, unused declarations, the structural lint rules and text-check findings.</li>
-    <li>Boolean comparisons such as <code>$F{active} == true</code> offer a one-click <code>EQUALS(...)</code> fix (<code>jrxml.lint.booleanEquals</code>).</li>
+    <li>Boolean comparisons such as <code>$F{active} == true</code> and bare Boolean references used as conditions (for example <code>$F{active}</code>) offer a one-click <code>EQUALS(...)</code> fix (<code>jrxml.lint.booleanEquals</code>).</li>
     <li>Open an issue’s context menu to jump to it, apply its quick fix, copy the message/rule id, or open the expression in the Expression Editor or If / Else Builder.</li>
     <li><strong>Fix All Issues in File</strong> applies the preferred fixes where they do not overlap.</li>
     <li><strong>Go to Next Issue</strong> and <strong>Go to Previous Issue</strong> move between problems without leaving the keyboard.</li>
