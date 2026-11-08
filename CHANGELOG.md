@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-08
+
 ### Added
 - **Function catalogue:** the remaining official date/time functions
   (`DATEVALUE`, `DAY`, `MONTH`, `YEAR`, `WEEKS`, `EDATE`, `TIME`, …), a
