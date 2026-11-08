@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-08
+
 ### Fixed
 - `$F`/`$P`/`$V` names containing a dash (for example `$F{my-field}`) are now
   found by Find All References and the unused-declaration check; the parser,
