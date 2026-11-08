@@ -12,6 +12,7 @@ const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
 const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
+const { reportLanguage } = require('./reportLanguage');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -183,6 +184,11 @@ const provider = vscode.languages.registerCompletionItemProvider(
             if (!isInsideExpressionTag(document, position)) return [];
 
             const config = vscode.workspace.getConfiguration('jrxml');
+            const text   = document.getText();
+            const options = suggestionOptions(config);
+            // The member index models JDK/Java types; do not apply it to a
+            // report that declares Groovy or JavaScript.
+            if (reportLanguage(text).language !== 'java') options.typedCompletion = false;
 
             let decls;
             try {
@@ -196,12 +202,12 @@ const provider = vscode.languages.registerCompletionItemProvider(
 
             const offset = document.offsetAt(position);
             const result = buildExpressionSuggestions({
-                text: document.getText(),
+                text,
                 offset,
                 // Only the declarations visible at the cursor: a subdataset
                 // must not offer the master report's fields, and vice versa.
                 declarations: resolveDeclarationScope(decls, offset),
-                options: suggestionOptions(config),
+                options,
                 customMethods: getCustomJavaMethods(),
             });
 

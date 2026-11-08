@@ -364,3 +364,17 @@ test('a single dot without a receiver falls back instead of erroring', () => {
     assert.ok(items.length > 1);
     assert.ok(find(items, 'TODAY'));
 });
+
+test('typed member completion is disabled for a non-Java report', () => {
+    settings = {};
+    const text = report('$F{CustomerName}.').replace(
+        '<jasperReport name="R">',
+        '<jasperReport name="R" language="groovy">'
+    );
+    const open = '<![CDATA[$F{CustomerName}.';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+
+    assert.ok(find(items, 'TODAY'), 'the language-neutral list is still offered');
+    assert.ok(!find(items, 'toUpperCase'), 'no Java member list');
+});

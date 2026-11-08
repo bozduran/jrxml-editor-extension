@@ -16,6 +16,7 @@ const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
+const { reportLanguage } = require('./reportLanguage');
 const {
     CODE: BOOLEAN_EQUALS_CODE,
     MESSAGE: BOOLEAN_EQUALS_MESSAGE,
@@ -60,6 +61,19 @@ function updateDiagnostics(document) {
         removeLineWhenBlank:    cfg.get('lint.removeLineWhenBlank', true),
         markupTagWithoutMarkup: cfg.get('lint.markupTagWithoutMarkup', true),
     };
+
+    // ── 0. Language model ────────────────────────────────────────────────────
+    // The parser, formatter and member index are Java-only. Say so at the
+    // declaration instead of silently applying Java rules to Groovy/JavaScript.
+    const language = reportLanguage(text);
+    if (language.declared && language.language !== 'java') {
+        diagnostics.push(makeDiagnostic(
+            document, language.offset, language.length,
+            `Report language '${language.language}' is not modeled: only Java expressions are fully supported. Typed completion is disabled and expression checks may be inaccurate.`,
+            vscode.DiagnosticSeverity.Warning,
+            'jrxml.unsupportedLanguage'
+        ));
+    }
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
     if (checkUnused) {

@@ -300,3 +300,30 @@ test('the duplicate-name rule can be turned off', () => {
         []
     );
 });
+
+const languageWarnings = diags => diags.filter(d => d.code === 'jrxml.unsupportedLanguage');
+
+test('a non-Java report warns that only Java expressions are modeled', () => {
+    const text = `<jasperReport name="R" language="groovy">
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+
+    const diags = languageWarnings(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 1); // Warning
+    assert.match(diags[0].message, /groovy/);
+    assert.match(diags[0].message, /only Java/);
+    assert.strictEqual(diags[0].range.start.character, text.indexOf('groovy'));
+});
+
+test('a Java report, or one without a language attribute, does not warn', () => {
+    const java = `<jasperReport name="R" language="java">
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+    const implicit = `<jasperReport name="R">
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+
+    assert.deepStrictEqual(languageWarnings(diagnose(java)), []);
+    assert.deepStrictEqual(languageWarnings(diagnose(implicit)), []);
+});
