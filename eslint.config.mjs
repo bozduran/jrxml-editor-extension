@@ -30,6 +30,18 @@ export default [{
         "valid-typeof": "warn",
     },
 }, {
+    // The design-view client is an inlined browser script, not a Node module.
+    files: ["designViewClient.js"],
+    languageOptions: {
+        globals: {
+            ...globals.browser,
+            acquireVsCodeApi: "readonly",
+            INITIAL_MODEL: "readonly",
+            INITIAL_FILE: "readonly",
+            INITIAL_VERSION: "readonly",
+        },
+    },
+}, {
     // Extension Host tests run under mocha (suite/test/suiteSetup/…).
     files: ["integration/**/*.js"],
     languageOptions: {
