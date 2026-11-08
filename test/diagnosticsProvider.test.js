@@ -5,6 +5,8 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const path   = require('node:path');
 const Module = require('node:module');
 
 class FakeRange {
@@ -116,6 +118,79 @@ test('ignores $F{} inside XML comments and static text', () => {
     assert.deepStrictEqual(undeclared(diagnose(text)), []);
 });
 
+const outOfScope = diags => diags.filter(d => d.code === 'jrxml.outOfScopeReference');
+
+test('a master field used inside a dataset is reported as out of scope', () => {
+    const text = `<jasperReport name="R">
+  <field name="MasterField" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="DSField" class="java.lang.String"/>
+    <filterExpression><![CDATA[$F{MasterField}]]></filterExpression>
+  </dataset>
+</jasperReport>`;
+
+    const diags = outOfScope(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 0); // Error
+    assert.match(diags[0].message, /MasterField/);
+    assert.match(diags[0].message, /dataset 'DS'/);
+    assert.match(diags[0].message, /report scope/);
+});
+
+test('a dataset field used inside its own dataset is accepted', () => {
+    const text = `<jasperReport name="R">
+  <field name="MasterField" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="DSField" class="java.lang.String"/>
+    <filterExpression><![CDATA[$F{DSField}]]></filterExpression>
+  </dataset>
+</jasperReport>`;
+
+    const diags = diagnose(text);
+    assert.deepStrictEqual(undeclared(diags), []);
+    assert.deepStrictEqual(outOfScope(diags), []);
+});
+
+test('a dataset-only field is not available at report scope', () => {
+    const text = `<jasperReport name="R">
+  <dataset name="DS"><field name="DSField" class="java.lang.String"/></dataset>
+  <detail><band><expression><![CDATA[$F{DSField}]]></expression></band></detail>
+</jasperReport>`;
+
+    const diags = undeclared(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.match(diags[0].message, /Field 'DSField' is not declared/);
+    assert.deepStrictEqual(outOfScope(diagnose(text)), []);
+});
+
+test('list contents resolve against the run dataset and its binding expression against the report', () => {
+    const text = `<jasperReport name="R">
+  <field name="Field_1" class="java.lang.String"/>
+  <dataset name="addons">
+    <parameter name="FIL_PARAMETER" class="java.lang.String"/>
+    <field name="CompanyName" class="java.lang.String"/>
+  </dataset>
+  <detail><band>
+    <element kind="component">
+      <component kind="list">
+        <datasetRun subDataset="addons">
+          <parameter name="FIL_PARAMETER">
+            <expression><![CDATA[$F{Field_1}]]></expression>
+          </parameter>
+        </datasetRun>
+        <contents>
+          <element kind="textField"><expression><![CDATA[$F{CompanyName}]]></expression></element>
+        </contents>
+      </component>
+    </element>
+  </band></detail>
+</jasperReport>`;
+
+    const diags = diagnose(text);
+    assert.deepStrictEqual(undeclared(diags), []);
+    assert.deepStrictEqual(outOfScope(diags), []);
+});
+
 test('validates $P!{} query fragments like any other parameter reference', () => {
     const text = `<jasperReport name="R">
   <parameter name="Clause" class="java.lang.String"/>
@@ -182,4 +257,15 @@ test('a variable used before its declaration is reported as a warning', () => {
     assert.strictEqual(diags.length, 1);
     assert.strictEqual(diags[0].severity, 1); // Warning
     assert.match(diags[0].message, /declared later/);
+});
+
+test('golden: the DatasetScopeReport fixture has no scope errors', () => {
+    const text = fs.readFileSync(
+        path.join(__dirname, 'fixtures', 'DatasetScopeReport.jrxml'),
+        'utf8'
+    );
+
+    const diags = diagnose(text);
+    assert.deepStrictEqual(undeclared(diags), []);
+    assert.deepStrictEqual(outOfScope(diags), []);
 });

@@ -9,7 +9,7 @@
 //   WARNING  — Boolean comparisons that should use EQUALS()
 
 const vscode = require('vscode');
-const { parseDeclarations, clearCache } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope, clearCache } = require('./jrxmlParser');
 const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
@@ -117,12 +117,6 @@ function updateDiagnostics(document) {
 
     // ── 2. Undeclared references ─────────────────────────────────────────────
     if (checkExpr) {
-        // A reference inside a dataset resolves against that dataset's
-        // declarations, so the declared set spans report and dataset scope.
-        const declaredFields = new Set(parsed.allFields.map(f => f.name));
-        const declaredParams = new Set([...parsed.allParameters.map(p => p.name), ...BUILTIN_PARAMETER_NAMES]);
-        const declaredVars   = new Set([...parsed.allVariables.map(v => v.name), ...BUILTIN_VARIABLE_NAMES]);
-
         for (const ref of parsed.references) {
             // <subreportParameter name="X"> / a <parameter> nested in a
             // subreport names the SUBREPORT's parameter, not one of this
@@ -132,25 +126,37 @@ function updateDiagnostics(document) {
             // is different: V IS a variable of this report.
             if (ref.fromSubreport && ref.sigil === 'P') continue;
 
-            let isDeclared = false;
-            if (ref.sigil === 'F') isDeclared = declaredFields.has(ref.name);
-            else if (ref.sigil === 'P') isDeclared = declaredParams.has(ref.name);
-            else if (ref.sigil === 'V') isDeclared = declaredVars.has(ref.name);
+            // Resolve against the scope that owns the reference. Report and
+            // dataset declarations never merge: a master field inside a
+            // subdataset is not available there.
+            const scope = resolveDeclarationScope(parsed, ref.offset);
+            if (scope.kind === 'unknown') continue; // run dataset not defined here
 
-            if (!isDeclared) {
-                const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
-                // `end` spans the real token ($P!{name} included). Attribute-name
-                // markers (subreportParameter/returnValue) have no token length.
-                const tokenLen = typeof ref.end === 'number'
-                    ? ref.end - ref.offset
-                    : 4 + ref.name.length;
+            if (declaredInScope(scope, ref.sigil).has(ref.name)) continue;
+
+            const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
+            // `end` spans the real token ($P!{name} included). Attribute-name
+            // markers (subreportParameter/returnValue) have no token length.
+            const tokenLen = typeof ref.end === 'number'
+                ? ref.end - ref.offset
+                : 4 + ref.name.length;
+
+            if (scope.kind === 'dataset' && declaredAtReportScope(parsed, ref.sigil, ref.name)) {
                 diagnostics.push(makeDiagnostic(
                     document, ref.offset, tokenLen,
-                    `${kindName} '${ref.name}' is not declared in this report.`,
+                    `${kindName} '${ref.name}' is declared at report scope and is not available inside dataset '${scope.datasetName}'. Pass it to the dataset as a parameter.`,
                     vscode.DiagnosticSeverity.Error,
-                    'jrxml.undeclaredReference'
+                    'jrxml.outOfScopeReference'
                 ));
+                continue;
             }
+
+            diagnostics.push(makeDiagnostic(
+                document, ref.offset, tokenLen,
+                `${kindName} '${ref.name}' is not declared in this report.`,
+                vscode.DiagnosticSeverity.Error,
+                'jrxml.undeclaredReference'
+            ));
         }
     }
 
@@ -244,6 +250,28 @@ function updateDiagnostics(document) {
     }
 
     diagnosticCollection.set(document.uri, diagnostics);
+}
+
+// ── Scope helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Names declared in a resolved scope. Jasper built-in parameters and variables
+ * are added for every scope: they are available inside datasets too.
+ */
+function declaredInScope(scope, sigil) {
+    if (sigil === 'F') return new Set(scope.fields.map(decl => decl.name));
+    if (sigil === 'P') {
+        return new Set([...scope.parameters.map(decl => decl.name), ...BUILTIN_PARAMETER_NAMES]);
+    }
+    return new Set([...scope.variables.map(decl => decl.name), ...BUILTIN_VARIABLE_NAMES]);
+}
+
+/** True when the name exists as a report-scope declaration. */
+function declaredAtReportScope(parsed, sigil, name) {
+    const list = sigil === 'F' ? parsed.fields
+        : sigil === 'P' ? parsed.parameters
+        : parsed.variables;
+    return (list || []).some(decl => decl.name === name);
 }
 
 // ── Syntax checkers ───────────────────────────────────────────────────────────

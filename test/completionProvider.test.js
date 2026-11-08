@@ -262,6 +262,68 @@ test('an undeclared reference falls back to the normal list instead of a hint', 
     assert.ok(find(items, 'TODAY'), 'Jasper built-ins are still there');
 });
 
+// ── Dataset scope ────────────────────────────────────────────────────────────
+
+const SCOPED_DECLARATIONS = [
+    '<field name="ReportField" class="java.lang.String"/>',
+    '<dataset name="DS">',
+    '  <field name="DatasetField" class="java.lang.Integer"/>',
+    '  <filterExpression><![CDATA[%EXPR%]]></filterExpression>',
+    '</dataset>',
+    '<detail><band>',
+    '  <element kind="component"><component kind="list">',
+    '    <datasetRun subDataset="DS"/>',
+    '    <contents><element kind="textField"><expression><![CDATA[%EXPR%]]></expression></element></contents>',
+    '  </component></element>',
+    '</band></detail>',
+].join('\n  ');
+
+/** Complete at the end of the expression in the dataset definition. */
+function completeInDatasetDefinition(expression) {
+    settings = {};
+    const text = `<jasperReport name="R">\n  ${SCOPED_DECLARATIONS.replaceAll('%EXPR%', expression)}\n</jasperReport>`;
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.indexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+/** Complete at the end of the expression in a list's dataset-run contents. */
+function completeInListContents(expression) {
+    settings = {};
+    const text = `<jasperReport name="R">\n  ${SCOPED_DECLARATIONS.replaceAll('%EXPR%', expression)}\n</jasperReport>`;
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.lastIndexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+test('inside a dataset only that dataset’s fields are offered', () => {
+    const names = labels(completeInDatasetDefinition('$F{'));
+
+    assert.ok(names.includes('DatasetField'), 'dataset field is offered');
+    assert.ok(!names.includes('ReportField'), 'master field is not');
+});
+
+test('inside a list dataset-run consumer only the run dataset’s fields are offered', () => {
+    const names = labels(completeInListContents('$F{'));
+
+    assert.ok(names.includes('DatasetField'));
+    assert.ok(!names.includes('ReportField'));
+});
+
+test('outside datasets only report-scope fields are offered', () => {
+    settings = {};
+    const text = report('$F{', [
+        '<field name="ReportField" class="java.lang.String"/>',
+        '<dataset name="DS"><field name="DatasetField" class="java.lang.Integer"/></dataset>',
+    ].join('\n  '));
+    const open = '<![CDATA[$F{';
+    const cursor = text.indexOf(open) + open.length;
+    const names = labels(provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {}));
+
+    assert.ok(names.includes('ReportField'));
+    assert.ok(!names.includes('DatasetField'));
+});
+
 // ── Falling back ──────────────────────────────────────────────────────────────
 
 test('a decimal point does not start member completion', () => {

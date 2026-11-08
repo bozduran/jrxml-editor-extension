@@ -6,6 +6,7 @@ const assert = require('node:assert');
 
 const {
     parseDeclarations,
+    resolveDeclarationScope,
     clearCache,
     clearAllCaches,
 } = require('../jrxmlParser');
@@ -206,6 +207,97 @@ test('dataset declarations are not report-scope declarations (issue regression)'
     assert.deepStrictEqual(r.allFields.map(f => f.name).sort(), ['DSField', 'MainField']);
     assert.deepStrictEqual(r.allParameters.map(p => p.name).sort(), ['DSParam', 'Own']);
     assert.deepStrictEqual(r.allVariables.map(v => v.name).sort(), ['DSVar', 'MainVar']);
+});
+
+const SCOPED_REPORT = `<jasperReport name="R">
+  <field name="MainField" class="java.lang.String"/>
+  <dataset name="DS">
+    <parameter name="DSParam" class="java.lang.String"/>
+    <field name="DSField" class="java.lang.String"/>
+    <filterExpression><![CDATA[$F{DSField}]]></filterExpression>
+  </dataset>
+  <detail><band height="20">
+    <element kind="component">
+      <component kind="list">
+        <datasetRun subDataset="DS">
+          <parameter name="DSParam">
+            <expression><![CDATA[$F{MainField}]]></expression>
+          </parameter>
+        </datasetRun>
+        <contents>
+          <element kind="textField"><expression><![CDATA[$F{DSField}]]></expression></element>
+        </contents>
+      </component>
+    </element>
+  </band></detail>
+</jasperReport>`;
+
+test('exposes every dataset with its own declarations and document span', () => {
+    const r = parseDeclarations(makeDoc(SCOPED_REPORT));
+
+    assert.strictEqual(r.datasets.length, 1);
+    const ds = r.datasets[0];
+    assert.strictEqual(ds.name, 'DS');
+    assert.deepStrictEqual(ds.fields.map(f => f.name), ['DSField']);
+    assert.deepStrictEqual(ds.parameters.map(p => p.name), ['DSParam']);
+    assert.deepStrictEqual(ds.variables, []);
+    assert.strictEqual(
+        SCOPED_REPORT.slice(ds.offset, ds.offset + '<dataset'.length),
+        '<dataset'
+    );
+    assert.ok(ds.end > ds.offset);
+});
+
+test('resolveDeclarationScope selects the dataset inside a dataset definition', () => {
+    const text = SCOPED_REPORT;
+    const cursor = text.indexOf('$F{DSField}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'dataset');
+    assert.strictEqual(scope.datasetName, 'DS');
+    assert.deepStrictEqual(scope.fields.map(f => f.name), ['DSField']);
+    assert.deepStrictEqual(scope.allFields.map(f => f.name), ['DSField']);
+});
+
+test('resolveDeclarationScope selects the dataset inside a list datasetRun consumer', () => {
+    const text = SCOPED_REPORT;
+    const cursor = text.lastIndexOf('$F{DSField}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'dataset');
+    assert.strictEqual(scope.datasetName, 'DS');
+});
+
+test('datasetRun parameter bindings stay in report scope', () => {
+    const text = SCOPED_REPORT;
+    const cursor = text.indexOf('$F{MainField}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'report');
+    assert.deepStrictEqual(scope.fields.map(f => f.name), ['MainField']);
+});
+
+test('resolveDeclarationScope falls back to report scope outside datasets', () => {
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(SCOPED_REPORT)), 0);
+
+    assert.strictEqual(scope.kind, 'report');
+    assert.deepStrictEqual(scope.allFields.map(f => f.name), ['MainField']);
+});
+
+test('resolveDeclarationScope marks a run of an undefined dataset as unknown', () => {
+    const text = `<jasperReport name="R">
+  <field name="MainField" class="java.lang.String"/>
+  <detail><band><element kind="component"><component kind="list">
+    <datasetRun subDataset="External"/>
+    <contents><element kind="textField"><expression><![CDATA[$F{Anything}]]></expression></element></contents>
+  </component></element></band></detail>
+</jasperReport>`;
+    const cursor = text.indexOf('$F{Anything}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'unknown');
+    assert.strictEqual(scope.datasetName, 'External');
+    assert.deepStrictEqual(scope.fields, []);
 });
 
 test('a parameter passed into a subreport is not a declaration of this report (issue regression)', () => {

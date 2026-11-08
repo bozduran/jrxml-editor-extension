@@ -2,7 +2,7 @@
 // Shows a tooltip when hovering over $F{name}, $P{name}, $V{name} in .jrxml files.
 
 const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { findReferenceToken } = require('./expressionUtils');
 const {
     BUILTIN_VARIABLES,
@@ -29,6 +29,14 @@ function mdCode(text) {
     return String(text ?? '').replace(/`/g, '\\`');
 }
 
+/** The report-scope declaration with this name, used to explain scope errors. */
+function reportDeclaration(parsed, sigil, name) {
+    const list = sigil === 'F' ? parsed.fields
+        : sigil === 'P' ? parsed.parameters
+        : parsed.variables;
+    return (list || []).find(declaration => declaration.name === name) || null;
+}
+
 const provider = vscode.languages.registerHoverProvider(
     { language: 'jrxml', scheme: 'file' },
     {
@@ -41,12 +49,13 @@ const provider = vscode.languages.registerHoverProvider(
             let isBuiltin = false;
 
             const parsed = parseDeclarations(document);
+            const scope  = resolveDeclarationScope(parsed, document.offsetAt(position));
 
             if (ref.sigil === 'F') {
-                decl = parsed.allFields.find(f => f.name === ref.name);
+                decl = scope.fields.find(f => f.name === ref.name);
                 kind = 'Field';
             } else if (ref.sigil === 'P') {
-                decl = parsed.allParameters.find(p => p.name === ref.name);
+                decl = scope.parameters.find(p => p.name === ref.name);
                 if (!decl && BUILTIN_PARAMETER_NAMES.has(ref.name)) {
                     const b = BUILTIN_PARAMETERS.find(p => p.name === ref.name);
                     decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
@@ -54,7 +63,7 @@ const provider = vscode.languages.registerHoverProvider(
                 }
                 kind = 'Parameter';
             } else if (ref.sigil === 'V') {
-                decl = parsed.allVariables.find(v => v.name === ref.name);
+                decl = scope.variables.find(v => v.name === ref.name);
                 if (!decl && BUILTIN_VARIABLE_NAMES.has(ref.name)) {
                     const b = BUILTIN_VARIABLES.find(v => v.name === ref.name);
                     decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
@@ -62,6 +71,13 @@ const provider = vscode.languages.registerHoverProvider(
                 }
                 kind = 'Variable';
             }
+
+            // A report-scope name used inside a dataset is not available there.
+            // Showing the report declaration as if it resolved would be a lie,
+            // so point at the scope problem instead.
+            const elsewhere = !decl && scope.kind === 'dataset'
+                ? reportDeclaration(parsed, ref.sigil, ref.name)
+                : null;
 
             // Count how many times this reference appears in the file
             const refCount = parsed.references.filter(r => r.sigil === ref.sigil && r.name === ref.name).length;
@@ -85,6 +101,17 @@ const provider = vscode.languages.registerHoverProvider(
                     md.appendMarkdown(`| **Info** | ${mdSafe(decl.description)} |\n`);
                 }
                 md.appendMarkdown(`| **Used** | ${refCount} time${refCount !== 1 ? 's' : ''} in this file |\n`);
+            } else if (elsewhere) {
+                md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
+                md.appendMarkdown(
+                    `⚠️ **${kind} '${ref.name}' is declared at report scope and is not available inside dataset '${mdSafe(scope.datasetName)}'.**\n\n`
+                );
+                md.appendMarkdown('Pass it to the dataset as a parameter and bind it in the `<datasetRun>`.');
+            } else if (scope.kind === 'unknown') {
+                md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
+                md.appendMarkdown(
+                    `⚠️ **Dataset '${mdSafe(scope.datasetName)}' is not defined in this file**, so this reference cannot be resolved.`
+                );
             } else {
                 md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
                 md.appendMarkdown(`⚠️ **${kind} not declared** in this file.\n\n`);

@@ -11,7 +11,7 @@ const cache = new Map();
  * @typedef {{ name:string, type:string, fullType:string, typeSource:'declared'|'inferred', description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
  * @typedef {{ sigil:string, name:string, offset:number, fromSubreport?:boolean }} Reference
  * @typedef {{ kind:string, name:string, offset:number, end:number, children:OutlineNode[] }} OutlineNode
- * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
+ * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, datasets:{name:string,offset:number,end:number,fields:Declaration[],parameters:Declaration[],variables:Declaration[]}[], scopeRanges:{datasetName:string,start:number,end:number}[], allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
  */
 
 const COMMON_TYPES = new Set([
@@ -60,6 +60,13 @@ function parseDeclarations(document) {
             parameters: dsParameters,
             variables:  dsVariables,
         },
+        datasets:    buildDatasets(scopes, rawFields, rawParameters, rawVariables),
+        // Ranges where a dataset's declarations are the visible scope: the
+        // <dataset>/<subDataset> definition itself and, inside list/table
+        // components, the part that consumes the run dataset. A <datasetRun>'s
+        // own parameter bindings are excluded: they are evaluated in the
+        // enclosing (usually report) scope.
+        scopeRanges: buildScopeRanges(scan, scopes),
         allFields:     [...fields, ...dsFields].sort(byOffset),
         allParameters: [...parameters, ...dsParameters].sort(byOffset),
         allVariables:  [...variables, ...dsVariables].sort(byOffset),
@@ -74,25 +81,52 @@ function parseDeclarations(document) {
 
 /**
  * Map each declaration tag to the set of start-tag offsets that are direct
- * report children or dataset children. Returns null when the document cannot
- * be scanned.
+ * report children or dataset children, and keep each dataset's own sets so
+ * consumers can resolve a single scope instead of the merged union.
+ * Returns null when the document cannot be scanned.
  */
 function classifyDeclarationScopes(scan) {
     if (!scan || scan.error) return null;
 
-    const report  = { field: new Set(), parameter: new Set(), variable: new Set() };
-    const dataset = { field: new Set(), parameter: new Set(), variable: new Set() };
+    const report   = emptyDeclarationSets();
+    const dataset  = emptyDeclarationSets();
+    const datasets = [];
+
+    for (const node of scan.doc.walk()) {
+        if (node.tag !== 'dataset' && node.tag !== 'subDataset') continue;
+        datasets.push({
+            name:   node.attrValue('name') || '',
+            offset: node.startTag,
+            end:    node.end,
+            sets:   emptyDeclarationSets(),
+        });
+    }
 
     for (const node of scan.doc.walk()) {
         if (node.tag !== 'field' && node.tag !== 'parameter' && node.tag !== 'variable') continue;
 
-        if (node.ancestors().some(a => a.tag === 'dataset' || a.tag === 'subDataset')) {
+        const owner = containingDataset(datasets, node.startTag);
+        if (owner) {
+            owner.sets[node.tag].add(node.startTag);
             dataset[node.tag].add(node.startTag);
         } else if (node.parent === scan.doc.root) {
             report[node.tag].add(node.startTag);
         }
     }
-    return { report, dataset };
+    return { report, dataset, datasets };
+}
+
+function emptyDeclarationSets() {
+    return { field: new Set(), parameter: new Set(), variable: new Set() };
+}
+
+/** The innermost dataset whose span contains `offset`, or null. */
+function containingDataset(datasets, offset) {
+    let best = null;
+    for (const ds of datasets) {
+        if (ds.offset <= offset && offset < ds.end && (!best || ds.offset >= best.offset)) best = ds;
+    }
+    return best;
 }
 
 /** Keep only declarations whose start tag belongs to `scope`. */
@@ -100,6 +134,117 @@ function filterScope(list, tag, scopes, scope) {
     if (!scopes) return scope === 'report' ? list : [];
     const allowed = scopes[scope][tag];
     return list.filter(decl => allowed.has(decl.offset));
+}
+
+/** One entry per <dataset>/<subDataset>, with that dataset's declarations. */
+function buildDatasets(scopes, rawFields, rawParameters, rawVariables) {
+    if (!scopes) return [];
+    return scopes.datasets.map(ds => ({
+        name:       ds.name,
+        offset:     ds.offset,
+        end:        ds.end,
+        fields:     rawFields.filter(decl => ds.sets.field.has(decl.offset)),
+        parameters: rawParameters.filter(decl => ds.sets.parameter.has(decl.offset)),
+        variables:  rawVariables.filter(decl => ds.sets.variable.has(decl.offset)),
+    }));
+}
+
+/**
+ * Spans where a dataset owns the visible declarations. Besides the dataset
+ * definition, this covers a list/table's component contents (which consume the
+ * run dataset) while excluding the <datasetRun> element itself, whose
+ * parameter/connection expressions are evaluated in the enclosing scope.
+ */
+function buildScopeRanges(scan, scopes) {
+    const ranges = [];
+    if (!scan || scan.error || !scopes) return ranges;
+
+    for (const ds of scopes.datasets) {
+        ranges.push({ datasetName: ds.name, start: ds.offset, end: ds.end });
+    }
+
+    for (const node of scan.doc.walk()) {
+        if (node.tag !== 'datasetRun') continue;
+        const parent = node.parent;
+        if (!parent || !consumesDataset(node, parent)) continue;
+
+        const datasetName = node.attrValue('subDataset') || '';
+        if (parent.startTagEnd < node.startTag) {
+            ranges.push({ datasetName, start: parent.startTagEnd, end: node.startTag });
+        }
+        if (node.end < parent.end) {
+            ranges.push({ datasetName, start: node.end, end: parent.end });
+        }
+    }
+    return ranges;
+}
+
+/** True for the component that renders a dataset (list/table), not its run. */
+function consumesDataset(run, parent) {
+    if (!run.attrValue('subDataset')) return false;
+    const kind = parent.attrValue('kind') || '';
+    return (parent.tag === 'component' || parent.tag === 'element') &&
+        (kind === 'list' || kind === 'table');
+}
+
+/** The dataset scope that owns `offset` when it is inside a scoped region. */
+function scopeRangeAt(parsed, offset) {
+    let best = null;
+    for (const range of (parsed && parsed.scopeRanges) || []) {
+        if (offset < range.start || offset >= range.end) continue;
+        if (!best || (range.end - range.start) < (best.end - best.start)) best = range;
+    }
+    return best;
+}
+
+/**
+ * Resolve the declarations visible at `offset`.
+ *
+ * `kind` is `report` outside datasets, `dataset` inside a dataset definition or
+ * a list/table run scope, and `unknown` when a dataset run names a dataset that
+ * is not defined in this file (the caller must not guess).
+ *
+ * @param {ParseResult} parsed
+ * @param {number} offset document character offset; negative means report scope
+ * @returns {{kind:'report'|'dataset'|'unknown', dataset:object|null, datasetName:string|null,
+ *            fields:Declaration[], parameters:Declaration[], variables:Declaration[],
+ *            allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[]}}
+ */
+function resolveDeclarationScope(parsed, offset) {
+    const range = scopeRangeAt(parsed, offset);
+    if (!range) return reportScope(parsed);
+
+    const dataset = ((parsed && parsed.datasets) || []).find(ds => ds.name === range.datasetName);
+    if (!dataset) {
+        return {
+            kind: 'unknown', dataset: null, datasetName: range.datasetName,
+            fields: [], parameters: [], variables: [],
+            allFields: [], allParameters: [], allVariables: [],
+        };
+    }
+
+    return {
+        kind: 'dataset',
+        dataset,
+        datasetName: dataset.name,
+        fields:      dataset.fields,
+        parameters:  dataset.parameters,
+        variables:   dataset.variables,
+        allFields:     dataset.fields,
+        allParameters: dataset.parameters,
+        allVariables:  dataset.variables,
+    };
+}
+
+function reportScope(parsed) {
+    const fields     = (parsed && parsed.fields)     || [];
+    const parameters = (parsed && parsed.parameters) || [];
+    const variables  = (parsed && parsed.variables)  || [];
+    return {
+        kind: 'report', dataset: null, datasetName: null,
+        fields, parameters, variables,
+        allFields: fields, allParameters: parameters, allVariables: variables,
+    };
 }
 
 /** Drop the cached parse result for a single document (call when it closes). */
@@ -550,4 +695,9 @@ function inSubreportRange(offset, ranges) {
     return ranges.some(([s, e]) => offset >= s && offset < e);
 }
 
-module.exports = { parseDeclarations, clearCache, clearAllCaches };
+module.exports = {
+    parseDeclarations,
+    resolveDeclarationScope,
+    clearCache,
+    clearAllCaches,
+};

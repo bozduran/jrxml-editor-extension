@@ -62,6 +62,7 @@ function makeDoc(text) {
             while (line + 1 < lineStarts.length && lineStarts[line + 1] <= offset) line++;
             return { line, character: offset - lineStarts[line] };
         },
+        offsetAt(position) { return lineStarts[position.line] + position.character; },
         lineAt(position) {
             const start = lineStarts[position.line];
             const next  = position.line + 1 < lineStarts.length ? lineStarts[position.line + 1] : text.length;
@@ -105,6 +106,22 @@ test('Ctrl+Click navigates $P!{} query fragments', () => {
     const location = provider.provideDefinition(makeDoc(text), positionAt(text, offset));
     assert.ok(location, 'expected $P!{} to resolve');
     assert.strictEqual(offsetAt(text, location.range.start), text.indexOf('"Clause"') + 1);
+});
+
+test('resolves the dataset declaration when a report and dataset name collide', () => {
+    const text = `<jasperReport name="R">
+  <field name="shared" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="shared" class="java.lang.Integer"/>
+    <filterExpression><![CDATA[$F{shared}]]></filterExpression>
+  </dataset>
+</jasperReport>`;
+    const cursor = text.indexOf('$F{shared}') + 3;
+    const expected = text.lastIndexOf('"shared"') + 1;
+
+    const location = provider.provideDefinition(makeDoc(text), positionAt(text, cursor));
+    assert.ok(location, 'expected a dataset definition');
+    assert.strictEqual(offsetAt(text, location.range.start), expected);
 });
 
 test('returns null for an undeclared reference or outside a token', () => {

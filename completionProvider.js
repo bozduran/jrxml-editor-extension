@@ -10,7 +10,7 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
-const { parseDeclarations } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
@@ -194,10 +194,13 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 };
             }
 
+            const offset = document.offsetAt(position);
             const result = buildExpressionSuggestions({
                 text: document.getText(),
-                offset: document.offsetAt(position),
-                declarations: decls,
+                offset,
+                // Only the declarations visible at the cursor: a subdataset
+                // must not offer the master report's fields, and vice versa.
+                declarations: resolveDeclarationScope(decls, offset),
                 options: suggestionOptions(config),
                 customMethods: getCustomJavaMethods(),
             });
