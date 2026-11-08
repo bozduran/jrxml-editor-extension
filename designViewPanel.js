@@ -14,9 +14,10 @@ const { buildElementPatch } = require('./designEdit');
 const { buildDesignViewHtml } = require('./designViewHtml');
 const { getNonce } = require('./expressionPanelHtml');
 const { isStale, STALE_MESSAGE } = require('./staleGuard');
-const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
+const { parseDeclarations } = require('./jrxmlParser');
 const { reportLanguage } = require('./reportLanguage');
 const { resourceEntriesForDocument } = require('./resourceIndex');
+const { visibleDeclarations } = require('./reportSymbols');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { getCustomJavaMethods } = require('./completionProvider');
 
@@ -88,7 +89,7 @@ function buildCompletionsForDocument(document, expression, offset) {
         offset,
         // The inspector edits report-band elements, so only report-scope
         // declarations apply; dataset members need their own dataset run.
-        declarations: resolveDeclarationScope(decls, -1),
+        declarations: visibleDeclarations(decls),
         options,
         customMethods: getCustomJavaMethods(),
         resources: resourceEntriesForDocument(document, decls.resourceBundle),

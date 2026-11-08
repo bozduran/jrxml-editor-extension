@@ -10,9 +10,9 @@
 //   { offset, length, message, severity: 'error'|'warning', code, data? }
 
 const { parseDeclarations, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
+const { declaredNames, declarationInAnyScope } = require('./reportSymbols');
 const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
 const { isFragmentStart, skipFragment } = require('./jasperTokens');
-const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
@@ -196,14 +196,14 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
             const scope = resolveDeclarationScope(parsed, ref.offset);
             if (scope.kind === 'unknown') continue;
 
-            if (declaredInScope(scope, ref.sigil).has(ref.name)) continue;
+            if (declaredNames(scope, ref.sigil).has(ref.name)) continue;
 
             const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
             const tokenLen = typeof ref.end === 'number'
                 ? ref.end - ref.offset
                 : 4 + ref.name.length;
 
-            if (scope.kind === 'dataset' && declaredAtReportScope(parsed, ref.sigil, ref.name)) {
+            if (scope.kind === 'dataset' && declarationInAnyScope(parsed, { sigil: ref.sigil, name: ref.name })) {
                 add(
                     ref.offset, tokenLen,
                     `${kindName} '${ref.name}' is declared at report scope and is not available inside dataset '${scope.datasetName}'. Pass it to the dataset as a parameter.`,
@@ -337,21 +337,6 @@ function duplicateMessage(duplicate) {
         ? ` in dataset '${duplicate.scope}'`
         : ' in this report';
     return `${label} '${duplicate.name}' is declared more than once${where}.`;
-}
-
-function declaredInScope(scope, sigil) {
-    if (sigil === 'F') return new Set(scope.fields.map(decl => decl.name));
-    if (sigil === 'P') {
-        return new Set([...scope.parameters.map(decl => decl.name), ...BUILTIN_PARAMETER_NAMES]);
-    }
-    return new Set([...scope.variables.map(decl => decl.name), ...BUILTIN_VARIABLE_NAMES]);
-}
-
-function declaredAtReportScope(parsed, sigil, name) {
-    const list = sigil === 'F' ? parsed.fields
-        : sigil === 'P' ? parsed.parameters
-        : parsed.variables;
-    return (list || []).some(decl => decl.name === name);
 }
 
 // ── Expression syntax checkers ───────────────────────────────────────────────

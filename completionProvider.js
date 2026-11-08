@@ -10,10 +10,11 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
-const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
+const { parseDeclarations } = require('./jrxmlParser');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { reportLanguage } = require('./reportLanguage');
 const { resourceEntriesForDocument } = require('./resourceIndex');
+const { visibleDeclarations } = require('./reportSymbols');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -211,7 +212,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 offset,
                 // Only the declarations visible at the cursor: a subdataset
                 // must not offer the master report's fields, and vice versa.
-                declarations: resolveDeclarationScope(decls, offset),
+                declarations: visibleDeclarations(decls, offset),
                 options,
                 customMethods: getCustomJavaMethods(),
                 resources: resourceEntriesForDocument(document, decls.resourceBundle),

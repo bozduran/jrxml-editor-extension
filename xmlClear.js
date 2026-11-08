@@ -15,6 +15,7 @@
 
 const { scanXml } = require('./xmlspan');
 const { REFERENCE_CONTAINERS } = require('./expressionTags');
+const { forEachReferenceToken } = require('./referenceTokens');
 const {
     cdataOf,
     decodeXml,
@@ -39,7 +40,6 @@ const BUILTIN_PARAMETERS = new Set([
 
 // REFERENCE_CONTAINERS is shared with jrxmlParser so usage collection and
 // reference extraction can never disagree about which elements carry refs.
-const REFERENCE_RE = /\$(F|P|V)!?\{([^}]*)\}/g;
 const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
 
 // ── Reference collection (ground-truth style) ─────────────────────────────────
@@ -81,11 +81,10 @@ function collectUsedNames(text) {
 }
 
 function addReferences(body, used) {
-    REFERENCE_RE.lastIndex = 0;
-    let match;
-    while ((match = REFERENCE_RE.exec(body)) !== null) {
-        addName(KIND_BY_SIGIL[match[1]], match[2], used);
-    }
+    forEachReferenceToken(body, token => {
+        if (token.sigil === 'R') return;
+        addName(KIND_BY_SIGIL[token.sigil], token.name, used);
+    });
 }
 
 function addName(kind, rawName, used) {

@@ -3,17 +3,11 @@
 
 const vscode = require('vscode');
 const path = require('path');
-const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
+const { parseDeclarations } = require('./jrxmlParser');
 const { resourcesForDocument } = require('./resourceIndex');
 const { bundleAttribute } = require('./resourceBundle');
 const { findReferenceToken } = require('./expressionUtils');
-const {
-    BUILTIN_VARIABLES,
-    BUILTIN_PARAMETERS,
-    BUILTIN_VARIABLE_NAMES,
-    BUILTIN_PARAMETER_NAMES,
-} = require('./jasperBuiltins');
-
+const { resolveSymbol } = require('./reportSymbols');
 /**
  * Sanitize file-derived text before appending it to a MarkdownString.
  * Escapes markdown structural characters and collapses newlines so a crafted
@@ -67,14 +61,6 @@ function resourceHover(document, position, ref) {
     ));
 }
 
-/** The report-scope declaration with this name, used to explain scope errors. */
-function reportDeclaration(parsed, sigil, name) {
-    const list = sigil === 'F' ? parsed.fields
-        : sigil === 'P' ? parsed.parameters
-        : parsed.variables;
-    return (list || []).find(declaration => declaration.name === name) || null;
-}
-
 const provider = vscode.languages.registerHoverProvider(
     { language: 'jrxml' },
     {
@@ -83,40 +69,23 @@ const provider = vscode.languages.registerHoverProvider(
             if (!ref) return null;
             if (ref.sigil === 'R') return resourceHover(document, position, ref);
 
-            let decl   = null;
-            let kind   = '';
-            let isBuiltin = false;
-
             const parsed = parseDeclarations(document);
-            const scope  = resolveDeclarationScope(parsed, document.offsetAt(position));
+            const symbol = resolveSymbol(parsed, {
+                offset: document.offsetAt(position),
+                lineText: document.lineAt(position).text,
+                character: position.character,
+            });
+            if (!symbol) return null;
 
-            if (ref.sigil === 'F') {
-                decl = scope.fields.find(f => f.name === ref.name);
-                kind = 'Field';
-            } else if (ref.sigil === 'P') {
-                decl = scope.parameters.find(p => p.name === ref.name);
-                if (!decl && BUILTIN_PARAMETER_NAMES.has(ref.name)) {
-                    const b = BUILTIN_PARAMETERS.find(p => p.name === ref.name);
-                    decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
-                    isBuiltin = true;
-                }
-                kind = 'Parameter';
-            } else if (ref.sigil === 'V') {
-                decl = scope.variables.find(v => v.name === ref.name);
-                if (!decl && BUILTIN_VARIABLE_NAMES.has(ref.name)) {
-                    const b = BUILTIN_VARIABLES.find(v => v.name === ref.name);
-                    decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
-                    isBuiltin = true;
-                }
-                kind = 'Variable';
-            }
+            const decl      = symbol.declaration;
+            const kind      = symbol.kind[0].toUpperCase() + symbol.kind.slice(1);
+            const isBuiltin = symbol.builtin;
+            const scope     = symbol.scope;
 
             // A report-scope name used inside a dataset is not available there.
             // Showing the report declaration as if it resolved would be a lie,
             // so point at the scope problem instead.
-            const elsewhere = !decl && scope.kind === 'dataset'
-                ? reportDeclaration(parsed, ref.sigil, ref.name)
-                : null;
+            const elsewhere = symbol.reportDeclaration;
 
             // Count how many times this reference appears in the file
             const refCount = parsed.references.filter(r => r.sigil === ref.sigil && r.name === ref.name).length;
@@ -154,7 +123,7 @@ const provider = vscode.languages.registerHoverProvider(
             } else {
                 md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
                 md.appendMarkdown(`⚠️ **${kind} not declared** in this file.\n\n`);
-                md.appendMarkdown(`No \`<${ref.sigil === 'F' ? 'field' : ref.sigil === 'P' ? 'parameter' : 'variable'} name="${ref.name}">\` declaration found.`);
+                md.appendMarkdown(`No \`<${symbol.kind} name="${ref.name}">\` declaration found.`);
             }
 
             const range = new vscode.Range(

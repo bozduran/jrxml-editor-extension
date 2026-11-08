@@ -2,6 +2,7 @@
 // Finds the JRXML expression element that the cursor is currently inside.
 
 const { EXPRESSION_TAGS } = require('./expressionTags');
+const { findReferenceToken } = require('./referenceTokens');
 
 const TAG_PATTERN = new RegExp(
     `<(${EXPRESSION_TAGS.join('|')})(\\s[^>]*)?>([\\s\\S]*?)<\\/\\1>`,
@@ -83,32 +84,6 @@ function hasCdata(rawInner) {
 
 function escapeRegExp(text) {
     return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * The `$F{name}` / `$P{name}` / `$V{name}` / `$R{key}` token under a cursor
- * column, or null. Accepts the query-parameter form `$P!{name}` as well.
- * Pure: works on a line of text, so it can be shared by hover and references.
- *
- * @param {string} lineText
- * @param {number} character 0-based column
- * @returns {{sigil:'F'|'P'|'V'|'R', name:string, bang:boolean, start:number, end:number}|null}
- */
-function findReferenceToken(lineText, character) {
-    const re = /\$(F|P|V|R)(!?)\{([\w.\-]+)\}/g;
-    let match;
-    while ((match = re.exec(lineText)) !== null) {
-        if (match.index <= character && character <= match.index + match[0].length) {
-            return {
-                sigil: match[1],
-                name: match[3],
-                bang: match[2] === '!',
-                start: match.index,
-                end: match.index + match[0].length,
-            };
-        }
-    }
-    return null;
 }
 
 /**

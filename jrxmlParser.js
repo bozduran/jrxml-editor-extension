@@ -4,6 +4,7 @@
 
 const { scanXml } = require('./xmlspan');
 const { EXPRESSION_TAGS, REFERENCE_CONTAINERS } = require('./expressionTags');
+const { forEachReferenceToken } = require('./referenceTokens');
 const { languageOfScan } = require('./reportLanguage');
 const { REPORT_SECTIONS } = require('./jrxmlSections');
 const { bundleAttributeOfScan } = require('./resourceBundle');
@@ -485,7 +486,6 @@ function insideAnyDataset(parsed, offset) {
 // are attribute names rather than tokens (subreportParameter, returnValue,
 // a nested subreport <parameter>) have no `end`.
 
-const REFERENCE_RE = /\$(F|P|V)(!?)\{([\w.]+)\}/g;
 
 function extractReferences(scan) {
     const results = [];
@@ -515,20 +515,17 @@ function extractReferences(scan) {
 /** Scan the plain-text/CDATA spans of one expression-bearing element. */
 function addTextNodeReferences(node, results) {
     for (const span of node.textNodes) {
-        REFERENCE_RE.lastIndex = 0;
-        let match;
-        while ((match = REFERENCE_RE.exec(span.text)) !== null) {
-            const name = match[3].trim();
-            if (!name) continue;
-            const offset = span.start + match.index;
+        forEachReferenceToken(span.text, token => {
+            if (token.sigil === 'R' || !token.name) return;
+            const offset = span.start + token.start;
             results.push({
-                sigil: match[1],
-                name,
-                bang:  match[2] === '!',
+                sigil: token.sigil,
+                name: token.name,
+                bang: token.bang,
                 offset,
-                end:   offset + match[0].length,
+                end:   span.start + token.end,
             });
-        }
+        });
     }
 }
 
