@@ -66,6 +66,13 @@ test('parses JasperReports "ERROR in file (at line N)" output', () => {
     });
 });
 
+test('Maven [ERROR] lines are not also claimed by the javac matcher', () => {
+    assert.strictEqual(
+        parse('jrxml-javac', '[ERROR] /work/reports/detail.jrxml:12: Field not found'),
+        null
+    );
+});
+
 test('ignores lines that do not point at a .jrxml file', () => {
     assert.strictEqual(parse('jrxml-javac', 'BUILD FAILURE'), null);
     assert.strictEqual(parse('jrxml-file-line', '[ERROR] Something else'), null);
