@@ -4,8 +4,8 @@
 // It is a live mirror of the JRXML diagnostics (source "JRXML": undeclared
 // references, unbalanced parens, unclosed strings, unused declarations, the
 // structural lint rules and textcheck) plus the file-level actions that are not
-// diagnostics (currently the SQL -> jsonql migration). Rules with their own
-// workflow (sort, best practices) stay in their own views.
+// diagnostics (currently the SQL -> jsonql migration). The geometry sort stays
+// in the JRXML menu and Command Palette, not in this view.
 //
 // Reading vscode.languages.getDiagnostics() keeps the view in lock-step with
 // the squiggles: there is no second copy of the diagnostic logic to drift.
