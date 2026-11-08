@@ -164,7 +164,7 @@ test('keeps the suggestion counts and plain insertion for each category', () => 
         ],
     });
 
-    assert.strictEqual(result.items.filter(item => item.kind === 'function').length, 48);
+    assert.strictEqual(result.items.filter(item => item.kind === 'function').length, 66);
     assert.strictEqual(result.items.filter(item => item.kind === 'class').length, 22);
     assert.strictEqual(result.items.filter(item => item.kind === 'method').length, 2);
 

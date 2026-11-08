@@ -1,0 +1,33 @@
+{
+  "comment": "Date and time functions transcribed from the official JasperReports function reference. Keep in sync when the catalogue changes.",
+  "source": "https://jasperreports.sourceforge.net/function.reference.html",
+  "version": "7.1.1",
+  "dateTime": [
+    "DATE",
+    "DATEFORMAT",
+    "DATERANGE",
+    "DATEVALUE",
+    "DAY",
+    "DAYS",
+    "DAYSINMONTH",
+    "DAYSINYEAR",
+    "EDATE",
+    "HOUR",
+    "ISLEAPYEAR",
+    "MINUTE",
+    "MONTH",
+    "MONTHS",
+    "NETWORKDAYS",
+    "NOW",
+    "SECOND",
+    "TIME",
+    "TODAY",
+    "WEEKDAY",
+    "WEEKNUM",
+    "WEEKS",
+    "WEEKSINYEAR",
+    "WORKDAY",
+    "YEAR",
+    "YEARS"
+  ]
+}

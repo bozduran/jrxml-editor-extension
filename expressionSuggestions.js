@@ -64,6 +64,24 @@ const JASPER_FUNCTIONS = [
     { label: 'WORKDAY',     detail: 'WORKDAY(start, days)',           doc: 'Returns the date that is a number of working days after start.',              snippet: 'WORKDAY(${1:start}, ${2:days})' },
     { label: 'msg',         detail: 'msg(key, ...)',                  doc: 'Looks up a message from the report resource bundle.',                         snippet: 'msg("${1:key}")' },
     { label: 'str',         detail: 'str(pattern, ...)',              doc: 'Formats a message pattern with arguments.',                                   snippet: 'str("${1:pattern}", ${2:args})' },
+    { label: 'DATEVALUE',   detail: 'DATEVALUE(value)',               doc: 'Returns the long millisecond value of a date.',                               snippet: 'DATEVALUE(${1:value})' },
+    { label: 'DAY',         detail: 'DAY(value)',                     doc: 'Returns the day of month of a date.',                                         snippet: 'DAY(${1:value})' },
+    { label: 'DAYSINMONTH', detail: 'DAYSINMONTH(value)',             doc: 'Returns the number of days in the month of a date.',                          snippet: 'DAYSINMONTH(${1:value})' },
+    { label: 'DAYSINYEAR',  detail: 'DAYSINYEAR(value)',              doc: 'Returns the number of days in the year of a date.',                           snippet: 'DAYSINYEAR(${1:value})' },
+    { label: 'EDATE',       detail: 'EDATE(value, months)',           doc: 'Returns the date a number of months after a date.',                           snippet: 'EDATE(${1:value}, ${2:months})' },
+    { label: 'HOUR',        detail: 'HOUR(value)',                    doc: 'Returns the hour (0-23) of a date.',                                          snippet: 'HOUR(${1:value})' },
+    { label: 'ISLEAPYEAR',  detail: 'ISLEAPYEAR(value)',              doc: 'Checks whether a date occurs in a leap year.',                                 snippet: 'ISLEAPYEAR(${1:value})' },
+    { label: 'MINUTE',      detail: 'MINUTE(value)',                  doc: 'Returns the minute (0-59) of a date.',                                        snippet: 'MINUTE(${1:value})' },
+    { label: 'MONTH',       detail: 'MONTH(value)',                   doc: 'Returns the month of a date.',                                                snippet: 'MONTH(${1:value})' },
+    { label: 'MONTHS',      detail: 'MONTHS(start, end)',             doc: 'Returns the number of months between two dates.',                             snippet: 'MONTHS(${1:start}, ${2:end})' },
+    { label: 'SECOND',      detail: 'SECOND(value)',                  doc: 'Returns the second (0-59) of a date.',                                        snippet: 'SECOND(${1:value})' },
+    { label: 'TIME',        detail: 'TIME(hours, minutes, seconds)',  doc: 'Builds a java.sql.Time, optionally formatted with a pattern.',                 snippet: 'TIME(${1:hours}, ${2:minutes}, ${3:seconds})' },
+    { label: 'WEEKDAY',     detail: 'WEEKDAY(value)',                 doc: 'Returns the day of week of a date.',                                          snippet: 'WEEKDAY(${1:value})' },
+    { label: 'WEEKNUM',     detail: 'WEEKNUM(value)',                 doc: 'Returns the week number of a date.',                                          snippet: 'WEEKNUM(${1:value})' },
+    { label: 'WEEKS',       detail: 'WEEKS(start, end)',              doc: 'Returns the number of weeks between two dates.',                              snippet: 'WEEKS(${1:start}, ${2:end})' },
+    { label: 'WEEKSINYEAR', detail: 'WEEKSINYEAR(value)',             doc: 'Returns the number of weeks in the year of a date.',                          snippet: 'WEEKSINYEAR(${1:value})' },
+    { label: 'YEAR',        detail: 'YEAR(value)',                    doc: 'Returns the year of a date.',                                                 snippet: 'YEAR(${1:value})' },
+    { label: 'YEARS',       detail: 'YEARS(start, end)',              doc: 'Returns the number of years between two dates.',                              snippet: 'YEARS(${1:start}, ${2:end})' },
 ];
 
 const X_CLAUSES = [
@@ -524,4 +542,5 @@ module.exports = {
     buildExpressionSuggestions,
     suggestionOptions,
     plainFromSnippet,
+    JASPER_FUNCTIONS,
 };
