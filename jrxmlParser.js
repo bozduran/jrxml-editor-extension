@@ -8,6 +8,7 @@ const { forEachReferenceToken } = require('./referenceTokens');
 const { languageOfScan } = require('./reportLanguage');
 const { REPORT_SECTIONS } = require('./jrxmlSections');
 const { bundleAttributeOfScan } = require('./resourceBundle');
+const { documentSource } = require('./reportSource');
 
 const cache = new Map();
 
@@ -26,11 +27,20 @@ const COMMON_TYPES = new Set([
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 function parseDeclarations(document, providedScan = null) {
-    const key    = document.uri.toString();
-    const cached = cache.get(key);
-    if (cached && cached.version === document.version) return cached.result;
+    return parseReport(documentSource(document), providedScan);
+}
 
-    const text = document.getText();
+/**
+ * Parse a report source (text + identity + version). This is the headless
+ * entry point; parseDeclarations is the VS Code document adapter.
+ */
+function parseReport(source, providedScan = null) {
+    const id      = source && source.id != null ? String(source.id) : null;
+    const version = source ? source.version : undefined;
+    const cached  = id !== null ? cache.get(id) : null;
+    if (cached && cached.version === version) return cached.result;
+
+    const text = source && typeof source.text === 'string' ? source.text : '';
     const scan = providedScan || scanXml(text);
 
     // Which <field>/<parameter>/<variable> offsets are report declarations
@@ -83,7 +93,7 @@ function parseDeclarations(document, providedScan = null) {
         outline:    extractOutline(scan, { fields, parameters, variables }),
     };
 
-    cache.set(key, { version: document.version, result });
+    if (id !== null) cache.set(id, { version, result });
     return result;
 }
 
@@ -906,6 +916,7 @@ function inSubreportRange(offset, ranges) {
 
 module.exports = {
     parseDeclarations,
+    parseReport,
     resolveDeclarationScope,
     findDuplicateNames,
     clearCache,

@@ -9,7 +9,8 @@
 // Finding shape:
 //   { offset, length, message, severity: 'error'|'warning', code, data? }
 
-const { parseDeclarations, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
+const { parseReport, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
+const { textSource } = require('./reportSource');
 const { analyse } = require('./analysisContext');
 const { declaredNames, declarationInAnyScope } = require('./reportSymbols');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
@@ -306,11 +307,10 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
 /** Parse with a synthetic document whose version follows the text content. */
 function parseSafely(text, fileName, scan = null) {
     try {
-        return parseDeclarations({
-            uri: { toString: () => `jrxml-diagnostics://${fileName || 'untitled'}` },
-            version: hashText(text),
-            getText: () => text,
-        }, scan);
+        return parseReport(
+            textSource(text, `jrxml-diagnostics://${fileName || 'untitled'}`, hashText(text)),
+            scan
+        );
     } catch (_) {
         return {
             fields: [], parameters: [], variables: [],

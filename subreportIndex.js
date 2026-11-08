@@ -7,7 +7,8 @@
 
 const fs   = require('fs');
 const { findSubreportLinks, resolveSubreportCandidates } = require('./subreports');
-const { parseDeclarations } = require('./jrxmlParser');
+const { parseReport } = require('./jrxmlParser');
+const { textSource } = require('./reportSource');
 
 const parameterCache = new Map();
 
@@ -69,11 +70,9 @@ function parametersOf(fsPath) {
 
     // Reuse the real declaration parser. The synthetic version (mtime) makes
     // its document cache agree with the file cache above.
-    const parsed = parseDeclarations({
-        uri: { toString: () => `jrxml-subreport://${fsPath}` },
-        version: stat.mtimeMs,
-        getText: () => text,
-    });
+    const parsed = parseReport(
+        textSource(text, `jrxml-subreport://${fsPath}`, stat.mtimeMs)
+    );
 
     const parameters = new Map(parsed.parameters.map(parameter => [parameter.name, parameter]));
     parameterCache.set(fsPath, { mtimeMs: stat.mtimeMs, size: stat.size, parameters });
