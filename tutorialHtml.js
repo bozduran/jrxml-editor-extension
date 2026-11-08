@@ -57,7 +57,7 @@ const DOCUMENTED_COMMANDS = [
 const DOCUMENTED_SETTING_GROUPS = [
     { id: 'editor', summary: 'Indent size, auto-open, auto-format, typed completion and the target Java version.' },
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
-    { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, subreport targets and parameter maps, expression validation, structural lint rules and the Boolean-comparison style rule.' },
+    { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, subreport targets and parameter maps, layout bounds, expression validation, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
     { id: 'clear', summary: 'The SQL migration target language and whether to confirm clear fixes.' },
     { id: 'sort', summary: 'Whether the geometry sort asks for confirmation (the diff preview always opens).' },

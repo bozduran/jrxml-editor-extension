@@ -10,6 +10,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **Layout validation:** columns that do not fit the page width, band heights
+  that exceed the space between the margins, and elements that extend below
+  their band (or frame) are reported as compile-time errors
+  (`jrxml.lint.layout`).
+
 ## [0.4.0] - 2026-11-08
 
 ### Added
