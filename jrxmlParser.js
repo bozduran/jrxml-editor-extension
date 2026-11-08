@@ -5,6 +5,7 @@
 const { scanXml } = require('./xmlspan');
 const { EXPRESSION_TAGS, REFERENCE_CONTAINERS } = require('./expressionTags');
 const { languageOfScan } = require('./reportLanguage');
+const { REPORT_SECTIONS } = require('./jrxmlSections');
 const { bundleAttributeOfScan } = require('./resourceBundle');
 
 const cache = new Map();
@@ -580,11 +581,6 @@ function extractResourceReferences(scan) {
 }
 
 // ── Outline (report structure for tree view) ──────────────────────────────────
-
-const REPORT_SECTIONS = [
-    'background', 'title', 'pageHeader', 'columnHeader', 'detail',
-    'columnFooter', 'pageFooter', 'lastPageFooter', 'summary', 'noData',
-];
 
 const CLASSIC_ELEMENTS = new Set([
     'textField', 'staticText', 'image', 'line', 'rectangle', 'ellipse',

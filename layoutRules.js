@@ -7,11 +7,7 @@
 
 const { scanXml } = require('./xmlspan');
 
-const BAND_TAGS = new Set([
-    'band', 'title', 'pageHeader', 'columnHeader', 'detail',
-    'columnFooter', 'pageFooter', 'lastPageFooter', 'summary',
-    'noData', 'background',
-]);
+const { BAND_TAGS } = require('./jrxmlSections');
 
 /**
  * @param {string} text JRXML document

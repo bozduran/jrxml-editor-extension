@@ -16,10 +16,7 @@ const fs   = require('fs');
 const path = require('path');
 const { collectFindings } = require('../diagnostics');
 
-const EXCLUDED_DIRS = new Set([
-    'node_modules', '.git', 'out', 'target', 'bin', 'dist',
-    '.vscode-test', '.dsh', 'coverage',
-]);
+const { EXCLUDED_DIRS } = require('../workspaceFiles');
 
 /** Recursively collect .jrxml files under a file or directory. */
 function collectFiles(target) {

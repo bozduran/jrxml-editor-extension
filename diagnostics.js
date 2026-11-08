@@ -11,6 +11,7 @@
 
 const { parseDeclarations, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
 const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
+const { isFragmentStart, skipFragment } = require('./jasperTokens');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
@@ -66,6 +67,17 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
 
     // Sections are isolated: a failure in one must not blank the others.
     const parsed = parseSafely(text, fileName);
+
+    // Run one rule, isolating its failures from the rest of the pipeline.
+    const runRule = (check, severity) => {
+        try {
+            for (const issue of check()) {
+                add(issue.offset, issue.length, issue.message, severity, issue.code);
+            }
+        } catch (_) {
+            // A broken rule must not blank the other checks.
+        }
+    };
 
     // ── 0. Language model ────────────────────────────────────────────────────
     const language = parsed.language;
@@ -274,48 +286,16 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
     }
 
     // ── 4. Query literals and comments ───────────────────────────────────────
-    if (enabled.queries) {
-        try {
-            for (const issue of checkQueries(text)) {
-                add(issue.offset, issue.length, issue.message, 'warning', issue.code);
-            }
-        } catch (_) {
-            // ignore
-        }
-    }
+    if (enabled.queries) runRule(() => checkQueries(text), 'warning');
 
     // ── 4a. Layout ───────────────────────────────────────────────────────────
-    if (enabled.layout) {
-        try {
-            for (const issue of checkLayout(text)) {
-                add(issue.offset, issue.length, issue.message, 'error', issue.code);
-            }
-        } catch (_) {
-            // Never let a geometry check hide the other findings.
-        }
-    }
+    if (enabled.layout) runRule(() => checkLayout(text), 'error');
 
     // ── 4b. Variable evaluation order ────────────────────────────────────────
-    if (enabled.variableOrder) {
-        try {
-            for (const issue of checkVariableOrder(text)) {
-                add(issue.offset, issue.length, issue.message, 'warning', issue.code);
-            }
-        } catch (_) {
-            // ignore
-        }
-    }
+    if (enabled.variableOrder) runRule(() => checkVariableOrder(text), 'warning');
 
     // ── 5. Text check ────────────────────────────────────────────────────────
-    if (enabled.textcheck) {
-        try {
-            for (const issue of collectTextCheckIssues(text)) {
-                add(issue.offset, issue.length, issue.message, 'warning', issue.code);
-            }
-        } catch (_) {
-            // ignore
-        }
-    }
+    if (enabled.textcheck) runRule(() => collectTextCheckIssues(text), 'warning');
 
     return findings;
 }
@@ -389,9 +369,8 @@ function checkParens(expr) {
     for (let i = 0; i < expr.length; i++) {
         const ch = expr[i];
 
-        if (ch === '$' && i + 1 < expr.length && 'FPVRXfpvrx'.includes(expr[i + 1]) && expr[i + 2] === '{') {
-            i += 3;
-            while (i < expr.length && expr[i] !== '}') i++;
+        if (isFragmentStart(expr, i)) {
+            i = skipFragment(expr, i) - 1;
             continue;
         }
 
@@ -425,9 +404,8 @@ function checkUnclosedString(expr) {
     for (let i = 0; i < expr.length; i++) {
         const ch = expr[i];
 
-        if (ch === '$' && i + 1 < expr.length && 'FPVRXfpvrx'.includes(expr[i + 1]) && expr[i + 2] === '{') {
-            i += 3;
-            while (i < expr.length && expr[i] !== '}') i++;
+        if (isFragmentStart(expr, i)) {
+            i = skipFragment(expr, i) - 1;
             continue;
         }
 
@@ -463,10 +441,4 @@ function forEachExpression(text, callback) {
     }
 }
 
-module.exports = {
-    collectFindings,
-    normalizeSettings,
-    DEFAULT_SETTINGS,
-    checkParens,
-    checkUnclosedString,
-};
+module.exports = { collectFindings };

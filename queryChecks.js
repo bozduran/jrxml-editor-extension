@@ -8,6 +8,7 @@
 // runtime and may legitimately contain quotes.
 
 const { scanXml } = require('./xmlspan');
+const { isFragmentStart, skipFragment } = require('./jasperTokens');
 
 const SQL_LIKE = new Set(['', 'sql']);
 
@@ -105,23 +106,6 @@ function scanJsonql(text, base) {
     }
 
     return findings;
-}
-
-function isFragmentStart(text, index) {
-    return fragmentBodyStart(text, index) !== -1;
-}
-
-function fragmentBodyStart(text, index) {
-    if (text[index] !== '$' || !/[FPVRX]/.test(text[index + 1] || '')) return -1;
-    if (text[index + 2] === '{') return index + 3;
-    if (text[index + 2] === '!' && text[index + 3] === '{') return index + 4;
-    return -1;
-}
-
-function skipFragment(text, index) {
-    let cursor = fragmentBodyStart(text, index);
-    while (cursor < text.length && text[cursor] !== '}') cursor++;
-    return cursor + 1;
 }
 
 /**
