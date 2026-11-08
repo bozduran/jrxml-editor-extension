@@ -27,6 +27,12 @@ function settingsFromConfig(cfg) {
     };
 }
 
+/** Accept file documents and in-memory/virtual ones (untitled, remote). */
+function isJrxmlDocument(document) {
+    return document.languageId === 'jrxml'
+        || (typeof document.fileName === 'string' && document.fileName.endsWith('.jrxml'));
+}
+
 function workspaceRoots() {
     return ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
         .map(folder => folder.uri && folder.uri.fsPath)
@@ -54,7 +60,7 @@ function toDiagnostic(document, finding) {
  * @param {vscode.TextDocument} document
  */
 function updateDiagnostics(document) {
-    if (!document.fileName.endsWith('.jrxml')) {
+    if (!isJrxmlDocument(document)) {
         diagnosticCollection.delete(document.uri);
         return;
     }
@@ -78,7 +84,7 @@ function register(context) {
     context.subscriptions.push(diagnosticCollection);
 
     // Run on open
-    if (vscode.window.activeTextEditor?.document.fileName.endsWith('.jrxml')) {
+    if (vscode.window.activeTextEditor && isJrxmlDocument(vscode.window.activeTextEditor.document)) {
         updateDiagnostics(vscode.window.activeTextEditor.document);
     }
 
@@ -86,7 +92,7 @@ function register(context) {
     let debounceTimer;
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(e => {
-            if (!e.document.fileName.endsWith('.jrxml')) return;
+            if (!isJrxmlDocument(e.document)) return;
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => updateDiagnostics(e.document), 500);
         })
@@ -95,7 +101,7 @@ function register(context) {
     // Run when switching tabs
     context.subscriptions.push(
         vscode.window.onDidChangeActiveTextEditor(editor => {
-            if (editor?.document.fileName.endsWith('.jrxml')) {
+            if (editor && isJrxmlDocument(editor.document)) {
                 updateDiagnostics(editor.document);
             }
         })
@@ -104,7 +110,7 @@ function register(context) {
     // Run on save
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(doc => {
-            if (doc.fileName.endsWith('.jrxml')) updateDiagnostics(doc);
+            if (isJrxmlDocument(doc)) updateDiagnostics(doc);
         })
     );
 

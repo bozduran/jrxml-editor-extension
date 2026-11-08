@@ -76,7 +76,7 @@ function reportDeclaration(parsed, sigil, name) {
 }
 
 const provider = vscode.languages.registerHoverProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideHover(document, position) {
             const ref = findReferenceToken(document.lineAt(position).text, position.character);

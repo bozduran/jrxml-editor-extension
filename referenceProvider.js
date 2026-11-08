@@ -29,7 +29,7 @@ function anyDeclaration(parsed, ref) {
 }
 
 const provider = vscode.languages.registerReferenceProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideReferences(document, position, context) {
             try {

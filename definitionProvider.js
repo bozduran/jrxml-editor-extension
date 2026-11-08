@@ -26,7 +26,7 @@ function subreportAt(document, position) {
 }
 
 const provider = vscode.languages.registerDefinitionProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideDefinition(document, position) {
             const ref = detectReferenceAtPosition(document, position);

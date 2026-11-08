@@ -77,7 +77,7 @@ function buildDeclarationSnippet(kind, name) {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 const provider = vscode.languages.registerCodeActionsProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideCodeActions(document, range, context) {
             const actions = [];

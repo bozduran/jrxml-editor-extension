@@ -47,7 +47,7 @@ function computeEdits(document) {
 // ── Format Document ───────────────────────────────────────────────────────────
 
 const provider = vscode.languages.registerDocumentFormattingEditProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideDocumentFormattingEdits(document) {
             return computeEdits(document) || [];
@@ -60,7 +60,7 @@ const provider = vscode.languages.registerDocumentFormattingEditProvider(
 const fixAllKind = vscode.CodeActionKind.SourceFixAll.append('jrxml');
 
 const fixAllProvider = vscode.languages.registerCodeActionsProvider(
-    { language: 'jrxml', scheme: 'file' },
+    { language: 'jrxml' },
     {
         provideCodeActions(document) {
             const edits = computeEdits(document);
