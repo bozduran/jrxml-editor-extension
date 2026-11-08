@@ -10,6 +10,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **Workspace validation:** `JRXML: Validate Workspace` runs every check over
+  all `.jrxml` files in the workspace and reports them in Problems. The same
+  pipeline is available for CI as `node tools/validate-workspace.js`
+  (`--json`, non-zero exit on errors).
+
 ## [0.5.0] - 2026-11-08
 
 ### Added
