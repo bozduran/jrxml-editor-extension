@@ -13,6 +13,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [0.6.0] - 2026-11-08
 
 ### Added
+- **Queries:** `<query>` content is highlighted as SQL/JSONQL (keywords,
+  strings, comments, numbers and `$P!{}`/`$X{}` fragments), `$P!{` completes
+  parameters, and unclosed string literals or block comments are diagnosed
+  without flagging runtime fragments (`jrxml.lint.queries`).
 - **Workspace validation:** `JRXML: Validate Workspace` runs every check over
   all `.jrxml` files in the workspace and reports them in Problems. The same
   pipeline is available for CI as `node tools/validate-workspace.js`
