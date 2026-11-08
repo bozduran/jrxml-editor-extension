@@ -10,14 +10,32 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **CI:** a GitHub Actions workflow runs lint, the unit suite, the Extension Host
+  integration suite and the static workspace validator on every push and PR.
+
+### Changed
+- **1.0.0:** command ids and `jrxml.*` settings are now a compatibility contract;
+  the README documents the supported scope and explicit non-goals.
+
 ## [0.9.0] - 2026-11-08
+
+### Added
+- **Outline:** rebuilt from the XML tree — report → declarations → datasets →
+  groups with header/footer bands → bands → every element kind (frames nest
+  their children) → styles.
+- **Completion:** `$X{}` SQL clause names (`IN`, `BETWEEN`,
+  `GREATEROREQUAL`, …) and the missing `DATEFORMAT`, `DATERANGE`, `DAYS`,
+  `NETWORKDAYS`, `WORKDAY`, `msg()` and `str()` entries.
+
+### Fixed
+- **Provider schemes:** completion, hover, definition, references, outline,
+  formatting and code actions now work for untitled and non-`file` documents;
+  diagnostics accept any `jrxml` document.
 
 ## [0.8.0] - 2026-11-08
 
 ### Added
-- **Function catalogue:** added `DATEFORMAT`, `DATERANGE`, `DAYS`,
-  `NETWORKDAYS`, `WORKDAY`, `msg()` and `str()` to completion, plus `$X{}` SQL
-  clause completion (`IN`, `BETWEEN`, `GREATEROREQUAL`, …).
 - **Build bridge:** `JRXML: Run Build` runs the configured Maven/Ant command as
   a VS Code task and parses its output with the contributed `$jrxml-*` problem
   matchers into Problems, plus a documented `tasks.json` recipe. The engine is

@@ -2,6 +2,24 @@
 
 A VS Code extension for working with JasperReports `.jrxml` files — focused on making expressions readable, editable and safer.
 
+## Scope
+
+This is a **static authoring and analysis companion**, not a Jaspersoft Studio
+replacement: it edits and validates JRXML, and bridges compile/verify to the
+project's existing Maven/Ant build instead of embedding the report engine.
+
+- **Supported:** JRXML editing, expressions (editor, If / Else, formatting,
+  typed completion), static diagnostics (references, datasets, layouts,
+  duplicates, subreports, resource bundles, queries), the Studio 7 design view,
+  workspace validation and the build bridge.
+- **Not supported:** report filling/preview, parameter prompting, PDF/HTML/XLSX
+  export, data adapters, JDBC schema introspection, visual chart/table/crosstab
+  designers, classic JasperReports 6 rendering, and full Groovy/JavaScript
+  semantics. See [ROADMAP.md](ROADMAP.md) for what is planned after 1.0.0.
+
+From 1.0.0, the contributed command ids and every `jrxml.*` setting are a
+compatibility contract; changes to them follow semver.
+
 ---
 
 ## Features
