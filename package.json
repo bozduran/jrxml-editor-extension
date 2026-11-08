@@ -188,7 +188,7 @@
         "source": "JasperReports",
         "applyTo": "allDocuments",
         "pattern": {
-          "regexp": "^\\s*(.+?\\.jrxml):(\\d+):\\s*(?:error:\\s*)?(.*)$",
+          "regexp": "^(?!\\[ERROR\\])\\s*(.+?\\.jrxml):(\\d+):\\s*(?:error:\\s*)?(.*)$",
           "file": 1,
           "line": 2,
           "message": 3
