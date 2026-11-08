@@ -5,9 +5,24 @@ const vscode = require('vscode');
 const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { findReferenceToken } = require('./expressionUtils');
 const { resourcesForDocument } = require('./resourceIndex');
+const { analyseSubreports } = require('./subreportIndex');
 
 function detectReferenceAtPosition(document, position) {
     return findReferenceToken(document.lineAt(position).text, position.character);
+}
+
+function workspaceRoots() {
+    return ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
+        .map(folder => folder.uri && folder.uri.fsPath)
+        .filter(Boolean);
+}
+
+/** The resolved subreport whose path literal contains the cursor, or null. */
+function subreportAt(document, position) {
+    const offset = document.offsetAt(position);
+    return analyseSubreports(document, workspaceRoots()).find(link =>
+        !link.dynamic && link.target &&
+        offset >= link.offset && offset <= link.offset + link.length);
 }
 
 const provider = vscode.languages.registerDefinitionProvider(
@@ -15,7 +30,14 @@ const provider = vscode.languages.registerDefinitionProvider(
     {
         provideDefinition(document, position) {
             const ref = detectReferenceAtPosition(document, position);
-            if (!ref) return null;
+            if (!ref) {
+                const subreport = subreportAt(document, position);
+                if (!subreport) return null;
+                return new vscode.Location(
+                    vscode.Uri.file(subreport.target),
+                    new vscode.Range(0, 0, 0, 0)
+                );
+            }
 
             // Resource keys live in .properties files, not in the report.
             if (ref.sigil === 'R') {

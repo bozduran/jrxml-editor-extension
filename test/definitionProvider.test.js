@@ -182,3 +182,42 @@ test('go-to-definition returns null for a missing resource key', () => {
         null
     );
 });
+
+test('Ctrl+Click on a subreport literal opens the target report', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-def-sub-'));
+    const target = path.join(dir, 'detail.jrxml');
+    fs.writeFileSync(target, '<jasperReport name="D"/>');
+
+    const text = `<jasperReport name="M">
+  <subreport>
+    <subreportExpression><![CDATA["detail.jrxml"]]></subreportExpression>
+  </subreport>
+</jasperReport>`;
+    const cursor = text.indexOf('detail.jrxml') + 3;
+
+    const location = provider.provideDefinition(
+        makeDoc(text, path.join(dir, 'master.jrxml')),
+        positionAt(text, cursor)
+    );
+
+    assert.ok(location, 'expected the subreport source');
+    assert.strictEqual(location.uri.fsPath, target);
+});
+
+test('returns null for a missing subreport target', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-def-sub-'));
+    const text = `<jasperReport name="M">
+  <subreport>
+    <subreportExpression><![CDATA["missing.jrxml"]]></subreportExpression>
+  </subreport>
+</jasperReport>`;
+    const cursor = text.indexOf('missing.jrxml') + 3;
+
+    assert.strictEqual(
+        provider.provideDefinition(
+            makeDoc(text, path.join(dir, 'master.jrxml')),
+            positionAt(text, cursor)
+        ),
+        null
+    );
+});
