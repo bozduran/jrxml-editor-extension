@@ -475,3 +475,17 @@ test('a valid layout produces no layout diagnostics', () => {
 
     assert.deepStrictEqual(layoutIssues(diagnose(text)), []);
 });
+
+test('query literals are validated and the rule can be switched off', () => {
+    const text = `<jasperReport name="R"><query language="sql"><![CDATA[SELECT * FROM t WHERE x = 'oops]]></query></jasperReport>`;
+
+    const diags = diagnose(text).filter(d => d.code === 'jrxml.query.unclosedString');
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 1); // Warning
+
+    assert.deepStrictEqual(
+        diagnose(text, { settings: { 'lint.queries': false } })
+            .filter(d => d.code === 'jrxml.query.unclosedString'),
+        []
+    );
+});

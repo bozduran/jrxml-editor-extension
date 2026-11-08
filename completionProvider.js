@@ -118,8 +118,11 @@ function extractStaticMethods(filePath, results) {
 }
 
 // ── Expression tag check ──────────────────────────────────────────────────────
-const OPEN_TAGS_RE  = new RegExp(`<(${EXPRESSION_TAGS.join('|')})(?:\\s[^>]*)?>`, 'g');
-const CLOSE_TAGS_RE = new RegExp(`</(${EXPRESSION_TAGS.join('|')})>`, 'g');
+// <query> is not an expression element for formatting, but it carries $P!{}
+// fragments, so completion must activate inside it too.
+const COMPLETION_TAGS = [...EXPRESSION_TAGS, 'query'];
+const OPEN_TAGS_RE  = new RegExp(`<(${COMPLETION_TAGS.join('|')})(?:\\s[^>]*)?>`, 'g');
+const CLOSE_TAGS_RE = new RegExp(`</(${COMPLETION_TAGS.join('|')})>`, 'g');
 
 function isInsideExpressionTag(document, position) {
     const text   = document.getText();

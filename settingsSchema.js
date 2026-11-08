@@ -123,6 +123,11 @@ const SETTINGS_GROUPS = [
                 label: 'Layout validation',
                 description: 'Error when columns do not fit the page, band heights exceed the margins, or an element extends below its band.',
             },
+            {
+                key: 'lint.queries', type: 'boolean', default: true,
+                label: 'Query validation',
+                description: 'Warn about an unclosed string literal or block comment inside <query> content.',
+            },
         ],
     },
     {

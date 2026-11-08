@@ -133,10 +133,10 @@ function buildExpressionSuggestions({ text, offset, declarations, options = {}, 
         }
     }
 
-    const brace = /\$([FPVR])\{([^}]*)$/.exec(linePrefix);
+    const brace = /\$([FPVR])(!?)\{([^}]*)$/.exec(linePrefix);
     if (brace) {
         const sigil  = brace[1];
-        const prefix = brace[2];
+        const prefix = brace[3];
 
         if (sigil === 'R') {
             if (!resourceEntries || resourceEntries.length === 0) {

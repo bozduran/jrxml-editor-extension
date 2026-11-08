@@ -405,3 +405,16 @@ test('$R{ completes keys from the report resource bundle', () => {
     assert.deepStrictEqual(labels(items).sort(), ['body', 'title']);
     assert.strictEqual(find(items, 'title').detail, 'Welcome');
 });
+
+test('$P!{ completes parameters inside a <query>', () => {
+    settings = {};
+    const text = `<jasperReport name="R">
+  <parameter name="Clause" class="java.lang.String"/>
+  <query language="sql"><![CDATA[SELECT * FROM t WHERE x = $P!{]]></query>
+</jasperReport>`;
+    const open = 'WHERE x = $P!{';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+
+    assert.ok(labels(items).includes('Clause'));
+});

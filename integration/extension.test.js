@@ -643,6 +643,22 @@ suite('JRXML extension smoke', () => {
         assert.match(found.message, /missing\.jrxml/);
     });
 
+    test('reports an unclosed query literal', async () => {
+        const uri = tempFile('QueryBroken.jrxml', [
+            '<jasperReport name="QueryBroken">',
+            '  <query language="sql"><![CDATA[SELECT * FROM t WHERE x = \'oops]]></query>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        await openDocument(uri);
+
+        const found = await waitFor(() =>
+            vscode.languages.getDiagnostics(uri)
+                .find(diagnostic => diagnostic.code === 'jrxml.query.unclosedString'));
+
+        assert.ok(found, 'expected an unclosed-query diagnostic');
+    });
+
     test('validates every JRXML file in the workspace', async () => {
         const result = await vscode.commands.executeCommand('jrxml.validateWorkspace');
 
