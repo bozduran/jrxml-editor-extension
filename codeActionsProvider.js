@@ -16,6 +16,7 @@
 const vscode = require('vscode');
 const { fixForFinding } = require('./xmlLintFixes');
 const { scanXml } = require('./xmlspan');
+const { findInsertionPoint } = require('./declarationInsertion');
 const { removalSpan } = require('./xmlClear');
 const { decodeXml } = require('./xmlRules');
 const { fixForTextCheck } = require('./textCheck');
@@ -30,33 +31,6 @@ const LINT_CODES = new Set([
 ]);
 
 // ── Insertion point helpers ───────────────────────────────────────────────────
-
-/**
- * Find the offset just after the last <field .../> or </field> block,
- * so we can insert a new field declaration after all existing ones.
- * Falls back to just before </jasperReport> if none exist.
- */
-function findInsertionPoint(text, tagName) {
-    // Find the last closing of this tag type
-    const closingRe = new RegExp(`<\\/${tagName}>|<${tagName}[^>]*\\/>`, 'g');
-    let last = -1, m;
-    while ((m = closingRe.exec(text)) !== null) last = m.index + m[0].length;
-
-    if (last !== -1) return last;
-
-    // No existing tags — insert before the first <group>, <background>, <title>,
-    // <pageHeader>, <detail>, <columnHeader>, <pageFooter>, <summary>, or </jasperReport>
-    const anchors = [
-        /<group[\s>]/, /<background[\s>]/, /<title[\s>]/, /<pageHeader[\s>]/,
-        /<columnHeader[\s>]/, /<detail[\s>]/, /<pageFooter[\s>]/, /<summary[\s>]/,
-        /<\/jasperReport>/
-    ];
-    for (const a of anchors) {
-        const am = a.exec(text);
-        if (am) return am.index;
-    }
-    return text.length;
-}
 
 /**
  * Build a full declaration snippet for the given kind and name.
