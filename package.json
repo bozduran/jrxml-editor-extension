@@ -152,12 +152,55 @@
         "command": "jrxml.validateWorkspace",
         "title": "JRXML: Validate Workspace",
         "icon": "$(check-all)"
+      },
+      {
+        "command": "jrxml.runBuild",
+        "title": "JRXML: Run Build",
+        "icon": "$(play)"
       }
     ],
     "submenus": [
       {
         "id": "jrxml",
         "label": "JRXML"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "jrxml-file-line",
+        "owner": "jrxml",
+        "source": "JasperReports",
+        "applyTo": "allDocuments",
+        "pattern": {
+          "regexp": "^\\[ERROR\\]\\s+(.+?\\.jrxml):(\\d+):\\s*(.*)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        }
+      },
+      {
+        "name": "jrxml-javac",
+        "owner": "jrxml",
+        "source": "JasperReports",
+        "applyTo": "allDocuments",
+        "pattern": {
+          "regexp": "^\\s*(.+?\\.jrxml):(\\d+):\\s*(?:error:\\s*)?(.*)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        }
+      },
+      {
+        "name": "jrxml-compile",
+        "owner": "jrxml",
+        "source": "JasperReports",
+        "applyTo": "allDocuments",
+        "pattern": {
+          "regexp": "^\\s*(?:\\d+\\.\\s+)?ERROR in\\s+(.+?\\.jrxml)\\s+\\(at line (\\d+)\\)\\s*$",
+          "file": 1,
+          "line": 2,
+          "message": "JasperReports compile error"
+        }
       }
     ],
     "menus": {
@@ -254,6 +297,10 @@
         {
           "command": "jrxml.validateWorkspace",
           "group": "5_validate@1"
+        },
+        {
+          "command": "jrxml.runBuild",
+          "group": "6_build@1"
         },
         {
           "command": "jrxml.openSettingsPanel",
@@ -464,6 +511,11 @@
           "type": "boolean",
           "default": true,
           "description": "Warn about an unclosed string literal or block comment inside <query> content."
+        },
+        "jrxml.build.command": {
+          "type": "string",
+          "default": "mvn -q -DskipTests jasperreports:compile",
+          "description": "Shell command run by JRXML: Run Build. Its output is parsed by the contributed $jrxml-* problem matchers."
         },
         "jrxml.format.reportName": {
           "type": "boolean",

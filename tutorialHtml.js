@@ -34,6 +34,7 @@ const DOCUMENTED_COMMANDS = [
     { id: 'jrxml.issues.applyFix', group: 'Format and fix', summary: 'Apply one issue’s quick fix from the Issues view.' },
 
     { id: 'jrxml.validateWorkspace', group: 'Issues and navigation', summary: 'Validate every .jrxml in the workspace and report the results in Problems.' },
+    { id: 'jrxml.runBuild', group: 'Build', summary: 'Run the configured Maven/Ant build and parse its JRXML errors into Problems.' },
     { id: 'jrxml.issues.jumpToHit', group: 'Issues and navigation', summary: 'Reveal the source location of an issue.' },
     { id: 'jrxml.goToDeclaration', group: 'Issues and navigation', summary: 'Jump from a $F/$P/$V reference to its declaration.' },
     { id: 'jrxml.issues.editInExpressionEditor', group: 'Issues and navigation', summary: 'Open an issue’s expression in the Expression Editor.' },
@@ -62,6 +63,7 @@ const DOCUMENTED_SETTING_GROUPS = [
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
     { id: 'clear', summary: 'The SQL migration target language and whether to confirm clear fixes.' },
     { id: 'sort', summary: 'Whether the geometry sort asks for confirmation (the diff preview always opens).' },
+    { id: 'build', summary: 'The shell command used by the build bridge.' },
 ];
 
 /**
