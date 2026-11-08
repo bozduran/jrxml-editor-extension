@@ -33,6 +33,7 @@ const DOCUMENTED_COMMANDS = [
     { id: 'jrxml.issues.fixAll', group: 'Format and fix', summary: 'Apply the preferred quick fix for every issue in the file.' },
     { id: 'jrxml.issues.applyFix', group: 'Format and fix', summary: 'Apply one issue’s quick fix from the Issues view.' },
 
+    { id: 'jrxml.validateWorkspace', group: 'Issues and navigation', summary: 'Validate every .jrxml in the workspace and report the results in Problems.' },
     { id: 'jrxml.issues.jumpToHit', group: 'Issues and navigation', summary: 'Reveal the source location of an issue.' },
     { id: 'jrxml.goToDeclaration', group: 'Issues and navigation', summary: 'Jump from a $F/$P/$V reference to its declaration.' },
     { id: 'jrxml.issues.editInExpressionEditor', group: 'Issues and navigation', summary: 'Open an issue’s expression in the Expression Editor.' },
