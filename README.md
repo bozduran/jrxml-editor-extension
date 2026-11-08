@@ -75,6 +75,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - **Resource bundles** — `$R{` completes keys from the report's `resourceBundle` (base and locale `.properties`), hover shows the default and localized values, go-to-definition opens the key in the properties file, and a missing key or unresolvable bundle is reported
 - **Subreports** — a literal `<subreportExpression>` (classic) or `<expression>` (Studio 7 subreport element) is resolved against the report directory and workspace; a missing target or a mapped parameter the target does not declare is reported, and go-to-definition opens the source `.jrxml` (a `.jasper` path maps back to its source)
 - **Layout** — columns wider than the page, band heights that exceed the space between the margins, and elements that extend below their band are compile-time errors surfaced before build (`jrxml.lint.layout`)
+- **Queries** — `<query>` content gets SQL/JSONQL highlighting, `$P!{}` parameter completion, and conservative warnings for an unclosed string literal or block comment (`jrxml.lint.queries`); `$P!{}`/`$X{}` fragments themselves are never flagged
 - Unbalanced parentheses and unclosed string literals
 - **Structural lint rules** ported from the project's commit-time `myhooks` hook:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
@@ -258,6 +259,7 @@ context-only actions are omitted.
 | `jrxml.lint.booleanEquals` | `true` | Warn on `==`/`!=` or `Boolean.TRUE/FALSE.equals` for Boolean values |
 | `jrxml.lint.duplicateNames` | `true` | Error when a field/parameter/variable/group/dataset/style name is declared more than once in the same scope |
 | `jrxml.lint.layout` | `true` | Error when columns overflow the page, band heights exceed the margins, or an element extends below its band |
+| `jrxml.lint.queries` | `true` | Warn on an unclosed string literal or block comment inside `<query>` content |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
