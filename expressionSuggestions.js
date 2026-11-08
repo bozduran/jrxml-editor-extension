@@ -424,6 +424,4 @@ function plainFromSnippet(snippet) {
 module.exports = {
     buildExpressionSuggestions,
     plainFromSnippet,
-    JASPER_FUNCTIONS,
-    JAVA_TYPES,
 };

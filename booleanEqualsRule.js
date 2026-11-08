@@ -103,4 +103,4 @@ function checkBooleanEquals(expression, declarations) {
     return hits;
 }
 
-module.exports = { CODE, MESSAGE, checkBooleanEquals, isBoolean };
+module.exports = { CODE, MESSAGE, checkBooleanEquals };

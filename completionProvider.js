@@ -215,5 +215,4 @@ module.exports = {
     provider,
     clearCustomJavaCache,
     getCustomJavaMethods,
-    toCompletionItem,
 };
