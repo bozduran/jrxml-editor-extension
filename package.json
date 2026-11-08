@@ -589,6 +589,7 @@
   "scripts": {
     "test": "node --test test/",
     "test:integration": "vscode-test",
+    "test:integration:headless": "vscode-test --config .vscode-test.headless.mjs",
     "lint": "eslint .",
     "package": "vsce package --no-dependencies",
     "version": "node tools/update-changelog.js && git add CHANGELOG.md",

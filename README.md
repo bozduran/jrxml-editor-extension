@@ -284,14 +284,17 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 ### Tests and linting
 ```
-npm test                 # node:test unit suite (parser, formatter, rules, webview HTML)
-npm run test:integration # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
-npm run lint             # eslint
+npm test                          # node:test unit suite (parser, formatter, rules, webview HTML)
+npm run test:integration          # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
+npm run test:integration:headless # same suite without a display (CI/sandbox)
+npm run lint                      # eslint
 ```
 The unit suite runs on plain Node with no VS Code needed. The integration suite
 activates the extension for real and covers command registration, diagnostics,
 the sort/clear commands (confirmation disabled), document formatting and the settings
-panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
+panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`,
+or use `npm run test:integration:headless` when Electron's headless Ozone platform
+is available (CI containers and sandboxes without X/Wayland).
 
 When you add a command or a settings group, also update `tutorialHtml.js`;
 `test/tutorialHtml.test.js` fails until the tutorial documents it. The pull
