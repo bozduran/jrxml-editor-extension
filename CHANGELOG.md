@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-08
+
 ### Added
 - **Workspace validation:** `JRXML: Validate Workspace` runs every check over
   all `.jrxml` files in the workspace and reports them in Problems. The same
