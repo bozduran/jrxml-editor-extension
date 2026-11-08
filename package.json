@@ -2,7 +2,7 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
@@ -441,6 +441,11 @@
           "default": true,
           "description": "Warn when a Boolean field, parameter or variable is compared with == / != or Boolean.TRUE/FALSE.equals instead of EQUALS()."
         },
+        "jrxml.lint.duplicateNames": {
+          "type": "boolean",
+          "default": true,
+          "description": "Error when a field, parameter, variable, group, dataset or style name is declared more than once in the same scope."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,
@@ -584,6 +589,7 @@
   "scripts": {
     "test": "node --test test/",
     "test:integration": "vscode-test",
+    "test:integration:headless": "vscode-test --config .vscode-test.headless.mjs",
     "lint": "eslint .",
     "package": "vsce package --no-dependencies",
     "version": "node tools/update-changelog.js && git add CHANGELOG.md",

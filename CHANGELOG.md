@@ -10,6 +10,46 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-08
+
+### Added
+- **Subreports:** literal subreport expressions are resolved against the report
+  directory and workspace, a missing target or a parameter the target report does
+  not declare is reported, and go-to-definition opens the target `.jrxml`
+  (`.jasper` paths map back to their source). Dynamic expressions are left alone.
+
+## [0.3.0] - 2026-11-08
+
+### Added
+- **Dataset-scope awareness:** completion, hover, go-to-definition and references
+  resolve against the report or the enclosing `<dataset>`/`<subDataset>`, including
+  the contents of list/table dataset runs. A master field, parameter or variable used
+  inside a subdataset is reported as out of scope; dataset members are no longer
+  offered at report scope.
+- **Duplicate-name diagnostics:** a field, parameter, variable, group, dataset or
+  style declared more than once in the same scope is an error
+  (`jrxml.lint.duplicateNames`).
+- **Report language detection:** a report with `language="groovy"` or
+  `"javascript"` gets a warning that only Java expressions are modeled, and Java
+  typed member completion is disabled for it.
+- **Resource bundles:** `$R{` completion from the report's `resourceBundle`
+  (base file plus locale variants), hover with the default and localized values,
+  go-to-definition into the `.properties` file, and warnings for a missing key
+  or a bundle that cannot be found.
+
+### Fixed
+- References are collected from expression elements only: `$F{}` inside an XML
+  comment or static `<text>` no longer raises a false "not declared" error or
+  inflates the hover/reference count.
+- `$P!{}` query fragments now support hover, go-to-definition, find-references and
+  validation.
+- Completion, hover, definition, references and diagnostics no longer merge report
+  and dataset declarations into one scope.
+- The expression-tag registry now matches the TextMate grammar, adding
+  `crosstabExpression`, `bookmarkLevelExpression`, `chartTitleExpression`,
+  `chartSubtitleExpression` and `timePeriodExpression` to the Expression Editor,
+  completion, formatting and diagnostics.
+
 ## [0.2.0] - 2026-11-08
 
 ### Added

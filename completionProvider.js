@@ -10,8 +10,10 @@ const vscode = require('vscode');
 const fs = require('fs');
 const path = require('path');
 const { EXPRESSION_TAGS } = require('./expressionUtils');
-const { parseDeclarations } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
+const { reportLanguage } = require('./reportLanguage');
+const { resourceEntriesForDocument } = require('./resourceIndex');
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
@@ -183,6 +185,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
             if (!isInsideExpressionTag(document, position)) return [];
 
             const config = vscode.workspace.getConfiguration('jrxml');
+            const text   = document.getText();
 
             let decls;
             try {
@@ -194,12 +197,21 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 };
             }
 
+            const options = suggestionOptions(config);
+            // The member index models JDK/Java types; do not apply it to a
+            // report that declares Groovy or JavaScript.
+            if ((decls.language || reportLanguage(text)).language !== 'java') options.typedCompletion = false;
+
+            const offset = document.offsetAt(position);
             const result = buildExpressionSuggestions({
-                text: document.getText(),
-                offset: document.offsetAt(position),
-                declarations: decls,
-                options: suggestionOptions(config),
+                text,
+                offset,
+                // Only the declarations visible at the cursor: a subdataset
+                // must not offer the master report's fields, and vice versa.
+                declarations: resolveDeclarationScope(decls, offset),
+                options,
                 customMethods: getCustomJavaMethods(),
+                resources: resourceEntriesForDocument(document, decls.resourceBundle),
             });
 
             return result.items.map(toCompletionItem);

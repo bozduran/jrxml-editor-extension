@@ -6,6 +6,8 @@ const assert = require('node:assert');
 
 const {
     parseDeclarations,
+    resolveDeclarationScope,
+    findDuplicateNames,
     clearCache,
     clearAllCaches,
 } = require('../jrxmlParser');
@@ -119,6 +121,38 @@ test('collects $F/$P/$V references', () => {
     assert.deepStrictEqual(refs, ['F:a', 'P:b', 'V:c']);
 });
 
+test('references are collected from expression elements, not comments or static text', () => {
+    const text = `<jasperReport name="R">
+  <!-- $F{inComment} -->
+  <text><![CDATA[$F{inStaticText}]]></text>
+  <expression><![CDATA[$F{Real}]]></expression>
+</jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).references;
+
+    assert.deepStrictEqual(refs.map(r => `${r.sigil}:${r.name}`), ['F:Real']);
+});
+
+test('collects $P!{} query fragments with their exact span', () => {
+    const text = `<jasperReport name="R">
+  <query language="sql"><![CDATA[SELECT * FROM t WHERE x = $P!{Clause}]]></query>
+</jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).references;
+
+    assert.strictEqual(refs.length, 1);
+    assert.strictEqual(refs[0].sigil, 'P');
+    assert.strictEqual(refs[0].name, 'Clause');
+    assert.strictEqual(refs[0].bang, true);
+    assert.strictEqual(
+        text.slice(refs[0].offset, refs[0].end),
+        '$P!{Clause}'
+    );
+});
+
+test('does not invent references in a document that cannot be scanned', () => {
+    const text = '<jasperReport><expression><![CDATA[$F{a}]]></expression>';
+    assert.deepStrictEqual(parseDeclarations(makeDoc(text)).references, []);
+});
+
 test('treats subreportParameter as a used parameter reference', () => {
     const text = `<jasperReport name="R"><subreport><subreportParameter name="passed"/></subreport></jasperReport>`;
     const refs = parseDeclarations(makeDoc(text)).references;
@@ -174,6 +208,97 @@ test('dataset declarations are not report-scope declarations (issue regression)'
     assert.deepStrictEqual(r.allFields.map(f => f.name).sort(), ['DSField', 'MainField']);
     assert.deepStrictEqual(r.allParameters.map(p => p.name).sort(), ['DSParam', 'Own']);
     assert.deepStrictEqual(r.allVariables.map(v => v.name).sort(), ['DSVar', 'MainVar']);
+});
+
+const SCOPED_REPORT = `<jasperReport name="R">
+  <field name="MainField" class="java.lang.String"/>
+  <dataset name="DS">
+    <parameter name="DSParam" class="java.lang.String"/>
+    <field name="DSField" class="java.lang.String"/>
+    <filterExpression><![CDATA[$F{DSField}]]></filterExpression>
+  </dataset>
+  <detail><band height="20">
+    <element kind="component">
+      <component kind="list">
+        <datasetRun subDataset="DS">
+          <parameter name="DSParam">
+            <expression><![CDATA[$F{MainField}]]></expression>
+          </parameter>
+        </datasetRun>
+        <contents>
+          <element kind="textField"><expression><![CDATA[$F{DSField}]]></expression></element>
+        </contents>
+      </component>
+    </element>
+  </band></detail>
+</jasperReport>`;
+
+test('exposes every dataset with its own declarations and document span', () => {
+    const r = parseDeclarations(makeDoc(SCOPED_REPORT));
+
+    assert.strictEqual(r.datasets.length, 1);
+    const ds = r.datasets[0];
+    assert.strictEqual(ds.name, 'DS');
+    assert.deepStrictEqual(ds.fields.map(f => f.name), ['DSField']);
+    assert.deepStrictEqual(ds.parameters.map(p => p.name), ['DSParam']);
+    assert.deepStrictEqual(ds.variables, []);
+    assert.strictEqual(
+        SCOPED_REPORT.slice(ds.offset, ds.offset + '<dataset'.length),
+        '<dataset'
+    );
+    assert.ok(ds.end > ds.offset);
+});
+
+test('resolveDeclarationScope selects the dataset inside a dataset definition', () => {
+    const text = SCOPED_REPORT;
+    const cursor = text.indexOf('$F{DSField}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'dataset');
+    assert.strictEqual(scope.datasetName, 'DS');
+    assert.deepStrictEqual(scope.fields.map(f => f.name), ['DSField']);
+    assert.deepStrictEqual(scope.allFields.map(f => f.name), ['DSField']);
+});
+
+test('resolveDeclarationScope selects the dataset inside a list datasetRun consumer', () => {
+    const text = SCOPED_REPORT;
+    const cursor = text.lastIndexOf('$F{DSField}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'dataset');
+    assert.strictEqual(scope.datasetName, 'DS');
+});
+
+test('datasetRun parameter bindings stay in report scope', () => {
+    const text = SCOPED_REPORT;
+    const cursor = text.indexOf('$F{MainField}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'report');
+    assert.deepStrictEqual(scope.fields.map(f => f.name), ['MainField']);
+});
+
+test('resolveDeclarationScope falls back to report scope outside datasets', () => {
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(SCOPED_REPORT)), 0);
+
+    assert.strictEqual(scope.kind, 'report');
+    assert.deepStrictEqual(scope.allFields.map(f => f.name), ['MainField']);
+});
+
+test('resolveDeclarationScope marks a run of an undefined dataset as unknown', () => {
+    const text = `<jasperReport name="R">
+  <field name="MainField" class="java.lang.String"/>
+  <detail><band><element kind="component"><component kind="list">
+    <datasetRun subDataset="External"/>
+    <contents><element kind="textField"><expression><![CDATA[$F{Anything}]]></expression></element></contents>
+  </component></element></band></detail>
+</jasperReport>`;
+    const cursor = text.indexOf('$F{Anything}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'unknown');
+    assert.strictEqual(scope.datasetName, 'External');
+    assert.deepStrictEqual(scope.fields, []);
 });
 
 test('a parameter passed into a subreport is not a declaration of this report (issue regression)', () => {
@@ -241,3 +366,85 @@ test('caches per document version and clearCache forces a re-parse', () => {
 });
 
 module.exports = {};
+
+const DUPLICATES_REPORT = `<jasperReport name="R">
+  <field name="Amount" class="java.lang.Double"/>
+  <field name="Amount" class="java.lang.String"/>
+  <field name="Unique" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="Amount" class="java.lang.Double"/>
+    <field name="Amount" class="java.lang.String"/>
+    <parameter name="P" class="java.lang.String"/>
+    <parameter name="P" class="java.lang.String"/>
+    <variable name="V" class="java.lang.Integer" calculation="Count"/>
+    <variable name="V" class="java.lang.Integer" calculation="Count"/>
+    <group name="G"><groupExpression><![CDATA[1]]></groupExpression></group>
+  </dataset>
+  <dataset name="DS"/>
+  <group name="G"><groupExpression><![CDATA[1]]></groupExpression></group>
+  <group name="G"><groupExpression><![CDATA[2]]></groupExpression></group>
+  <style name="S" fontSize="10"/>
+  <style name="S" fontSize="12"/>
+</jasperReport>`;
+
+test('findDuplicateNames reports repeats inside a scope, not across scopes', () => {
+    const text = DUPLICATES_REPORT;
+    const duplicates = findDuplicateNames(parseDeclarations(makeDoc(text)));
+
+    const summary = duplicates.map(d => `${d.kind}:${d.name}@${d.scope}`).sort();
+    assert.deepStrictEqual(summary, [
+        'dataset:DS@',
+        'field:Amount@',
+        'field:Amount@DS',
+        'group:G@',
+        'parameter:P@DS',
+        'style:S@',
+        'variable:V@DS',
+    ]);
+
+    for (const duplicate of duplicates) {
+        assert.strictEqual(
+            text.slice(duplicate.offset, duplicate.offset + duplicate.length),
+            duplicate.name,
+            `span for ${duplicate.kind}:${duplicate.name}`
+        );
+    }
+});
+
+test('findDuplicateNames returns an empty list for unique declarations', () => {
+    const parsed = parseDeclarations(makeDoc(SAMPLE));
+    assert.deepStrictEqual(findDuplicateNames(parsed), []);
+});
+
+test('resolveDeclarationScope covers crosstab bucket and measure expressions', () => {
+    const text = `<jasperReport name="R">
+  <dataset name="DS"><field name="Amount" class="java.lang.Double"/></dataset>
+  <element kind="crosstab">
+    <datasetRun subDataset="DS"/>
+    <measure name="Total" class="java.lang.Double" calculation="Sum">
+      <expression><![CDATA[$F{Amount}]]></expression>
+    </measure>
+  </element>
+</jasperReport>`;
+    const cursor = text.indexOf('$F{Amount}') + 2;
+    const scope = resolveDeclarationScope(parseDeclarations(makeDoc(text)), cursor);
+
+    assert.strictEqual(scope.kind, 'dataset');
+    assert.strictEqual(scope.datasetName, 'DS');
+});
+
+test('exposes the report expression language on the parse result', () => {
+    const text = '<jasperReport name="R" language="groovy"><expression><![CDATA["x"]]></expression></jasperReport>';
+    assert.strictEqual(parseDeclarations(makeDoc(text)).language.language, 'groovy');
+});
+
+test('collects $R{} resource references from expression elements only', () => {
+    const text = `<jasperReport name="R">
+  <!-- $R{commented} -->
+  <expression><![CDATA[$R{title} + $R{greeting.hello}]]></expression>
+</jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).resourceReferences;
+
+    assert.deepStrictEqual(refs.map(ref => ref.name), ['title', 'greeting.hello']);
+    assert.strictEqual(text.slice(refs[0].offset, refs[0].end), '$R{title}');
+});

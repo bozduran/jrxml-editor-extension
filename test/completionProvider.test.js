@@ -6,6 +6,9 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const os     = require('node:os');
+const path   = require('node:path');
 const Module = require('node:module');
 
 let settings = {};
@@ -72,7 +75,7 @@ const provider = registered;
 let seq = 0;
 
 /** Build a document stub with the offset/line APIs the provider uses. */
-function makeDoc(text) {
+function makeDoc(text, fileName) {
     const id = `file:///completion-${seq++}.jrxml`;
     const lineStarts = [0];
     for (let i = 0; i < text.length; i++) {
@@ -80,6 +83,7 @@ function makeDoc(text) {
     }
     return {
         uri: { toString: () => id },
+        fileName: fileName || '/test/report.jrxml',
         version: 1,
         getText: () => text,
         offsetAt: (position) => lineStarts[position.line] + position.character,
@@ -262,6 +266,68 @@ test('an undeclared reference falls back to the normal list instead of a hint', 
     assert.ok(find(items, 'TODAY'), 'Jasper built-ins are still there');
 });
 
+// ── Dataset scope ────────────────────────────────────────────────────────────
+
+const SCOPED_DECLARATIONS = [
+    '<field name="ReportField" class="java.lang.String"/>',
+    '<dataset name="DS">',
+    '  <field name="DatasetField" class="java.lang.Integer"/>',
+    '  <filterExpression><![CDATA[%EXPR%]]></filterExpression>',
+    '</dataset>',
+    '<detail><band>',
+    '  <element kind="component"><component kind="list">',
+    '    <datasetRun subDataset="DS"/>',
+    '    <contents><element kind="textField"><expression><![CDATA[%EXPR%]]></expression></element></contents>',
+    '  </component></element>',
+    '</band></detail>',
+].join('\n  ');
+
+/** Complete at the end of the expression in the dataset definition. */
+function completeInDatasetDefinition(expression) {
+    settings = {};
+    const text = `<jasperReport name="R">\n  ${SCOPED_DECLARATIONS.replaceAll('%EXPR%', expression)}\n</jasperReport>`;
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.indexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+/** Complete at the end of the expression in a list's dataset-run contents. */
+function completeInListContents(expression) {
+    settings = {};
+    const text = `<jasperReport name="R">\n  ${SCOPED_DECLARATIONS.replaceAll('%EXPR%', expression)}\n</jasperReport>`;
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.lastIndexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+test('inside a dataset only that dataset’s fields are offered', () => {
+    const names = labels(completeInDatasetDefinition('$F{'));
+
+    assert.ok(names.includes('DatasetField'), 'dataset field is offered');
+    assert.ok(!names.includes('ReportField'), 'master field is not');
+});
+
+test('inside a list dataset-run consumer only the run dataset’s fields are offered', () => {
+    const names = labels(completeInListContents('$F{'));
+
+    assert.ok(names.includes('DatasetField'));
+    assert.ok(!names.includes('ReportField'));
+});
+
+test('outside datasets only report-scope fields are offered', () => {
+    settings = {};
+    const text = report('$F{', [
+        '<field name="ReportField" class="java.lang.String"/>',
+        '<dataset name="DS"><field name="DatasetField" class="java.lang.Integer"/></dataset>',
+    ].join('\n  '));
+    const open = '<![CDATA[$F{';
+    const cursor = text.indexOf(open) + open.length;
+    const names = labels(provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {}));
+
+    assert.ok(names.includes('ReportField'));
+    assert.ok(!names.includes('DatasetField'));
+});
+
 // ── Falling back ──────────────────────────────────────────────────────────────
 
 test('a decimal point does not start member completion', () => {
@@ -301,4 +367,41 @@ test('a single dot without a receiver falls back instead of erroring', () => {
     const items = completeExpression('.');
     assert.ok(items.length > 1);
     assert.ok(find(items, 'TODAY'));
+});
+
+test('typed member completion is disabled for a non-Java report', () => {
+    settings = {};
+    const text = report('$F{CustomerName}.').replace(
+        '<jasperReport name="R">',
+        '<jasperReport name="R" language="groovy">'
+    );
+    const open = '<![CDATA[$F{CustomerName}.';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+
+    assert.ok(find(items, 'TODAY'), 'the language-neutral list is still offered');
+    assert.ok(!find(items, 'toUpperCase'), 'no Java member list');
+});
+
+test('$R{ completes keys from the report resource bundle', () => {
+    settings = {};
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-completion-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\nbody=Body text\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <detail><band><textField>
+    <reportElement x="0" y="0" width="100" height="20"/>
+    <textFieldExpression><![CDATA[$R{]]></textFieldExpression>
+  </textField></band></detail>
+</jasperReport>`;
+    const open = '<![CDATA[$R{';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(
+        makeDoc(text, path.join(dir, 'report.jrxml')),
+        positionAt(text, cursor),
+        {}
+    );
+
+    assert.deepStrictEqual(labels(items).sort(), ['body', 'title']);
+    assert.strictEqual(find(items, 'title').detail, 'Welcome');
 });

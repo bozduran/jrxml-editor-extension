@@ -5,6 +5,9 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const path   = require('node:path');
+const os     = require('node:os');
 const Module = require('node:module');
 
 class FakeRange {
@@ -12,6 +15,7 @@ class FakeRange {
 }
 
 let currentDiags = [];
+let settings = {};
 const collection = {
     set(_uri, diags) { currentDiags = diags; },
     delete() {},
@@ -32,7 +36,7 @@ Module._load = function (request, ...rest) {
                 }
             },
             languages: { createDiagnosticCollection: () => collection },
-            workspace: { getConfiguration: () => ({ get: (_key, fallback) => fallback }) },
+            workspace: { getConfiguration: () => ({ get: (key, fallback) => (key in settings ? settings[key] : fallback) }) },
             window: {},
         };
     }
@@ -43,10 +47,10 @@ const { updateDiagnostics } = require('../diagnosticsProvider');
 
 let docSeq = 0;
 
-function fakeDocument(text) {
+function fakeDocument(text, fileName = '/test/report.jrxml') {
     const uri = `file:///test/report-${docSeq++}.jrxml`;
     return {
-        fileName: '/test/report.jrxml',
+        fileName,
         uri: { toString: () => uri },
         version: 1,
         getText: () => text,
@@ -57,9 +61,10 @@ function fakeDocument(text) {
     };
 }
 
-function diagnose(text) {
+function diagnose(text, options = {}) {
+    settings = options.settings || {};
     currentDiags = [];
-    updateDiagnostics(fakeDocument(text));
+    updateDiagnostics(fakeDocument(text, options.fileName));
     return currentDiags;
 }
 
@@ -99,6 +104,100 @@ test('a classic subreportParameter name is not reported as undeclared', () => {
 test('a genuinely undeclared $P{} is still flagged', () => {
     const text = `<jasperReport name="R">
   <expression><![CDATA[$P{Missing}]]></expression>
+</jasperReport>`;
+
+    const diags = undeclared(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.match(diags[0].message, /Parameter 'Missing' is not declared/);
+});
+
+test('ignores $F{} inside XML comments and static text', () => {
+    const text = `<jasperReport name="R">
+  <!-- $F{inComment} -->
+  <text><![CDATA[$F{inStaticText}]]></text>
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+
+    assert.deepStrictEqual(undeclared(diagnose(text)), []);
+});
+
+const outOfScope = diags => diags.filter(d => d.code === 'jrxml.outOfScopeReference');
+
+test('a master field used inside a dataset is reported as out of scope', () => {
+    const text = `<jasperReport name="R">
+  <field name="MasterField" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="DSField" class="java.lang.String"/>
+    <filterExpression><![CDATA[$F{MasterField}]]></filterExpression>
+  </dataset>
+</jasperReport>`;
+
+    const diags = outOfScope(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 0); // Error
+    assert.match(diags[0].message, /MasterField/);
+    assert.match(diags[0].message, /dataset 'DS'/);
+    assert.match(diags[0].message, /report scope/);
+});
+
+test('a dataset field used inside its own dataset is accepted', () => {
+    const text = `<jasperReport name="R">
+  <field name="MasterField" class="java.lang.String"/>
+  <dataset name="DS">
+    <field name="DSField" class="java.lang.String"/>
+    <filterExpression><![CDATA[$F{DSField}]]></filterExpression>
+  </dataset>
+</jasperReport>`;
+
+    const diags = diagnose(text);
+    assert.deepStrictEqual(undeclared(diags), []);
+    assert.deepStrictEqual(outOfScope(diags), []);
+});
+
+test('a dataset-only field is not available at report scope', () => {
+    const text = `<jasperReport name="R">
+  <dataset name="DS"><field name="DSField" class="java.lang.String"/></dataset>
+  <detail><band><expression><![CDATA[$F{DSField}]]></expression></band></detail>
+</jasperReport>`;
+
+    const diags = undeclared(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.match(diags[0].message, /Field 'DSField' is not declared/);
+    assert.deepStrictEqual(outOfScope(diagnose(text)), []);
+});
+
+test('list contents resolve against the run dataset and its binding expression against the report', () => {
+    const text = `<jasperReport name="R">
+  <field name="Field_1" class="java.lang.String"/>
+  <dataset name="addons">
+    <parameter name="FIL_PARAMETER" class="java.lang.String"/>
+    <field name="CompanyName" class="java.lang.String"/>
+  </dataset>
+  <detail><band>
+    <element kind="component">
+      <component kind="list">
+        <datasetRun subDataset="addons">
+          <parameter name="FIL_PARAMETER">
+            <expression><![CDATA[$F{Field_1}]]></expression>
+          </parameter>
+        </datasetRun>
+        <contents>
+          <element kind="textField"><expression><![CDATA[$F{CompanyName}]]></expression></element>
+        </contents>
+      </component>
+    </element>
+  </band></detail>
+</jasperReport>`;
+
+    const diags = diagnose(text);
+    assert.deepStrictEqual(undeclared(diags), []);
+    assert.deepStrictEqual(outOfScope(diags), []);
+});
+
+test('validates $P!{} query fragments like any other parameter reference', () => {
+    const text = `<jasperReport name="R">
+  <parameter name="Clause" class="java.lang.String"/>
+  <query language="sql"><![CDATA[WHERE x = $P!{Clause} AND y = $P!{Missing}]]></query>
 </jasperReport>`;
 
     const diags = undeclared(diagnose(text));
@@ -161,4 +260,189 @@ test('a variable used before its declaration is reported as a warning', () => {
     assert.strictEqual(diags.length, 1);
     assert.strictEqual(diags[0].severity, 1); // Warning
     assert.match(diags[0].message, /declared later/);
+});
+
+test('golden: the DatasetScopeReport fixture has no scope errors', () => {
+    const text = fs.readFileSync(
+        path.join(__dirname, 'fixtures', 'DatasetScopeReport.jrxml'),
+        'utf8'
+    );
+
+    const diags = diagnose(text);
+    assert.deepStrictEqual(undeclared(diags), []);
+    assert.deepStrictEqual(outOfScope(diags), []);
+});
+
+const duplicates = diags => diags.filter(d => d.code === 'jrxml.duplicateName');
+
+test('duplicate declarations are errors, and each duplicate points at its own name', () => {
+    const text = `<jasperReport name="R">
+  <field name="Amount" class="java.lang.String"/>
+  <field name="Amount" class="java.lang.String"/>
+  <dataset name="DS"><field name="X" class="java.lang.String"/></dataset>
+  <dataset name="DS"><field name="Y" class="java.lang.String"/></dataset>
+</jasperReport>`;
+
+    const diags = duplicates(diagnose(text));
+    assert.strictEqual(diags.length, 2);
+    assert.strictEqual(diags[0].severity, 0); // Error
+    assert.match(diags[0].message, /Field 'Amount' is declared more than once/);
+    assert.match(diags[1].message, /Dataset 'DS' is declared more than once/);
+});
+
+test('the duplicate-name rule can be turned off', () => {
+    const text = `<jasperReport name="R">
+  <field name="Amount" class="java.lang.String"/>
+  <field name="Amount" class="java.lang.String"/>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        duplicates(diagnose(text, { settings: { 'lint.duplicateNames': false } })),
+        []
+    );
+});
+
+const languageWarnings = diags => diags.filter(d => d.code === 'jrxml.unsupportedLanguage');
+
+test('a non-Java report warns that only Java expressions are modeled', () => {
+    const text = `<jasperReport name="R" language="groovy">
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+
+    const diags = languageWarnings(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 1); // Warning
+    assert.match(diags[0].message, /groovy/);
+    assert.match(diags[0].message, /only Java/);
+    assert.strictEqual(diags[0].range.start.character, text.indexOf('groovy'));
+});
+
+test('a Java report, or one without a language attribute, does not warn', () => {
+    const java = `<jasperReport name="R" language="java">
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+    const implicit = `<jasperReport name="R">
+  <expression><![CDATA["ok"]]></expression>
+</jasperReport>`;
+
+    assert.deepStrictEqual(languageWarnings(diagnose(java)), []);
+    assert.deepStrictEqual(languageWarnings(diagnose(implicit)), []);
+});
+
+test('every newly registered expression tag is scanned for syntax errors', () => {
+    for (const tag of [
+        'crosstabExpression', 'bookmarkLevelExpression', 'chartTitleExpression',
+        'chartSubtitleExpression', 'timePeriodExpression',
+    ]) {
+        const text = `<jasperReport name="R"><${tag}><![CDATA[($F{a}]]></${tag}></jasperReport>`;
+        const diags = diagnose(text).filter(d => d.code === 'jrxml.unbalancedParen');
+
+        assert.strictEqual(diags.length, 1, `no syntax error for <${tag}>`);
+    }
+});
+
+const resourceIssues = diags => diags.filter(d =>
+    d.code === 'jrxml.missingResourceKey' || d.code === 'jrxml.missingResourceBundle');
+
+test('a missing $R{} key is diagnosed against the report bundle', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-diagnostics-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <expression><![CDATA[$R{title} + $R{missing}]]></expression>
+</jasperReport>`;
+    const diags = diagnose(text, { fileName: path.join(dir, 'report.jrxml') });
+
+    const keyIssues = diags.filter(d => d.code === 'jrxml.missingResourceKey');
+    assert.strictEqual(keyIssues.length, 1);
+    assert.strictEqual(keyIssues[0].severity, 1); // Warning
+    assert.match(keyIssues[0].message, /missing/);
+    assert.match(keyIssues[0].message, /messages/);
+});
+
+test('a declared bundle whose files are missing is reported once', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-diagnostics-'));
+    const text = `<jasperReport name="R" resourceBundle="nope">
+  <expression><![CDATA[$R{title}]]></expression>
+</jasperReport>`;
+
+    const diags = resourceIssues(diagnose(text, { fileName: path.join(dir, 'report.jrxml') }));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.missingResourceBundle');
+    assert.match(diags[0].message, /nope/);
+});
+
+test('no resource diagnostics without a resourceBundle attribute', () => {
+    const text = '<jasperReport name="R"><expression><![CDATA[$R{anything}]]></expression></jasperReport>';
+    assert.deepStrictEqual(resourceIssues(diagnose(text)), []);
+});
+
+const subreportIssues = diags => diags.filter(d =>
+    d.code === 'jrxml.missingSubreport' || d.code === 'jrxml.unknownSubreportParameter');
+
+test('a missing subreport target is diagnosed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA["missing.jrxml"]]></subreportExpression>
+  </subreport>
+</jasperReport>`;
+
+    const diags = subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') }));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.missingSubreport');
+    assert.strictEqual(diags[0].severity, 1); // Warning
+    assert.match(diags[0].message, /missing\.jrxml/);
+});
+
+test('a resolved subreport validates mapped parameter names', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    fs.writeFileSync(path.join(dir, 'detail.jrxml'),
+        '<jasperReport name="D"><parameter name="P1" class="java.lang.String"/></jasperReport>');
+
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA["detail.jrxml"]]></subreportExpression>
+    <subreportParameter name="P1"/>
+    <subreportParameter name="TYPO"/>
+  </subreport>
+</jasperReport>`;
+
+    const diags = subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') }));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.unknownSubreportParameter');
+    assert.match(diags[0].message, /TYPO/);
+    assert.match(diags[0].message, /detail\.jrxml/);
+});
+
+test('a .jasper expression resolves to the .jrxml source for validation', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    fs.writeFileSync(path.join(dir, 'detail.jrxml'),
+        '<jasperReport name="D"><parameter name="P1" class="java.lang.String"/></jasperReport>');
+
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA["detail.jasper"]]></subreportExpression>
+    <subreportParameter name="P1"/>
+  </subreport>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') })),
+        []
+    );
+});
+
+test('dynamic subreport expressions are not diagnosed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA[$P{SUBREPORT_DIR} + "detail.jrxml"]]></subreportExpression>
+  </subreport>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') })),
+        []
+    );
 });

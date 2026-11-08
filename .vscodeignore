@@ -12,3 +12,7 @@ vsc-extension-quickstart.md
 **/eslint.config.mjs
 **/.vscode-test.*
 tools/**
+.dsh/**
+AGENTS.md
+ROADMAP.md
+EXTENSION_PRODUCT_REVIEW.md

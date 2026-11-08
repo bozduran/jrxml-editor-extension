@@ -14,7 +14,7 @@
 // and subreport/scoped parameters are neither reported nor deleted here.
 
 const { scanXml } = require('./xmlspan');
-const { EXPRESSION_TAGS } = require('./expressionUtils');
+const { REFERENCE_CONTAINERS } = require('./expressionTags');
 const {
     cdataOf,
     decodeXml,
@@ -37,18 +37,8 @@ const BUILTIN_PARAMETERS = new Set([
     'JSON_LOCALE', 'JSON_TIME_ZONE', 'JSON_DATE_PATTERN', 'JSON_NUMBER_PATTERN',
 ]);
 
-// Elements whose body can contain $F/$P/$V references. The formatting hook's
-// narrow expression set is not enough for "is this declaration used?": image,
-// subreport, filter, chart and hyperlink expressions, propertyExpression and
-// the classic subreport/dataset parameter expressions all carry real
-// references that must count as usages.
-const REFERENCE_CONTAINERS = new Set([
-    ...EXPRESSION_TAGS,
-    'query',
-    'propertyExpression',
-    'subreportParameterExpression',
-    'datasetParameterExpression',
-]);
+// REFERENCE_CONTAINERS is shared with jrxmlParser so usage collection and
+// reference extraction can never disagree about which elements carry refs.
 const REFERENCE_RE = /\$(F|P|V)!?\{([^}]*)\}/g;
 const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
 

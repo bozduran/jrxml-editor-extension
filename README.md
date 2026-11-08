@@ -68,7 +68,12 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 
 ### 5. Diagnostics
 - Unused fields, parameters and variables
-- Undeclared `$F`/`$P`/`$V` references
+- Undeclared `$F`/`$P`/`$V`/`$P!` references
+- **Dataset scope** — completion, hover and diagnostics resolve against the report or the enclosing `<dataset>`/`<subDataset>` (and a list/table's dataset run). A master declaration used inside a dataset is an error, and dataset members are not offered at report scope
+- **Duplicate names** — a field, parameter, variable, group, dataset or style name declared more than once in the same scope (`jrxml.lint.duplicateNames`)
+- **Report language** — a `language="groovy"` or `"javascript"` report warns that only Java is modeled and loses Java typed member completion
+- **Resource bundles** — `$R{` completes keys from the report's `resourceBundle` (base and locale `.properties`), hover shows the default and localized values, go-to-definition opens the key in the properties file, and a missing key or unresolvable bundle is reported
+- **Subreports** — a literal `<subreportExpression>` (classic) or `<expression>` (Studio 7 subreport element) is resolved against the report directory and workspace; a missing target or a mapped parameter the target does not declare is reported, and go-to-definition opens the source `.jrxml` (a `.jasper` path maps back to its source)
 - Unbalanced parentheses and unclosed string literals
 - **Structural lint rules** ported from the project's commit-time `myhooks` hook:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
@@ -82,7 +87,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
   fix and its own setting. The hook's structural
   `validate`/`compile` gate is intentionally **not** ported (it needs the JasperReports engine).
 - **Text check warnings** — double spaces, a missing space after `.`, unrenderable characters and newline normalization, flagged inside `<text>` CDATA and inside string/text-block literals, each with a quick fix (`jrxml.textcheck.diagnostics`)
-- Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}`
+- Outline, hover, go-to-definition and **Find All References** for `$F{}` / `$P{}` / `$V{}` / `$P!{}`, resolved in the declaration's own scope
 - **Act on issues** — right-click an issue (or use its lightbulb) to open the offending
   expression in the Expression Editor or the If / Else Builder
 
@@ -250,6 +255,7 @@ context-only actions are omitted.
 | `jrxml.lint.markupTagWithoutMarkup` | `true` | Warn when markup tags are used without `markup="styled"`/`html`/`rtf` |
 | `jrxml.lint.nullDereference` | `true` | Warn on an unguarded `$F`/`$P`/`$V` method-call receiver |
 | `jrxml.lint.booleanEquals` | `true` | Warn on `==`/`!=` or `Boolean.TRUE/FALSE.equals` for Boolean values |
+| `jrxml.lint.duplicateNames` | `true` | Error when a field/parameter/variable/group/dataset/style name is declared more than once in the same scope |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
@@ -278,14 +284,17 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 ### Tests and linting
 ```
-npm test                 # node:test unit suite (parser, formatter, rules, webview HTML)
-npm run test:integration # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
-npm run lint             # eslint
+npm test                          # node:test unit suite (parser, formatter, rules, webview HTML)
+npm run test:integration          # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
+npm run test:integration:headless # same suite without a display (CI/sandbox)
+npm run lint                      # eslint
 ```
 The unit suite runs on plain Node with no VS Code needed. The integration suite
 activates the extension for real and covers command registration, diagnostics,
 the sort/clear commands (confirmation disabled), document formatting and the settings
-panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
+panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`,
+or use `npm run test:integration:headless` when Electron's headless Ozone platform
+is available (CI containers and sandboxes without X/Wayland).
 
 When you add a command or a settings group, also update `tutorialHtml.js`;
 `test/tutorialHtml.test.js` fails until the tutorial documents it. The pull
@@ -328,7 +337,11 @@ The editor activates for cursor positions inside any of these tags:
 `printWhenExpression`, `initialValueExpression`, `filterExpression`, `expression`,
 `jr:expression`, `defaultValueExpression`, `hyperlinkReferenceExpression`,
 `subreportExpression`, `bucketExpression`, `keyExpression`, `valueExpression`,
-`categoryExpression`, `seriesExpression`, `labelExpression`, and more.
+`categoryExpression`, `seriesExpression`, `labelExpression`, `crosstabExpression`,
+`bookmarkLevelExpression`, `chartTitleExpression`, `chartSubtitleExpression`,
+`timePeriodExpression`, and more. The canonical list lives in
+[expressionTags.js](expressionTags.js); `test/expressionUtils.test.js` fails if it
+drifts from the TextMate grammar.
 
 ---
 

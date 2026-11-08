@@ -3,6 +3,9 @@
 // Results are cached per document version.
 
 const { scanXml } = require('./xmlspan');
+const { REFERENCE_CONTAINERS } = require('./expressionTags');
+const { languageOfScan } = require('./reportLanguage');
+const { bundleAttributeOfScan } = require('./resourceBundle');
 
 const cache = new Map();
 
@@ -10,7 +13,7 @@ const cache = new Map();
  * @typedef {{ name:string, type:string, fullType:string, typeSource:'declared'|'inferred', description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
  * @typedef {{ sigil:string, name:string, offset:number, fromSubreport?:boolean }} Reference
  * @typedef {{ kind:string, name:string, offset:number, end:number, children:OutlineNode[] }} OutlineNode
- * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], outline:OutlineNode[] }} ParseResult
+ * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, datasets:{name:string,offset:number,end:number,fields:Declaration[],parameters:Declaration[],variables:Declaration[]}[], scopeRanges:{datasetName:string,start:number,end:number}[], allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], resourceReferences:{name:string,offset:number,end:number}[], resourceBundle:{name:string,offset:number,length:number}|null, outline:OutlineNode[] }} ParseResult
  */
 
 const COMMON_TYPES = new Set([
@@ -26,6 +29,7 @@ function parseDeclarations(document) {
     if (cached && cached.version === document.version) return cached.result;
 
     const text = document.getText();
+    const scan = scanXml(text);
 
     // Which <field>/<parameter>/<variable> offsets are report declarations
     // (direct children of <jasperReport>) versus dataset declarations (inside
@@ -34,7 +38,7 @@ function parseDeclarations(document) {
     // `null` when the document cannot be scanned: fall back to the old
     // whole-document regex behaviour so a malformed file still yields
     // declarations for the undeclared-reference check.
-    const scopes = classifyDeclarationScopes(text);
+    const scopes = classifyDeclarationScopes(scan);
 
     const rawFields     = extractFields(text);
     const rawParameters = extractParameters(text, !scopes);
@@ -58,11 +62,22 @@ function parseDeclarations(document) {
             parameters: dsParameters,
             variables:  dsVariables,
         },
+        language:    languageOfScan(scan),
+        resourceBundle: bundleAttributeOfScan(scan),
+        datasets:    buildDatasets(scopes, rawFields, rawParameters, rawVariables),
+        // Ranges where a dataset's declarations are the visible scope: the
+        // <dataset>/<subDataset> definition itself and, inside list/table
+        // components, the part that consumes the run dataset. A <datasetRun>'s
+        // own parameter bindings are excluded: they are evaluated in the
+        // enclosing (usually report) scope.
+        scopeRanges: buildScopeRanges(scan, scopes),
         allFields:     [...fields, ...dsFields].sort(byOffset),
         allParameters: [...parameters, ...dsParameters].sort(byOffset),
         allVariables:  [...variables, ...dsVariables].sort(byOffset),
         groups:     extractGroups(text),
-        references: extractReferences(text),
+        styles:     extractStyles(text),
+        references: extractReferences(scan),
+        resourceReferences: extractResourceReferences(scan),
         outline:    extractOutline(text, { fields, parameters, variables }),
     };
 
@@ -72,26 +87,54 @@ function parseDeclarations(document) {
 
 /**
  * Map each declaration tag to the set of start-tag offsets that are direct
- * report children or dataset children. Returns null when the document cannot
- * be scanned.
+ * report children or dataset children, and keep each dataset's own sets so
+ * consumers can resolve a single scope instead of the merged union.
+ * Returns null when the document cannot be scanned.
  */
-function classifyDeclarationScopes(text) {
-    const scan = scanXml(text);
-    if (scan.error) return null;
+function classifyDeclarationScopes(scan) {
+    if (!scan || scan.error) return null;
 
-    const report  = { field: new Set(), parameter: new Set(), variable: new Set() };
-    const dataset = { field: new Set(), parameter: new Set(), variable: new Set() };
+    const report   = emptyDeclarationSets();
+    const dataset  = emptyDeclarationSets();
+    const datasets = [];
+
+    for (const node of scan.doc.walk()) {
+        if (node.tag !== 'dataset' && node.tag !== 'subDataset') continue;
+        const nameAttr = node.attr('name');
+        datasets.push({
+            name:       node.attrValue('name') || '',
+            nameOffset: nameAttr ? nameAttr.valueStart : -1,
+            offset:     node.startTag,
+            end:        node.end,
+            sets:       emptyDeclarationSets(),
+        });
+    }
 
     for (const node of scan.doc.walk()) {
         if (node.tag !== 'field' && node.tag !== 'parameter' && node.tag !== 'variable') continue;
 
-        if (node.ancestors().some(a => a.tag === 'dataset' || a.tag === 'subDataset')) {
+        const owner = containingDataset(datasets, node.startTag);
+        if (owner) {
+            owner.sets[node.tag].add(node.startTag);
             dataset[node.tag].add(node.startTag);
         } else if (node.parent === scan.doc.root) {
             report[node.tag].add(node.startTag);
         }
     }
-    return { report, dataset };
+    return { report, dataset, datasets };
+}
+
+function emptyDeclarationSets() {
+    return { field: new Set(), parameter: new Set(), variable: new Set() };
+}
+
+/** The innermost dataset whose span contains `offset`, or null. */
+function containingDataset(datasets, offset) {
+    let best = null;
+    for (const ds of datasets) {
+        if (ds.offset <= offset && offset < ds.end && (!best || ds.offset >= best.offset)) best = ds;
+    }
+    return best;
 }
 
 /** Keep only declarations whose start tag belongs to `scope`. */
@@ -99,6 +142,118 @@ function filterScope(list, tag, scopes, scope) {
     if (!scopes) return scope === 'report' ? list : [];
     const allowed = scopes[scope][tag];
     return list.filter(decl => allowed.has(decl.offset));
+}
+
+/** One entry per <dataset>/<subDataset>, with that dataset's declarations. */
+function buildDatasets(scopes, rawFields, rawParameters, rawVariables) {
+    if (!scopes) return [];
+    return scopes.datasets.map(ds => ({
+        name:       ds.name,
+        nameOffset: ds.nameOffset,
+        offset:     ds.offset,
+        end:        ds.end,
+        fields:     rawFields.filter(decl => ds.sets.field.has(decl.offset)),
+        parameters: rawParameters.filter(decl => ds.sets.parameter.has(decl.offset)),
+        variables:  rawVariables.filter(decl => ds.sets.variable.has(decl.offset)),
+    }));
+}
+
+/**
+ * Spans where a dataset owns the visible declarations. Besides the dataset
+ * definition, this covers a list/table's component contents (which consume the
+ * run dataset) while excluding the <datasetRun> element itself, whose
+ * parameter/connection expressions are evaluated in the enclosing scope.
+ */
+function buildScopeRanges(scan, scopes) {
+    const ranges = [];
+    if (!scan || scan.error || !scopes) return ranges;
+
+    for (const ds of scopes.datasets) {
+        ranges.push({ datasetName: ds.name, start: ds.offset, end: ds.end });
+    }
+
+    for (const node of scan.doc.walk()) {
+        if (node.tag !== 'datasetRun') continue;
+        const parent = node.parent;
+        if (!parent || !consumesDataset(node, parent)) continue;
+
+        const datasetName = node.attrValue('subDataset') || '';
+        if (parent.startTagEnd < node.startTag) {
+            ranges.push({ datasetName, start: parent.startTagEnd, end: node.startTag });
+        }
+        if (node.end < parent.end) {
+            ranges.push({ datasetName, start: node.end, end: parent.end });
+        }
+    }
+    return ranges;
+}
+
+/** True for the component that renders a dataset (list/table/crosstab). */
+function consumesDataset(run, parent) {
+    if (!run.attrValue('subDataset')) return false;
+    const kind = parent.attrValue('kind') || '';
+    return (parent.tag === 'component' || parent.tag === 'element') &&
+        (kind === 'list' || kind === 'table' || kind === 'crosstab');
+}
+
+/** The dataset scope that owns `offset` when it is inside a scoped region. */
+function scopeRangeAt(parsed, offset) {
+    let best = null;
+    for (const range of (parsed && parsed.scopeRanges) || []) {
+        if (offset < range.start || offset >= range.end) continue;
+        if (!best || (range.end - range.start) < (best.end - best.start)) best = range;
+    }
+    return best;
+}
+
+/**
+ * Resolve the declarations visible at `offset`.
+ *
+ * `kind` is `report` outside datasets, `dataset` inside a dataset definition or
+ * a list/table run scope, and `unknown` when a dataset run names a dataset that
+ * is not defined in this file (the caller must not guess).
+ *
+ * @param {ParseResult} parsed
+ * @param {number} offset document character offset; negative means report scope
+ * @returns {{kind:'report'|'dataset'|'unknown', dataset:object|null, datasetName:string|null,
+ *            fields:Declaration[], parameters:Declaration[], variables:Declaration[],
+ *            allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[]}}
+ */
+function resolveDeclarationScope(parsed, offset) {
+    const range = scopeRangeAt(parsed, offset);
+    if (!range) return reportScope(parsed);
+
+    const dataset = ((parsed && parsed.datasets) || []).find(ds => ds.name === range.datasetName);
+    if (!dataset) {
+        return {
+            kind: 'unknown', dataset: null, datasetName: range.datasetName,
+            fields: [], parameters: [], variables: [],
+            allFields: [], allParameters: [], allVariables: [],
+        };
+    }
+
+    return {
+        kind: 'dataset',
+        dataset,
+        datasetName: dataset.name,
+        fields:      dataset.fields,
+        parameters:  dataset.parameters,
+        variables:   dataset.variables,
+        allFields:     dataset.fields,
+        allParameters: dataset.parameters,
+        allVariables:  dataset.variables,
+    };
+}
+
+function reportScope(parsed) {
+    const fields     = (parsed && parsed.fields)     || [];
+    const parameters = (parsed && parsed.parameters) || [];
+    const variables  = (parsed && parsed.variables)  || [];
+    return {
+        kind: 'report', dataset: null, datasetName: null,
+        fields, parameters, variables,
+        allFields: fields, allParameters: parameters, allVariables: variables,
+    };
 }
 
 /** Drop the cached parse result for a single document (call when it closes). */
@@ -241,41 +396,184 @@ function extractGroups(text) {
     return results;
 }
 
-// ── References ($F/$P/$V usages and declaration-equivalent usages) ────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-function extractReferences(text) {
+function extractStyles(text) {
     const results = [];
-
-    // $F{} $P{} $V{} usages inside expressions
-    const refRe = /\$(F|P|V)\{([\w.]+)\}/g;
+    const tagRe = /<style(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/style>)/g;
     let m;
-    while ((m = refRe.exec(text)) !== null) {
-        results.push({ sigil: m[1], name: m[2], offset: m.index });
+    while ((m = tagRe.exec(text)) !== null) {
+        const attrs = m[1] || '';
+        const named = readName(m, 'style', attrs);
+        if (!named) continue;
+
+        results.push({
+            name:        named.name,
+            type:        'Style',
+            fullType:    'Style',
+            description: 'Named report style',
+            offset:      m.index,
+            end:         m.index + m[0].length,
+            nameOffset:  named.nameOffset,
+        });
+    }
+    return results;
+}
+
+// ── Duplicate declaration names ──────────────────────────────────────────────
+
+/**
+ * Every declaration that repeats an earlier name within the same scope.
+ * Report and dataset scopes are checked separately: a dataset field may share
+ * its name with a master field, but not with another field of the same dataset.
+ *
+ * @param {ParseResult} parsed
+ * @returns {{kind:string,name:string,scope:string,offset:number,length:number}[]}
+ */
+function findDuplicateNames(parsed) {
+    const duplicates = [];
+
+    const check = (kind, list, scope) => {
+        const seen = new Set();
+        for (const declaration of list || []) {
+            if (!declaration.name || typeof declaration.nameOffset !== 'number') continue;
+            if (seen.has(declaration.name)) {
+                duplicates.push({
+                    kind,
+                    name:   declaration.name,
+                    scope,
+                    offset: declaration.nameOffset,
+                    length: declaration.name.length,
+                });
+            } else {
+                seen.add(declaration.name);
+            }
+        }
+    };
+
+    check('field', parsed.fields, '');
+    check('parameter', parsed.parameters, '');
+    check('variable', parsed.variables, '');
+    // parsed.groups also contains dataset groups (they are declared inside a
+    // <dataset>); those belong to that dataset's scope, not the report's.
+    check('group', (parsed.groups || []).filter(group => !insideAnyDataset(parsed, group.offset)), '');
+    check('style', parsed.styles, '');
+    check('dataset', parsed.datasets, '');
+
+    for (const dataset of parsed.datasets || []) {
+        check('field', dataset.fields, dataset.name);
+        check('parameter', dataset.parameters, dataset.name);
+        check('variable', dataset.variables, dataset.name);
     }
 
-    // <subreportParameter name="..."> — classic format subreport parameter:
-    // the parameter is passed to a subreport, so it counts as used.
-    const subParamRe = /<subreportParameter\s[^>]*name\s*=\s*["']([^"']+)["']/g;
-    while ((m = subParamRe.exec(text)) !== null) {
-        results.push({ sigil: 'P', name: m[1], offset: m.index, fromSubreport: true });
+    return duplicates;
+}
+
+function insideAnyDataset(parsed, offset) {
+    return (parsed.datasets || []).some(dataset =>
+        dataset.offset <= offset && offset < dataset.end);
+}
+
+// ── References ($F/$P/$V usages and declaration-equivalent usages) ────────────
+//
+// Only expression-bearing nodes are scanned. A reference mentioned in an XML
+// comment or displayed as static text is not a usage: treating it as one
+// produced false "not declared" errors and inflated the hover/reference counts.
+//
+// `end` is the offset just past a real `$X{name}` token. Reference markers that
+// are attribute names rather than tokens (subreportParameter, returnValue,
+// a nested subreport <parameter>) have no `end`.
+
+const REFERENCE_RE = /\$(F|P|V)(!?)\{([\w.]+)\}/g;
+
+function extractReferences(scan) {
+    const results = [];
+    if (!scan || scan.error) return results;
+
+    for (const node of scan.doc.walk()) {
+        if (REFERENCE_CONTAINERS.has(node.tag)) {
+            addTextNodeReferences(node, results);
+        } else if (node.tag === 'subreportParameter') {
+            // Classic format: the parameter is passed to a subreport, so it
+            // counts as used here.
+            addAttributeReference(results, 'P', node, 'name');
+        } else if (node.tag === 'returnValue') {
+            // <returnValue toVariable="..."> writes one of this report's variables.
+            addAttributeReference(results, 'V', node, 'toVariable');
+        } else if (node.tag === 'parameter' && insideSubreport(node)) {
+            // New format: <parameter name="..."> nested inside a subreport
+            // passes a value INTO it, so it is a usage of a parent parameter,
+            // not a declaration of this report.
+            addAttributeReference(results, 'P', node, 'name');
+        }
     }
 
-    // New format: <parameter name="..."> nested inside <element kind="subreport">.
-    // These pass values INTO the subreport — they are NOT declarations of THIS
-    // report's parameters, so register them as "used" references for any matching
-    // parameter name (prevents a false "declared but never used" warning).
-    const subreportRanges = buildSubreportRanges(text);
-    const nestedParamRe = /<parameter(\s[^>]*)(?:\/>|>[\s\S]*?<\/parameter>)/g;
-    while ((m = nestedParamRe.exec(text)) !== null) {
-        if (!inSubreportRange(m.index, subreportRanges)) continue;
-        const name = attrValue(m[1] || '', 'name');
-        if (name) results.push({ sigil: 'P', name, offset: m.index, fromSubreport: true });
-    }
+    return results;
+}
 
-    // <returnValue toVariable="..."> — the variable is written to, counts as used
-    const returnVarRe = /<returnValue\s[^>]*toVariable\s*=\s*["']([^"']+)["']/g;
-    while ((m = returnVarRe.exec(text)) !== null) {
-        results.push({ sigil: 'V', name: m[1], offset: m.index, fromSubreport: true });
+/** Scan the plain-text/CDATA spans of one expression-bearing element. */
+function addTextNodeReferences(node, results) {
+    for (const span of node.textNodes) {
+        REFERENCE_RE.lastIndex = 0;
+        let match;
+        while ((match = REFERENCE_RE.exec(span.text)) !== null) {
+            const name = match[3].trim();
+            if (!name) continue;
+            const offset = span.start + match.index;
+            results.push({
+                sigil: match[1],
+                name,
+                bang:  match[2] === '!',
+                offset,
+                end:   offset + match[0].length,
+            });
+        }
+    }
+}
+
+/** A name attribute that behaves like a reference but has no `$X{}` token. */
+function addAttributeReference(results, sigil, node, attribute) {
+    const attr = node.attr(attribute);
+    if (!attr || !attr.value) return;
+    results.push({
+        sigil,
+        name:          attr.value,
+        offset:        attr.valueStart,
+        fromSubreport: true,
+    });
+}
+
+function insideSubreport(node) {
+    return node.ancestors().some(ancestor =>
+        ancestor.tag === 'subreport' ||
+        ((ancestor.tag === 'element' || ancestor.tag === 'component') &&
+            ancestor.attrValue('kind') === 'subreport'));
+}
+
+// ── Resource-bundle references ($R{key}) ─────────────────────────────────────
+
+const RESOURCE_REFERENCE_RE = /\$R\{([\w.\-]+)\}/g;
+
+/** `$R{key}` tokens inside expression-bearing elements (for missing-key checks). */
+function extractResourceReferences(scan) {
+    const results = [];
+    if (!scan || scan.error) return results;
+
+    for (const node of scan.doc.walk()) {
+        if (!REFERENCE_CONTAINERS.has(node.tag)) continue;
+
+        for (const span of node.textNodes) {
+            RESOURCE_REFERENCE_RE.lastIndex = 0;
+            let match;
+            while ((match = RESOURCE_REFERENCE_RE.exec(span.text)) !== null) {
+                const offset = span.start + match.index;
+                results.push({
+                    name: match[1],
+                    offset,
+                    end: offset + match[0].length,
+                });
+            }
+        }
     }
 
     return results;
@@ -405,11 +703,6 @@ function matchAttr(attrs, attrName) {
     return { value, valueOffset: m.index + m[0].length - value.length - 1 };
 }
 
-function attrValue(attrs, attrName) {
-    const m = matchAttr(attrs, attrName);
-    return m ? m.value : '';
-}
-
 /**
  * Read the `name` attribute of a declaration tag and resolve its absolute
  * offset in the document. Works for both single- and double-quoted values.
@@ -518,4 +811,10 @@ function inSubreportRange(offset, ranges) {
     return ranges.some(([s, e]) => offset >= s && offset < e);
 }
 
-module.exports = { parseDeclarations, clearCache, clearAllCaches };
+module.exports = {
+    parseDeclarations,
+    resolveDeclarationScope,
+    findDuplicateNames,
+    clearCache,
+    clearAllCaches,
+};

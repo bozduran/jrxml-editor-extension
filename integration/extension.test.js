@@ -620,6 +620,58 @@ suite('JRXML extension smoke', () => {
             'the rest of the file was modified'
         );
     });
+
+    test('diagnoses a missing subreport target', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-it-sub-'));
+        const master = path.join(dir, 'master.jrxml');
+        fs.writeFileSync(master, [
+            '<jasperReport name="M">',
+            '  <subreport>',
+            '    <subreportExpression><![CDATA["missing.jrxml"]]></subreportExpression>',
+            '  </subreport>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const uri = vscode.Uri.file(master);
+        await openDocument(uri);
+
+        const found = await waitFor(() =>
+            vscode.languages.getDiagnostics(uri)
+                .find(diagnostic => diagnostic.code === 'jrxml.missingSubreport'));
+
+        assert.ok(found, 'expected a missing-subreport diagnostic');
+        assert.match(found.message, /missing\.jrxml/);
+    });
+
+    test('jumps from a subreport expression to its source', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-it-sub-'));
+        const detail = path.join(dir, 'detail.jrxml');
+        fs.writeFileSync(detail, '<jasperReport name="D"/>');
+
+        const master = path.join(dir, 'master.jrxml');
+        fs.writeFileSync(master, [
+            '<jasperReport name="M">',
+            '  <subreport>',
+            '    <subreportExpression><![CDATA["detail.jrxml"]]></subreportExpression>',
+            '  </subreport>',
+            '</jasperReport>',
+        ].join('\n'));
+
+        const document = await openDocument(vscode.Uri.file(master));
+        const offset = document.getText().indexOf('detail.jrxml') + 3;
+        const locations = await vscode.commands.executeCommand(
+            'vscode.executeDefinitionProvider',
+            document.uri,
+            document.positionAt(offset)
+        );
+
+        assert.ok(Array.isArray(locations) && locations.length > 0, 'expected a definition');
+        const hit = locations.find(location => {
+            const uri = location.uri || location.targetUri;
+            return uri && uri.fsPath === detail;
+        });
+        assert.ok(hit, 'definition did not point at detail.jrxml');
+    });
 });
 
 function findNode(nodes, predicate) {

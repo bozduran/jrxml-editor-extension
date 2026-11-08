@@ -14,7 +14,9 @@ const { buildElementPatch } = require('./designEdit');
 const { buildDesignViewHtml } = require('./designViewHtml');
 const { getNonce } = require('./expressionPanelHtml');
 const { isStale, STALE_MESSAGE } = require('./staleGuard');
-const { parseDeclarations } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
+const { reportLanguage } = require('./reportLanguage');
+const { resourceEntriesForDocument } = require('./resourceIndex');
 const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
 const { getCustomJavaMethods } = require('./completionProvider');
 
@@ -79,12 +81,17 @@ function buildCompletionsForDocument(document, expression, offset) {
     }
 
     const config = vscode.workspace.getConfiguration('jrxml');
+    const options = suggestionOptions(config);
+    if ((decls.language || reportLanguage(document.getText())).language !== 'java') options.typedCompletion = false;
     const result = buildExpressionSuggestions({
         text: expression,
         offset,
-        declarations: decls,
-        options: suggestionOptions(config),
+        // The inspector edits report-band elements, so only report-scope
+        // declarations apply; dataset members need their own dataset run.
+        declarations: resolveDeclarationScope(decls, -1),
+        options,
         customMethods: getCustomJavaMethods(),
+        resources: resourceEntriesForDocument(document, decls.resourceBundle),
     });
 
     result.items = result.items.slice(0, MAX_COMPLETIONS);

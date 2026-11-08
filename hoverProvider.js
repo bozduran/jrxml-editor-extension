@@ -2,7 +2,10 @@
 // Shows a tooltip when hovering over $F{name}, $P{name}, $V{name} in .jrxml files.
 
 const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
+const path = require('path');
+const { parseDeclarations, resolveDeclarationScope } = require('./jrxmlParser');
+const { resourcesForDocument } = require('./resourceIndex');
+const { bundleAttribute } = require('./resourceBundle');
 const { findReferenceToken } = require('./expressionUtils');
 const {
     BUILTIN_VARIABLES,
@@ -29,24 +32,69 @@ function mdCode(text) {
     return String(text ?? '').replace(/`/g, '\\`');
 }
 
+/** Hover for a `$R{key}` resource-bundle reference. */
+function resourceHover(document, position, ref) {
+    const text   = document.getText();
+    const bundle = bundleAttribute(text);
+    const index  = resourcesForDocument(document);
+    const md     = new vscode.MarkdownString('', true);
+
+    md.appendMarkdown(`### $R{${ref.name}}\n\n`);
+
+    if (!index) {
+        md.appendMarkdown(bundle
+            ? `⚠️ Resource bundle '${mdSafe(bundle.name)}' was not found next to the report or in the workspace.`
+            : '⚠️ No resource bundle is configured for this report.');
+    } else {
+        const entry = index.entries.get(ref.name);
+        if (!entry) {
+            md.appendMarkdown(`⚠️ Key '${mdSafe(ref.name)}' is not found in resource bundle '${mdSafe(index.name)}'.`);
+        } else {
+            md.appendMarkdown('| | |\n|---|---|\n');
+            md.appendMarkdown(`| **Value** | ${entry.defaultValue !== null ? mdSafe(entry.defaultValue) : '_no default value_'} |\n`);
+            if (entry.defaultFile) {
+                md.appendMarkdown(`| **Bundle** | ${mdSafe(path.basename(entry.defaultFile))} |\n`);
+            }
+            for (const [locale, located] of entry.locales) {
+                md.appendMarkdown(`| **${mdSafe(locale)}** | ${mdSafe(located.value)} |\n`);
+            }
+        }
+    }
+
+    return new vscode.Hover(md, new vscode.Range(
+        position.line, ref.start,
+        position.line, ref.end
+    ));
+}
+
+/** The report-scope declaration with this name, used to explain scope errors. */
+function reportDeclaration(parsed, sigil, name) {
+    const list = sigil === 'F' ? parsed.fields
+        : sigil === 'P' ? parsed.parameters
+        : parsed.variables;
+    return (list || []).find(declaration => declaration.name === name) || null;
+}
+
 const provider = vscode.languages.registerHoverProvider(
     { language: 'jrxml', scheme: 'file' },
     {
         provideHover(document, position) {
             const ref = findReferenceToken(document.lineAt(position).text, position.character);
             if (!ref) return null;
+            if (ref.sigil === 'R') return resourceHover(document, position, ref);
 
             let decl   = null;
             let kind   = '';
             let isBuiltin = false;
 
             const parsed = parseDeclarations(document);
+            const scope  = resolveDeclarationScope(parsed, document.offsetAt(position));
 
             if (ref.sigil === 'F') {
-                decl = parsed.allFields.find(f => f.name === ref.name);
+                decl = scope.fields.find(f => f.name === ref.name);
                 kind = 'Field';
             } else if (ref.sigil === 'P') {
-                decl = parsed.allParameters.find(p => p.name === ref.name);
+                decl = scope.parameters.find(p => p.name === ref.name);
                 if (!decl && BUILTIN_PARAMETER_NAMES.has(ref.name)) {
                     const b = BUILTIN_PARAMETERS.find(p => p.name === ref.name);
                     decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
@@ -54,7 +102,7 @@ const provider = vscode.languages.registerHoverProvider(
                 }
                 kind = 'Parameter';
             } else if (ref.sigil === 'V') {
-                decl = parsed.allVariables.find(v => v.name === ref.name);
+                decl = scope.variables.find(v => v.name === ref.name);
                 if (!decl && BUILTIN_VARIABLE_NAMES.has(ref.name)) {
                     const b = BUILTIN_VARIABLES.find(v => v.name === ref.name);
                     decl = { name: b.name, type: b.type, fullType: b.type, description: b.description };
@@ -62,6 +110,13 @@ const provider = vscode.languages.registerHoverProvider(
                 }
                 kind = 'Variable';
             }
+
+            // A report-scope name used inside a dataset is not available there.
+            // Showing the report declaration as if it resolved would be a lie,
+            // so point at the scope problem instead.
+            const elsewhere = !decl && scope.kind === 'dataset'
+                ? reportDeclaration(parsed, ref.sigil, ref.name)
+                : null;
 
             // Count how many times this reference appears in the file
             const refCount = parsed.references.filter(r => r.sigil === ref.sigil && r.name === ref.name).length;
@@ -71,9 +126,11 @@ const provider = vscode.languages.registerHoverProvider(
             // class names) must not be able to inject command: links or HTML.
             const md = new vscode.MarkdownString('', true);
 
+            const bang = ref.bang ? '!' : '';
+
             if (decl) {
                 const badge  = isBuiltin ? ' *(built-in)*' : '';
-                const sigStr = `$${ref.sigil}{${ref.name}}`;
+                const sigStr = `$${ref.sigil}${bang}{${ref.name}}`;
 
                 md.appendMarkdown(`### ${sigStr}\n\n`);
                 md.appendMarkdown(`| | |\n|---|---|\n`);
@@ -83,8 +140,19 @@ const provider = vscode.languages.registerHoverProvider(
                     md.appendMarkdown(`| **Info** | ${mdSafe(decl.description)} |\n`);
                 }
                 md.appendMarkdown(`| **Used** | ${refCount} time${refCount !== 1 ? 's' : ''} in this file |\n`);
+            } else if (elsewhere) {
+                md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
+                md.appendMarkdown(
+                    `⚠️ **${kind} '${ref.name}' is declared at report scope and is not available inside dataset '${mdSafe(scope.datasetName)}'.**\n\n`
+                );
+                md.appendMarkdown('Pass it to the dataset as a parameter and bind it in the `<datasetRun>`.');
+            } else if (scope.kind === 'unknown') {
+                md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
+                md.appendMarkdown(
+                    `⚠️ **Dataset '${mdSafe(scope.datasetName)}' is not defined in this file**, so this reference cannot be resolved.`
+                );
             } else {
-                md.appendMarkdown(`### $${ref.sigil}{${ref.name}}\n\n`);
+                md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
                 md.appendMarkdown(`⚠️ **${kind} not declared** in this file.\n\n`);
                 md.appendMarkdown(`No \`<${ref.sigil === 'F' ? 'field' : ref.sigil === 'P' ? 'parameter' : 'variable'} name="${ref.name}">\` declaration found.`);
             }

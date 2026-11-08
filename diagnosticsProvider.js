@@ -9,13 +9,16 @@
 //   WARNING  — Boolean comparisons that should use EQUALS()
 
 const vscode = require('vscode');
-const { parseDeclarations, clearCache } = require('./jrxmlParser');
+const { parseDeclarations, resolveDeclarationScope, findDuplicateNames, clearCache } = require('./jrxmlParser');
 const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
 const { BUILTIN_VARIABLE_NAMES, BUILTIN_PARAMETER_NAMES } = require('./jasperBuiltins');
 const { lintXml } = require('./xmlLint');
 const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
+const { reportLanguage } = require('./reportLanguage');
+const { resourcesForDocument } = require('./resourceIndex');
+const { analyseSubreports } = require('./subreportIndex');
 const {
     CODE: BOOLEAN_EQUALS_CODE,
     MESSAGE: BOOLEAN_EQUALS_MESSAGE,
@@ -60,6 +63,82 @@ function updateDiagnostics(document) {
         removeLineWhenBlank:    cfg.get('lint.removeLineWhenBlank', true),
         markupTagWithoutMarkup: cfg.get('lint.markupTagWithoutMarkup', true),
     };
+
+    // ── 0. Language model ────────────────────────────────────────────────────
+    // The parser, formatter and member index are Java-only. Say so at the
+    // declaration instead of silently applying Java rules to Groovy/JavaScript.
+    const language = parsed.language || reportLanguage(text);
+    if (language.declared && language.language !== 'java') {
+        diagnostics.push(makeDiagnostic(
+            document, language.offset, language.length,
+            `Report language '${language.language}' is not modeled: only Java expressions are fully supported. Typed completion is disabled and expression checks may be inaccurate.`,
+            vscode.DiagnosticSeverity.Warning,
+            'jrxml.unsupportedLanguage'
+        ));
+    }
+
+    // ── 0b. Resource-bundle references ───────────────────────────────────────
+    // A missing key fails only at fill time, so this is exactly the check a
+    // static editor can own. It runs only when the report declares a bundle.
+    if (parsed.resourceBundle) {
+        const bundle    = parsed.resourceBundle;
+        const resources = resourcesForDocument(document, bundle);
+
+        if (!resources) {
+            diagnostics.push(makeDiagnostic(
+                document, bundle.offset, bundle.length,
+                `Resource bundle '${bundle.name}' was not found next to the report or in the workspace.`,
+                vscode.DiagnosticSeverity.Warning,
+                'jrxml.missingResourceBundle'
+            ));
+        } else {
+            for (const ref of parsed.resourceReferences || []) {
+                if (resources.entries.has(ref.name)) continue;
+                diagnostics.push(makeDiagnostic(
+                    document, ref.offset, ref.end - ref.offset,
+                    `Resource key '${ref.name}' is not defined in resource bundle '${bundle.name}'.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.missingResourceKey'
+                ));
+            }
+        }
+    }
+
+    // ── 0c. Subreport targets and parameter maps ─────────────────────────────
+    // The engine resolves these at fill time: a bad path or a misspelled
+    // parameter can fail late or be silently ignored.
+    try {
+        const roots = ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
+            .map(folder => folder.uri && folder.uri.fsPath)
+            .filter(Boolean);
+
+        for (const link of analyseSubreports(document, roots)) {
+            if (link.dynamic || !link.path) continue;
+
+            if (!link.target) {
+                diagnostics.push(makeDiagnostic(
+                    document, link.offset, link.length,
+                    `Subreport '${link.path}' was not found next to the report or in the workspace.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.missingSubreport'
+                ));
+                continue;
+            }
+
+            if (!link.targetParameters) continue;
+            for (const mapping of link.mappings) {
+                if (link.targetParameters.has(mapping.name)) continue;
+                diagnostics.push(makeDiagnostic(
+                    document, mapping.offset, mapping.length,
+                    `Parameter '${mapping.name}' is not declared in subreport '${link.path}'.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.unknownSubreportParameter'
+                ));
+            }
+        }
+    } catch (err) {
+        console.error('[JRXML] subreport check failed:', err);
+    }
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
     if (checkUnused) {
@@ -117,12 +196,6 @@ function updateDiagnostics(document) {
 
     // ── 2. Undeclared references ─────────────────────────────────────────────
     if (checkExpr) {
-        // A reference inside a dataset resolves against that dataset's
-        // declarations, so the declared set spans report and dataset scope.
-        const declaredFields = new Set(parsed.allFields.map(f => f.name));
-        const declaredParams = new Set([...parsed.allParameters.map(p => p.name), ...BUILTIN_PARAMETER_NAMES]);
-        const declaredVars   = new Set([...parsed.allVariables.map(v => v.name), ...BUILTIN_VARIABLE_NAMES]);
-
         for (const ref of parsed.references) {
             // <subreportParameter name="X"> / a <parameter> nested in a
             // subreport names the SUBREPORT's parameter, not one of this
@@ -132,22 +205,51 @@ function updateDiagnostics(document) {
             // is different: V IS a variable of this report.
             if (ref.fromSubreport && ref.sigil === 'P') continue;
 
-            let isDeclared = false;
-            if (ref.sigil === 'F') isDeclared = declaredFields.has(ref.name);
-            else if (ref.sigil === 'P') isDeclared = declaredParams.has(ref.name);
-            else if (ref.sigil === 'V') isDeclared = declaredVars.has(ref.name);
+            // Resolve against the scope that owns the reference. Report and
+            // dataset declarations never merge: a master field inside a
+            // subdataset is not available there.
+            const scope = resolveDeclarationScope(parsed, ref.offset);
+            if (scope.kind === 'unknown') continue; // run dataset not defined here
 
-            if (!isDeclared) {
-                const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
-                // The full token is $X{name} — length = 4 + name.length
-                const tokenLen = 3 + ref.name.length + 1; // $F{ + name + }
+            if (declaredInScope(scope, ref.sigil).has(ref.name)) continue;
+
+            const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
+            // `end` spans the real token ($P!{name} included). Attribute-name
+            // markers (subreportParameter/returnValue) have no token length.
+            const tokenLen = typeof ref.end === 'number'
+                ? ref.end - ref.offset
+                : 4 + ref.name.length;
+
+            if (scope.kind === 'dataset' && declaredAtReportScope(parsed, ref.sigil, ref.name)) {
                 diagnostics.push(makeDiagnostic(
                     document, ref.offset, tokenLen,
-                    `${kindName} '${ref.name}' is not declared in this report.`,
+                    `${kindName} '${ref.name}' is declared at report scope and is not available inside dataset '${scope.datasetName}'. Pass it to the dataset as a parameter.`,
                     vscode.DiagnosticSeverity.Error,
-                    'jrxml.undeclaredReference'
+                    'jrxml.outOfScopeReference'
                 ));
+                continue;
             }
+
+            diagnostics.push(makeDiagnostic(
+                document, ref.offset, tokenLen,
+                `${kindName} '${ref.name}' is not declared in this report.`,
+                vscode.DiagnosticSeverity.Error,
+                'jrxml.undeclaredReference'
+            ));
+        }
+    }
+
+    // ── 2b. Duplicate declaration names ───────────────────────────────────────
+    // Checked per scope: a dataset field may share a master field's name, but
+    // not another declaration's name inside the same dataset.
+    if (cfg.get('lint.duplicateNames', true)) {
+        for (const duplicate of findDuplicateNames(parsed)) {
+            diagnostics.push(makeDiagnostic(
+                document, duplicate.offset, duplicate.length,
+                duplicateMessage(duplicate),
+                vscode.DiagnosticSeverity.Error,
+                'jrxml.duplicateName'
+            ));
         }
     }
 
@@ -241,6 +343,41 @@ function updateDiagnostics(document) {
     }
 
     diagnosticCollection.set(document.uri, diagnostics);
+}
+
+/** Human-readable label for a duplicate-name diagnostic. */
+function duplicateMessage(duplicate) {
+    const labels = {
+        field: 'Field', parameter: 'Parameter', variable: 'Variable',
+        group: 'Group', dataset: 'Dataset', style: 'Style',
+    };
+    const label = labels[duplicate.kind] || 'Declaration';
+    const where = duplicate.scope
+        ? ` in dataset '${duplicate.scope}'`
+        : ' in this report';
+    return `${label} '${duplicate.name}' is declared more than once${where}.`;
+}
+
+// ── Scope helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Names declared in a resolved scope. Jasper built-in parameters and variables
+ * are added for every scope: they are available inside datasets too.
+ */
+function declaredInScope(scope, sigil) {
+    if (sigil === 'F') return new Set(scope.fields.map(decl => decl.name));
+    if (sigil === 'P') {
+        return new Set([...scope.parameters.map(decl => decl.name), ...BUILTIN_PARAMETER_NAMES]);
+    }
+    return new Set([...scope.variables.map(decl => decl.name), ...BUILTIN_VARIABLE_NAMES]);
+}
+
+/** True when the name exists as a report-scope declaration. */
+function declaredAtReportScope(parsed, sigil, name) {
+    const list = sigil === 'F' ? parsed.fields
+        : sigil === 'P' ? parsed.parameters
+        : parsed.variables;
+    return (list || []).some(decl => decl.name === name);
 }
 
 // ── Syntax checkers ───────────────────────────────────────────────────────────
