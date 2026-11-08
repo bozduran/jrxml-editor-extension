@@ -18,6 +18,7 @@ const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
 const { reportLanguage } = require('./reportLanguage');
 const { resourcesForDocument } = require('./resourceIndex');
+const { analyseSubreports } = require('./subreportIndex');
 const {
     CODE: BOOLEAN_EQUALS_CODE,
     MESSAGE: BOOLEAN_EQUALS_MESSAGE,
@@ -101,6 +102,42 @@ function updateDiagnostics(document) {
                 ));
             }
         }
+    }
+
+    // ── 0c. Subreport targets and parameter maps ─────────────────────────────
+    // The engine resolves these at fill time: a bad path or a misspelled
+    // parameter can fail late or be silently ignored.
+    try {
+        const roots = ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
+            .map(folder => folder.uri && folder.uri.fsPath)
+            .filter(Boolean);
+
+        for (const link of analyseSubreports(document, roots)) {
+            if (link.dynamic || !link.path) continue;
+
+            if (!link.target) {
+                diagnostics.push(makeDiagnostic(
+                    document, link.offset, link.length,
+                    `Subreport '${link.path}' was not found next to the report or in the workspace.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.missingSubreport'
+                ));
+                continue;
+            }
+
+            if (!link.targetParameters) continue;
+            for (const mapping of link.mappings) {
+                if (link.targetParameters.has(mapping.name)) continue;
+                diagnostics.push(makeDiagnostic(
+                    document, mapping.offset, mapping.length,
+                    `Parameter '${mapping.name}' is not declared in subreport '${link.path}'.`,
+                    vscode.DiagnosticSeverity.Warning,
+                    'jrxml.unknownSubreportParameter'
+                ));
+            }
+        }
+    } catch (err) {
+        console.error('[JRXML] subreport check failed:', err);
     }
 
     // ── 1. Unused declarations ────────────────────────────────────────────────

@@ -376,3 +376,73 @@ test('no resource diagnostics without a resourceBundle attribute', () => {
     const text = '<jasperReport name="R"><expression><![CDATA[$R{anything}]]></expression></jasperReport>';
     assert.deepStrictEqual(resourceIssues(diagnose(text)), []);
 });
+
+const subreportIssues = diags => diags.filter(d =>
+    d.code === 'jrxml.missingSubreport' || d.code === 'jrxml.unknownSubreportParameter');
+
+test('a missing subreport target is diagnosed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA["missing.jrxml"]]></subreportExpression>
+  </subreport>
+</jasperReport>`;
+
+    const diags = subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') }));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.missingSubreport');
+    assert.strictEqual(diags[0].severity, 1); // Warning
+    assert.match(diags[0].message, /missing\.jrxml/);
+});
+
+test('a resolved subreport validates mapped parameter names', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    fs.writeFileSync(path.join(dir, 'detail.jrxml'),
+        '<jasperReport name="D"><parameter name="P1" class="java.lang.String"/></jasperReport>');
+
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA["detail.jrxml"]]></subreportExpression>
+    <subreportParameter name="P1"/>
+    <subreportParameter name="TYPO"/>
+  </subreport>
+</jasperReport>`;
+
+    const diags = subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') }));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.unknownSubreportParameter');
+    assert.match(diags[0].message, /TYPO/);
+    assert.match(diags[0].message, /detail\.jrxml/);
+});
+
+test('a .jasper expression resolves to the .jrxml source for validation', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    fs.writeFileSync(path.join(dir, 'detail.jrxml'),
+        '<jasperReport name="D"><parameter name="P1" class="java.lang.String"/></jasperReport>');
+
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA["detail.jasper"]]></subreportExpression>
+    <subreportParameter name="P1"/>
+  </subreport>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') })),
+        []
+    );
+});
+
+test('dynamic subreport expressions are not diagnosed', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-subreport-'));
+    const text = `<jasperReport name="R">
+  <subreport>
+    <subreportExpression><![CDATA[$P{SUBREPORT_DIR} + "detail.jrxml"]]></subreportExpression>
+  </subreport>
+</jasperReport>`;
+
+    assert.deepStrictEqual(
+        subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') })),
+        []
+    );
+});
