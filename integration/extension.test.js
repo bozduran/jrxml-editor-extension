@@ -665,6 +665,12 @@ suite('JRXML extension smoke', () => {
         const labels = items.map(item => (typeof item.label === 'string' ? item.label : item.label.label));
 
         assert.ok(labels.includes('CustomerName'), 'completion did not run for the untitled document');
+
+        const symbols = await vscode.commands.executeCommand(
+            'vscode.executeDocumentSymbolProvider', document.uri
+        );
+        assert.ok(Array.isArray(symbols) && symbols.some(symbol => symbol.name === 'Untitled'),
+            'outline did not run for the untitled document');
     });
 
     test('reports an unclosed query literal', async () => {
