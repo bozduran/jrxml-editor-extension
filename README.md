@@ -73,6 +73,7 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - **Duplicate names** — a field, parameter, variable, group, dataset or style name declared more than once in the same scope (`jrxml.lint.duplicateNames`)
 - **Report language** — a `language="groovy"` or `"javascript"` report warns that only Java is modeled and loses Java typed member completion
 - **Resource bundles** — `$R{` completes keys from the report's `resourceBundle` (base and locale `.properties`), hover shows the default and localized values, go-to-definition opens the key in the properties file, and a missing key or unresolvable bundle is reported
+- **Subreports** — a literal `<subreportExpression>` (classic) or `<expression>` (Studio 7 subreport element) is resolved against the report directory and workspace; a missing target or a mapped parameter the target does not declare is reported, and go-to-definition opens the source `.jrxml` (a `.jasper` path maps back to its source)
 - Unbalanced parentheses and unclosed string literals
 - **Structural lint rules** ported from the project's commit-time `myhooks` hook:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`

@@ -29,6 +29,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   go-to-definition into the `.properties` file, and warnings for a missing key
   or a bundle that cannot be found.
 
+- **Subreports:** literal subreport expressions are resolved against the report
+  directory and workspace, a missing target or a parameter the target report does
+  not declare is reported, and go-to-definition opens the target `.jrxml`
+  (`.jasper` paths map back to their source). Dynamic expressions are left alone.
+
 ### Fixed
 - References are collected from expression elements only: `$F{}` inside an XML
   comment or static `<text>` no longer raises a false "not declared" error or
