@@ -555,9 +555,14 @@ function readBox(node, style) {
     return box;
 }
 
+/**
+ * Element attributes exposed to the webview are decoded: the model is a
+ * display/edit representation and designEdit encodes values once on write.
+ * Structural checks that need the literal source use `node.attr(name).value`.
+ */
 function readAttrs(node) {
     const out = {};
-    for (const attr of node.attrList) out[attr.name] = attr.value;
+    for (const attr of node.attrList) out[attr.name] = decodeXmlEntities(attr.value);
     return out;
 }
 
