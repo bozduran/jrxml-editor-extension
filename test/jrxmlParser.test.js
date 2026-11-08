@@ -469,6 +469,7 @@ test('outline covers datasets, groups, frames, every element kind and styles', (
         </element>
       </element>
       <element kind="line" x="0" y="60" width="10" height="1"/>
+      <element kind="chart" x="0" y="70" width="100" height="50"/>
     </band>
   </detail>
 </jasperReport>`;
@@ -486,7 +487,7 @@ test('outline covers datasets, groups, frames, every element kind and styles', (
     assert.strictEqual(group.children[0].children[0].name, 'staticText: Header');
 
     const detail = report.children.find(child => child.kind === 'band' && child.name === 'detail');
-    assert.deepStrictEqual(detail.children.map(child => child.kind), ['frame', 'line']);
+    assert.deepStrictEqual(detail.children.map(child => child.kind), ['frame', 'line', 'chart']);
     assert.deepStrictEqual(
         detail.children[0].children.map(child => `${child.kind}:${child.name}`),
         ['textField:$F{F}']
