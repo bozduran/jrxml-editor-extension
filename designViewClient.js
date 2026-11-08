@@ -1441,8 +1441,8 @@ function completionTrigger(event) {
   const value = inputs.text.value;
   const offset = inputs.text.selectionStart;
   const before = value.slice(0, offset);
-  return /$[FPVR]?{[^}]*$/.test(before)
-    || /.s*[A-Za-z_$][w$]*$/.test(before);
+  return /\$[FPVR]?\{[^}]*$/.test(before)
+    || /\.\s*[A-Za-z_$][\w$]*$/.test(before);
 }
 
 function scheduleCompletions(event) {

@@ -189,6 +189,15 @@ test('ships the required renderer and messaging hooks', () => {
     );
 });
 
+test('keeps completion-trigger regex escapes intact in the inlined client', () => {
+    const script = inlineScript(build());
+
+    // The client is a real JS file now; these backslashes must reach the
+    // browser unchanged instead of being consumed as template-literal escapes.
+    assert.ok(script.includes('/\\$[FPVR]?\\{[^}]*$/.test(before)'), 'field trigger regex was mangled');
+    assert.ok(script.includes('/\\.\\s*[A-Za-z_$][\\w$]*$/.test(before)'), 'member trigger regex was mangled');
+});
+
 test('embeds the document version and handles a missing version', () => {
     assert.ok(build().includes('const INITIAL_VERSION = 7;'));
 

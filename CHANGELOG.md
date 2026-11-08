@@ -83,6 +83,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   itself remains in the **JRXML** menu and the Command Palette.
 
 ### Fixed
+- **Design view autocomplete:** the inspector no longer stops requesting
+  suggestions while typing inside `$F{…}` / `$P{…}` / `$V{…}` or after a dot. The
+  client script is now a real JavaScript asset, so its regex escapes are not
+  consumed by the host template literal.
 - **If / Else builder:** loading an expression whose results used arithmetic or
   concatenation (`$F{a} + " " + $F{b}`) failed with "Cannot read near…"; results
   are now captured as opaque source.
