@@ -10,6 +10,27 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **Function catalogue:** the remaining official date/time functions
+  (`DATEVALUE`, `DAY`, `MONTH`, `YEAR`, `WEEKS`, `EDATE`, `TIME`, …), a
+  checked-in reference manifest and a parity test.
+- **Build bridge:** a documented `verifyDesign` recipe for projects that have
+  one; the extension runs the configured command and parses its output.
+- **Queries:** SQL keyword/comment highlighting is scoped to
+  `language="sql"`; JSONQL gets strings, numbers and fragments only.
+
+### Fixed
+- Classic `<section><band height>` sections now count toward the page budget,
+  and classic frame children are measured against the frame.
+- Maven `[ERROR] file:line` output is no longer double-reported by the javac
+  problem matcher.
+- `DATERANGE` now uses the official one-argument `DateRange` contract.
+
+### Changed
+- Internal: shared `$F/$P/$V/$R/$X` token scanner and rule runner, one
+  workspace-scan exclude contract, one report-section list, the build default
+  read from the settings schema, and tests for the build bridge.
+
 ## [1.0.0] - 2026-11-08
 
 ### Added
