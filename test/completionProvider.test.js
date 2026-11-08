@@ -360,7 +360,7 @@ test('the legacy contexts still work', () => {
     assert.ok(labels(insideVariable).includes('Count'));
 
     const afterDollar = completeExpression('$');
-    assert.deepStrictEqual(labels(afterDollar), ['$F{', '$P{', '$V{', '$R{']);
+    assert.deepStrictEqual(labels(afterDollar), ['$F{', '$P{', '$V{', '$R{', '$X{']);
 });
 
 test('a single dot without a receiver falls back instead of erroring', () => {
