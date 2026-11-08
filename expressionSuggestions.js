@@ -57,6 +57,18 @@ const JASPER_FUNCTIONS = [
     { label: 'FIRST',       detail: 'FIRST(value)',                   doc: 'Returns the first non-null value encountered.',                               snippet: 'FIRST(${1:value})' },
     { label: 'STDEV',       detail: 'STDEV(value)',                   doc: 'Calculates standard deviation.',                                              snippet: 'STDEV(${1:value})' },
     { label: 'VAR',         detail: 'VAR(value)',                     doc: 'Calculates variance.',                                                        snippet: 'VAR(${1:value})' },
+    { label: 'DATEFORMAT',  detail: 'DATEFORMAT(date, pattern)',      doc: 'Formats a date with a pattern.',                                              snippet: 'DATEFORMAT(${1:date}, "${2:yyyy-MM-dd}")' },
+    { label: 'DATERANGE',   detail: 'DATERANGE(date, start, end)',    doc: 'Returns true when date falls between start and end.',                         snippet: 'DATERANGE(${1:date}, ${2:start}, ${3:end})' },
+    { label: 'DAYS',        detail: 'DAYS(date1, date2)',             doc: 'Returns the number of days between two dates.',                               snippet: 'DAYS(${1:date1}, ${2:date2})' },
+    { label: 'NETWORKDAYS', detail: 'NETWORKDAYS(start, end)',        doc: 'Returns the number of working days between two dates.',                       snippet: 'NETWORKDAYS(${1:start}, ${2:end})' },
+    { label: 'WORKDAY',     detail: 'WORKDAY(start, days)',           doc: 'Returns the date that is a number of working days after start.',              snippet: 'WORKDAY(${1:start}, ${2:days})' },
+    { label: 'msg',         detail: 'msg(key, ...)',                  doc: 'Looks up a message from the report resource bundle.',                         snippet: 'msg("${1:key}")' },
+    { label: 'str',         detail: 'str(pattern, ...)',              doc: 'Formats a message pattern with arguments.',                                   snippet: 'str("${1:pattern}", ${2:args})' },
+];
+
+const X_CLAUSES = [
+    'IN', 'NOTIN', 'EQUAL', 'NOTEQUAL', 'LESS', 'GREATER',
+    'LESSOREQUAL', 'GREATEROREQUAL', 'BETWEEN', 'NOTBETWEEN',
 ];
 
 const JAVA_TYPES = [
@@ -133,10 +145,21 @@ function buildExpressionSuggestions({ text, offset, declarations, options = {}, 
         }
     }
 
-    const brace = /\$([FPVR])(!?)\{([^}]*)$/.exec(linePrefix);
+    const brace = /\$([FPVRX])(!?)\{([^}]*)$/.exec(linePrefix);
     if (brace) {
         const sigil  = brace[1];
         const prefix = brace[3];
+
+        if (sigil === 'X') {
+            const items = clauseItems();
+            completeBrace(items, expression, caret);
+            return {
+                mode:    'clause',
+                prefix,
+                replace: { start: caret - prefix.length, end: caret },
+                items,
+            };
+        }
 
         if (sigil === 'R') {
             if (!resourceEntries || resourceEntries.length === 0) {
@@ -236,6 +259,18 @@ function completeBrace(items, expression, caret) {
     }
 }
 
+/** `$X{CLAUSE, ...}` SQL clause-builder suggestions. */
+function clauseItems() {
+    return X_CLAUSES.map(clause => withPlain({
+        label:             clause,
+        detail:            `$X{${clause}, ...}`,
+        documentation:     `JasperReports SQL clause function **${clause}**.\n\nUse \`$X{${clause}, field, parameter}\` inside a query.`,
+        insertTextSnippet: clause,
+        kind:              'function',
+        sortText:          '0_' + clause,
+    }, clause));
+}
+
 /** `$R{key}` suggestions from the report's resource bundle. */
 function resourceItems(resources) {
     return resources.map(resource => {
@@ -275,6 +310,7 @@ function shortcutItems() {
         shortcut('$P{', 'Parameter', 'parameter'),
         shortcut('$V{', 'Variable', 'variable'),
         shortcut('$R{', 'Resource bundle key', 'reference'),
+        shortcut('$X{', 'SQL clause', 'function'),
     ];
 }
 
