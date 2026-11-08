@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-08
+
 ### Added
 - **Dataset-scope awareness:** completion, hover, go-to-definition and references
   resolve against the report or the enclosing `<dataset>`/`<subDataset>`, including
@@ -22,7 +24,6 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - **Report language detection:** a report with `language="groovy"` or
   `"javascript"` gets a warning that only Java expressions are modeled, and Java
   typed member completion is disabled for it.
-
 - **Resource bundles:** `$R{` completion from the report's `resourceBundle`
   (base file plus locale variants), hover with the default and localized values,
   go-to-definition into the `.properties` file, and warnings for a missing key
