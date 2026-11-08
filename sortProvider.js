@@ -3,7 +3,7 @@
 //
 // Sorting rewrites the whole file, so it is never silent: the command opens a
 // diff of the current document against the sorted result and only applies it
-// when the user confirms (unless jrxml.sort.preview is off).
+// when the user confirms (unless jrxml.sort.confirm is off).
 
 const vscode = require('vscode');
 const path   = require('path');
@@ -36,7 +36,7 @@ function register(context) {
                     `Sort elements: ${path.basename(document.fileName)}`
                 );
 
-                if (vscode.workspace.getConfiguration('jrxml').get('sort.preview', true)) {
+                if (vscode.workspace.getConfiguration('jrxml').get('sort.confirm', true)) {
                     const choice = await vscode.window.showInformationMessage(
                         'Apply the geometry sort?',
                         { modal: true },

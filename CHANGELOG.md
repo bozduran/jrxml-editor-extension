@@ -60,6 +60,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   the reminder.
 
 ### Changed
+- **Settings:** `jrxml.clear.preview` / `jrxml.sort.preview` are now
+  `jrxml.clear.confirm` / `jrxml.sort.confirm`. The names match the behaviour:
+  the diff preview always opens, and the setting controls whether the destructive
+  apply asks for confirmation.
 - **Navigation:** **Go to Next / Previous Issue** now use `Ctrl+Alt+N` / `Ctrl+Alt+P`
   (`Cmd+Alt+N` / `Cmd+Alt+P` on macOS) instead of `Ctrl+Alt+Down` / `Ctrl+Alt+Up`,
   which overrode VS Code's add-cursor-below/above shortcuts while a `.jrxml` editor

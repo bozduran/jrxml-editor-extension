@@ -101,7 +101,7 @@ Formatting only runs when you ask for it (Format Document, the fix-all action, o
 `jrxml.formatOnSave`) and never reorders elements or deletes declarations.
 
 ### 7. Clear fixes and geometry sort
-Two destructive steps are opt-in commands, always previewed as a diff before applying:
+Two destructive steps are opt-in commands. Each always opens a diff preview and, unless confirmation is disabled, asks before applying:
 
 - **Clear fixes** (`JRXML: Apply Clear Fixes`) — delete unused declarations (never the
   built-in parameters), sync field descriptions with their jsonql property, and fix the
@@ -248,8 +248,8 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `jrxml.textcheck.enabled` | `true` | Rendered-text rules in text and string literals |
 | `jrxml.textcheck.diagnostics` | `true` | Show warnings + quick fixes for text-check problems |
 | `jrxml.formatOnSave` | `false` | Run format + textcheck on save (never clear/sort) |
-| `jrxml.sort.preview` | `true` | Show a diff and confirm before applying the geometry sort |
-| `jrxml.clear.preview` | `true` | Show a diff and confirm before applying clear fixes or a SQL migration |
+| `jrxml.sort.confirm` | `true` | Ask before applying the geometry sort (the diff preview always opens) |
+| `jrxml.clear.confirm` | `true` | Ask before applying clear fixes or a SQL migration (the diff preview always opens) |
 | `jrxml.migrate.targetLanguage` | `jsonql` | Language written to `<query language="...">` when migrating a SQL query |
 
 ---
@@ -275,7 +275,7 @@ npm run lint             # eslint
 ```
 The unit suite runs on plain Node with no VS Code needed. The integration suite
 activates the extension for real and covers command registration, diagnostics,
-the sort/clear commands (preview disabled), document formatting and the settings
+the sort/clear commands (confirmation disabled), document formatting and the settings
 panel. On a headless Linux box run it under `xvfb-run -a npm run test:integration`.
 
 When you add a command or a settings group, also update `tutorialHtml.js`;

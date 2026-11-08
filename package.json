@@ -476,15 +476,15 @@
           "default": false,
           "description": "Run the format + textcheck steps when saving a .jrxml file (never the clear or sort steps)."
         },
-        "jrxml.sort.preview": {
+        "jrxml.sort.confirm": {
           "type": "boolean",
           "default": true,
-          "description": "Show a diff and ask for confirmation before applying the geometry sort (the sort rewrites the whole file)."
+          "description": "Ask for confirmation before applying the geometry sort (the command always opens a diff preview; the sort rewrites the whole file)."
         },
-        "jrxml.clear.preview": {
+        "jrxml.clear.confirm": {
           "type": "boolean",
           "default": true,
-          "description": "Show a diff and ask for confirmation before applying clear fixes or a SQL->jsonql migration."
+          "description": "Ask for confirmation before applying clear fixes or a SQL->jsonql migration (the command always opens a diff preview)."
         },
         "jrxml.migrate.targetLanguage": {
           "type": "string",

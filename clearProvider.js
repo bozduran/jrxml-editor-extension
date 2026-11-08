@@ -7,7 +7,7 @@
 //                            <query language="sql"> element
 //
 // Clear is destructive, so it is never automatic: the user runs a command, sees
-// a diff, and confirms.
+// a diff, and confirms (unless jrxml.clear.confirm is off).
 
 const vscode = require('vscode');
 const path   = require('path');
@@ -27,7 +27,7 @@ function applyEdits(document, edits) {
 }
 
 async function confirm(message) {
-    if (!vscode.workspace.getConfiguration('jrxml').get('clear.preview', true)) return true;
+    if (!vscode.workspace.getConfiguration('jrxml').get('clear.confirm', true)) return true;
     const choice = await vscode.window.showInformationMessage(message, { modal: true }, 'Apply');
     return choice === 'Apply';
 }

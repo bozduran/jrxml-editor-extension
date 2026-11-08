@@ -59,8 +59,8 @@ const DOCUMENTED_SETTING_GROUPS = [
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
     { id: 'diagnostics', summary: 'Unused warnings, expression validation, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
-    { id: 'clear', summary: 'The SQL migration target language and whether to preview clear fixes.' },
-    { id: 'sort', summary: 'Whether the geometry sort opens a diff before applying.' },
+    { id: 'clear', summary: 'The SQL migration target language and whether to confirm clear fixes.' },
+    { id: 'sort', summary: 'Whether the geometry sort asks for confirmation (the diff preview always opens).' },
 ];
 
 /**
@@ -570,7 +570,7 @@ Class&lt;? extends Number&gt;</code></div>
     <li><strong>Sort Band/Frame Elements by Position</strong> reorders each container by <code>y</code> then <code>x</code>, keeping comments attached to their element.</li>
     <li><strong>Migrate SQL Query to jsonql</strong> rewrites a <code>&lt;query language="sql"&gt;</code> into the configured target language.</li>
   </ul>
-  <p>The previews can be disabled with <code>jrxml.clear.preview</code> or <code>jrxml.sort.preview</code>, but the confirmation remains the safe default.</p>
+  <p>The confirmation can be disabled with <code>jrxml.clear.confirm</code> or <code>jrxml.sort.confirm</code>; the diff preview always opens.</p>
 </section>
 
 <section id="include-chain">

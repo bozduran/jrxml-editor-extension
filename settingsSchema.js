@@ -163,9 +163,9 @@ const SETTINGS_GROUPS = [
         description: 'Declaration cleanup and SQL query migration',
         settings: [
             {
-                key: 'clear.preview', type: 'boolean', default: true,
-                label: 'Preview clear fixes',
-                description: 'Show a diff and ask for confirmation before applying clear fixes or a SQL migration.',
+                key: 'clear.confirm', type: 'boolean', default: true,
+                label: 'Confirm clear fixes',
+                description: 'Ask for confirmation before applying clear fixes or a SQL migration (the diff preview always opens).',
             },
             {
                 key: 'migrate.targetLanguage', type: 'string', default: 'jsonql',
@@ -180,9 +180,9 @@ const SETTINGS_GROUPS = [
         description: 'Geometry reordering of band/frame elements',
         settings: [
             {
-                key: 'sort.preview', type: 'boolean', default: true,
-                label: 'Preview sort',
-                description: 'Show a diff and ask for confirmation before applying the geometry sort.',
+                key: 'sort.confirm', type: 'boolean', default: true,
+                label: 'Confirm sort',
+                description: 'Ask for confirmation before applying the geometry sort (the diff preview always opens).',
             },
         ],
     },
