@@ -10,6 +10,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- The “Add declaration” quick fix for an undeclared `$P{}`/`$F{}`/`$V{}`
+  reference now inserts at report level, in schema order, instead of after a
+  nested subreport or dataset parameter with the same tag name.
+
 ## [1.1.0] - 2026-11-08
 
 ### Added
