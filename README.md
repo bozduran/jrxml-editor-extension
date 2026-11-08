@@ -45,7 +45,9 @@ A visual builder for conditional expressions, opened on demand:
   **Text**, a **Number**, `null`, or an **Expression** — expressions are inserted
   verbatim, so `$F{first} + " " + $F{last}`, method calls and `new Date()` work.
 - **Two output styles** — a nested ternary or the Jaspersoft `IF()` / `AND()` / `OR()`
-  functions. Null-safe guards are written as inline ternaries in function style.
+  functions. String and Boolean equality use the Jaspersoft `EQUALS(...)` /
+  `NOT(EQUALS(...))` helpers instead of `.equals(...)`. Null-safe guards are written as
+  inline ternaries in function style.
 - **Apply or copy** — Apply writes the expression back into the expression tag the
   builder was opened from (CDATA preserved, one undoable edit); Copy puts it on the
   clipboard.
@@ -143,7 +145,8 @@ The member table ships with the extension (`data/jdk-members.json`, generated fr
 `jrxml.typeCompletion.enabled` (default `true`) turns the whole thing off and restores the previous behaviour.
 
 **Expression snippets.** Type a snippet prefix in an expression to insert a common pattern:
-`jif` (`IF(...)`), `jternary`, `jnullsafe`, `jand`, `jor`, `jnot`, `jequals`, `jtext`,
+`jif` (`IF(...)`), `jternary`, `jnullsafe`, `jand`, `jor`, `jnot`,
+`jequals`/`jrequals` (`EQUALS(...)`), `jtext`,
 `jstring`, `jdecimal` and `jdate`.
 
 Date/time helpers: `jdatetoday` (format `TODAY()`), `jdateadd` (`TODAY()` + N days),

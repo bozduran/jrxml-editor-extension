@@ -484,7 +484,7 @@ function buildTutorialHtml({ nonce }) {
   <h3>Branches and conditions</h3>
   <ul>
     <li>Each branch is an <strong>if</strong> or <strong>else if</strong>; conditions can be joined with AND or OR.</li>
-    <li>Value types are String, Number, Boolean or a raw Boolean expression. Null checks, string methods, comparisons and boolean guards are written with the null-safety you choose.</li>
+    <li>Value types are String, Number, Boolean or a raw Boolean expression. Null checks, string methods, comparisons and boolean guards are written with the null-safety you choose; String and Boolean equality use the Jaspersoft <code>EQUALS(...)</code> / <code>NOT(EQUALS(...))</code> helpers instead of <code>.equals(...)</code>.</li>
     <li>Two output styles are available: a nested ternary or the Jaspersoft <code>IF()</code> / <code>AND()</code> / <code>OR()</code> functions.</li>
   </ul>
 

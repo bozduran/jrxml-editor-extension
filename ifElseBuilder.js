@@ -211,10 +211,10 @@ function conditionText(condition, options = {}) {
 
     if (condition.type === 'String') {
         if (op === 'equals') {
-            return nullSafe ? value + '.equals(' + ref + ')' : ref + '.equals(' + value + ')';
+            return 'EQUALS(' + ref + ', ' + value + ')';
         }
         if (op === 'notEquals') {
-            return '!' + (nullSafe ? value + '.equals(' + ref + ')' : ref + '.equals(' + value + ')');
+            return 'NOT(EQUALS(' + ref + ', ' + value + '))';
         }
         if (op === 'equalsIgnoreCase') {
             return nullSafe
@@ -237,9 +237,9 @@ function conditionText(condition, options = {}) {
     }
 
     if (op === 'isTrue') {
-        return nullSafe ? 'Boolean.TRUE.equals(' + ref + ')' : ref + '.booleanValue()';
+        return nullSafe ? 'EQUALS(' + ref + ', true)' : ref + '.booleanValue()';
     }
-    return nullSafe ? 'Boolean.FALSE.equals(' + ref + ')' : '!' + ref + '.booleanValue()';
+    return nullSafe ? 'EQUALS(' + ref + ', false)' : '!' + ref + '.booleanValue()';
 }
 
 /** The text of one branch's result. */
@@ -569,34 +569,68 @@ function toCondition(node, context) {
         }
     }
 
-    // 4. Method calls and static helpers.
-    if (node.t === 'call' && node.o) {
-        const object = node.o;
-        const argument = node.args[0];
-        const method = node.n;
+    // 4. Calls: JasperReports helpers and Java methods.
+    if (node.t === 'call') {
+        const args = node.args || [];
+        const argument = args[0];
         const valueOf = valueNode => (valueNode.t === 'str' ? valueNode.v : valueNode.src);
 
-        if (object.src === 'Boolean.TRUE' && argument && argument.t === 'ref') {
-            context.nullSafe = true;
-            return fromRef(argument, 'Boolean', 'isTrue');
-        }
-        if (object.src === 'Boolean.FALSE' && argument && argument.t === 'ref') {
-            context.nullSafe = true;
-            return fromRef(argument, 'Boolean', 'isFalse');
-        }
-        if (method === 'booleanValue' && object.t === 'ref') {
-            return fromRef(object, 'Boolean', 'isTrue');
-        }
-        if (method === 'isEmpty' && object.t === 'ref') {
-            return fromRef(object, 'String', 'isEmpty');
-        }
-        if (['equals', 'equalsIgnoreCase', 'contains', 'startsWith', 'endsWith'].includes(method) && argument) {
-            if (object.t === 'ref' && (argument.t === 'str' || argument.t === 'ref')) {
-                return fromRef(object, 'String', method, valueOf(argument));
-            }
-            if (object.t === 'str' && argument.t === 'ref' && method.startsWith('equals')) {
+        if (!node.o && node.n === 'EQUALS' && args.length === 2) {
+            const [left, right] = args;
+            if (left.t === 'ref' && right.t === 'bool') {
                 context.nullSafe = true;
-                return fromRef(argument, 'String', method, object.v);
+                return fromRef(left, 'Boolean', right.v ? 'isTrue' : 'isFalse');
+            }
+            if (right.t === 'ref' && left.t === 'bool') {
+                context.nullSafe = true;
+                return fromRef(right, 'Boolean', left.v ? 'isTrue' : 'isFalse');
+            }
+            if (left.t === 'ref' && right.t === 'null') {
+                return fromRef(left, 'String', 'isNull');
+            }
+            if (right.t === 'ref' && left.t === 'null') {
+                return fromRef(right, 'String', 'isNull');
+            }
+            if (left.t === 'ref' && right.t === 'num') {
+                return fromRef(left, 'Number', '==', right.src);
+            }
+            if (right.t === 'ref' && left.t === 'num') {
+                return fromRef(right, 'Number', '==', left.src);
+            }
+            if (left.t === 'ref' && (right.t === 'str' || right.t === 'ref')) {
+                return fromRef(left, 'String', 'equals', valueOf(right));
+            }
+            if (right.t === 'ref' && left.t === 'str') {
+                return fromRef(right, 'String', 'equals', left.v);
+            }
+        }
+
+        if (node.o) {
+            const object = node.o;
+            const method = node.n;
+
+            if (object.src === 'Boolean.TRUE' && argument && argument.t === 'ref') {
+                context.nullSafe = true;
+                return fromRef(argument, 'Boolean', 'isTrue');
+            }
+            if (object.src === 'Boolean.FALSE' && argument && argument.t === 'ref') {
+                context.nullSafe = true;
+                return fromRef(argument, 'Boolean', 'isFalse');
+            }
+            if (method === 'booleanValue' && object.t === 'ref') {
+                return fromRef(object, 'Boolean', 'isTrue');
+            }
+            if (method === 'isEmpty' && object.t === 'ref') {
+                return fromRef(object, 'String', 'isEmpty');
+            }
+            if (['equals', 'equalsIgnoreCase', 'contains', 'startsWith', 'endsWith'].includes(method) && argument) {
+                if (object.t === 'ref' && (argument.t === 'str' || argument.t === 'ref')) {
+                    return fromRef(object, 'String', method, valueOf(argument));
+                }
+                if (object.t === 'str' && argument.t === 'ref' && method.startsWith('equals')) {
+                    context.nullSafe = true;
+                    return fromRef(argument, 'String', method, object.v);
+                }
             }
         }
     }

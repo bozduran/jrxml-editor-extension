@@ -60,6 +60,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   the reminder.
 
 ### Changed
+- **If / Else builder and snippets:** String and Boolean equality now emit the
+  JasperReports `EQUALS(...)` / `NOT(EQUALS(...))` helpers instead of
+  `.equals(...)`. The `jequals` snippet gained the `jrequals` alias and inserts
+  `EQUALS(value, expected)`.
 - **Settings:** `jrxml.clear.preview` / `jrxml.sort.preview` are now
   `jrxml.clear.confirm` / `jrxml.sort.confirm`. The names match the behaviour:
   the diff preview always opens, and the setting controls whether the destructive

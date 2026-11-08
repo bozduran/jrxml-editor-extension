@@ -29,10 +29,10 @@
     "body": ["NOT(${1:condition})"],
     "description": "Negate a boolean expression"
   },
-  "String equals": {
-    "prefix": ["jequals", "jr-equals"],
-    "body": ["${1:value}.equals(${2:\"expected\"})"],
-    "description": "String equals call; the receiver must be non-null"
+  "JasperReports EQUALS": {
+    "prefix": ["jequals", "jrequals", "jr-equals"],
+    "body": ["EQUALS(${1:value}, ${2:\"expected\"})"],
+    "description": "JasperReports EQUALS(value, expected); null-safe comparison"
   },
   "TEXT formatting": {
     "prefix": ["jtext", "jr-text"],

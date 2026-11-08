@@ -49,7 +49,7 @@ function fakeDocument(text) {
 
 // ── Generation (spec 9.1) ────────────────────────────────────────────────────
 
-test('G1: String equals, null-safe, single line', () => {
+test('G1: String equals uses the JasperReports EQUALS function, null-safe', () => {
     const state = oneBranch({
         conditions: [cond({ name: 'status', type: 'String', op: 'equals', val: 'PAID' })],
         result: TEXT('Paid'),
@@ -57,11 +57,11 @@ test('G1: String equals, null-safe, single line', () => {
     });
     assert.strictEqual(
         builder.buildExpression(state, { nullSafe: true, multiline: false }),
-        '("PAID".equals($F{status}) ? "Paid" : "Unknown")'
+        '(EQUALS($F{status}, "PAID") ? "Paid" : "Unknown")'
     );
 });
 
-test('G2: String equals, null-safe off, single line', () => {
+test('G2: String equals uses EQUALS in both null-safe modes', () => {
     const state = oneBranch({
         conditions: [cond({ name: 'status', type: 'String', op: 'equals', val: 'PAID' })],
         result: TEXT('Paid'),
@@ -69,7 +69,7 @@ test('G2: String equals, null-safe off, single line', () => {
     });
     assert.strictEqual(
         builder.buildExpression(state, { nullSafe: false, multiline: false }),
-        '($F{status}.equals("PAID") ? "Paid" : "Unknown")'
+        '(EQUALS($F{status}, "PAID") ? "Paid" : "Unknown")'
     );
 });
 
@@ -81,8 +81,32 @@ test('G3: String equals, functions style, single line', () => {
     });
     assert.strictEqual(
         builder.buildExpression(state, { nullSafe: true, multiline: false, style: 'functions' }),
-        'IF("PAID".equals($F{status}), "Paid", "Unknown")'
+        'IF(EQUALS($F{status}, "PAID"), "Paid", "Unknown")'
     );
+});
+
+test('String not-equals and Boolean conditions also use EQUALS', () => {
+    const notEqual = oneBranch({
+        conditions: [cond({ name: 'status', type: 'String', op: 'notEquals', val: 'PAID' })],
+        result: TEXT('Paid'),
+        els: TEXT('Unknown'),
+    });
+    assert.strictEqual(
+        builder.buildExpression(notEqual, { nullSafe: true, multiline: false }),
+        '(NOT(EQUALS($F{status}, "PAID")) ? "Paid" : "Unknown")'
+    );
+
+    for (const [op, expected] of [['isTrue', 'true'], ['isFalse', 'false']]) {
+        const bool = oneBranch({
+            conditions: [cond({ name: 'active', type: 'Boolean', op })],
+            result: TEXT('Yes'),
+            els: TEXT('No'),
+        });
+        assert.strictEqual(
+            builder.buildExpression(bool, { nullSafe: true, multiline: false }),
+            `(EQUALS($F{active}, ${expected}) ? "Yes" : "No")`
+        );
+    }
 });
 
 test('G4: Number comparison is guarded, single line', () => {
@@ -148,9 +172,9 @@ test('G8: two branches, multi-line ternary indentation', () => {
     assert.strictEqual(
         builder.buildExpression(state, { nullSafe: true, multiline: true }),
         [
-            '("PAID".equals($F{status})',
+            '(EQUALS($F{status}, "PAID")',
             '  ? "Paid"',
-            '  : ("PENDING".equals($F{status})',
+            '  : (EQUALS($F{status}, "PENDING")',
             '      ? "Pending"',
             '      : "Unknown"))',
         ].join('\n')
@@ -165,7 +189,7 @@ test('G9: quotes, backslashes and newlines are escaped in Java literals', () => 
     });
     assert.strictEqual(
         builder.buildExpression(state, { nullSafe: true, multiline: false }),
-        '("say \\"hi\\"".equals($F{status}) ? "a\\\\b" : "")'
+        '(EQUALS($F{status}, "say \\"hi\\"") ? "a\\\\b" : "")'
     );
     assert.strictEqual(
         builder.escapeJavaString(String.raw`a\b"c` + '\n'),
@@ -198,7 +222,7 @@ test('defaults are null-safe, multi-line and ternary', () => {
     });
     const output = builder.buildExpression(state);
     assert.ok(output.includes('\n'), 'default output is multi-line');
-    assert.ok(output.includes('"PAID".equals($F{status})'), 'default output is null-safe');
+    assert.ok(output.includes('EQUALS($F{status}, "PAID")'), 'default output uses the null-safe EQUALS function');
     assert.ok(output.startsWith('('), 'default style is ternary');
 });
 
@@ -225,7 +249,7 @@ test('array references are accepted as comparison values', () => {
     });
     assert.strictEqual(
         builder.buildExpression(state, { nullSafe: true, multiline: false }),
-        '($P{expected}.equals($F{status}) ? "a" : "b")'
+        '(EQUALS($F{status}, $P{expected}) ? "a" : "b")'
     );
 });
 
@@ -347,6 +371,46 @@ test('reverse conversion also understands NOT, Boolean.TRUE.equals and string re
     ]);
 });
 
+test('reverse conversion understands the JasperReports EQUALS function', () => {
+    const equal = builder.fromExpression('IF(EQUALS($F{status}, "PAID"), "Paid", "Unknown")');
+    assert.deepStrictEqual(equal.state.branches[0].conds, [
+        { ref: 'F', name: 'status', type: 'String', op: 'equals', val: 'PAID' },
+    ]);
+
+    const notEqual = builder.fromExpression('IF(NOT(EQUALS($F{status}, "PAID")), "Paid", "Unknown")');
+    assert.deepStrictEqual(notEqual.state.branches[0].conds, [
+        { ref: 'F', name: 'status', type: 'String', op: 'notEquals', val: 'PAID' },
+    ]);
+
+    const bool = builder.fromExpression('IF(EQUALS($F{active}, true), "Y", "N")');
+    assert.deepStrictEqual(bool.state.branches[0].conds, [
+        { ref: 'F', name: 'active', type: 'Boolean', op: 'isTrue', val: '' },
+    ]);
+    assert.strictEqual(bool.nullSafe, true);
+});
+
+test('Boolean EQUALS round-trips through reverse conversion', () => {
+    const state = oneBranch({
+        conditions: [cond({ name: 'active', type: 'Boolean', op: 'isFalse' })],
+        result: TEXT('Yes'),
+        els: TEXT('No'),
+    });
+    const generated = builder.buildExpression(state, { nullSafe: true, multiline: false });
+
+    assert.strictEqual(generated, '(EQUALS($F{active}, false) ? "Yes" : "No")');
+    const recovered = builder.fromExpression(generated);
+    assert.deepStrictEqual(recovered.state.branches[0].conds, [
+        { ref: 'F', name: 'active', type: 'Boolean', op: 'isFalse', val: '' },
+    ]);
+    assert.strictEqual(recovered.nullSafe, true);
+    assert.strictEqual(
+        builder.buildExpression(recovered.state, {
+            nullSafe: recovered.nullSafe, multiline: false, style: recovered.style,
+        }),
+        generated
+    );
+});
+
 // ── Expression results ───────────────────────────────────────────────────────
 // Results are opaque Java/JasperReports source, not condition fragments.
 
@@ -361,7 +425,7 @@ test('loads arbitrary expression results verbatim', () => {
         builder.buildExpression(result.state, {
             nullSafe: result.nullSafe, multiline: false, style: result.style,
         }),
-        '($F{status}.equals("PAID") ? $F{first} + " " + $F{last} : new java.util.Date())'
+        '(EQUALS($F{status}, "PAID") ? $F{first} + " " + $F{last} : new java.util.Date())'
     );
 });
 
@@ -599,5 +663,5 @@ test('emptyState starts with one empty branch and a text else', () => {
         { ref: 'F', name: '', type: 'String', op: 'equals', val: '' },
     ]);
     assert.deepStrictEqual(state.els, { kind: 'text', val: '' });
-    assert.strictEqual(builder.buildExpression(state, { multiline: false }), '("".equals($F{name}) ? "" : "")');
+    assert.strictEqual(builder.buildExpression(state, { multiline: false }), '(EQUALS($F{name}, "") ? "" : "")');
 });
