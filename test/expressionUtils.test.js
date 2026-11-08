@@ -4,6 +4,8 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
+const fs     = require('node:fs');
+const path   = require('node:path');
 const Module = require('node:module');
 
 class FakeRange {
@@ -60,6 +62,58 @@ test('wrapExpression only wraps when asked', () => {
 test('EXPRESSION_TAGS contains the common expression elements', () => {
     for (const tag of ['textFieldExpression', 'printWhenExpression', 'variableExpression', 'jr:expression']) {
         assert.ok(EXPRESSION_TAGS.includes(tag), `missing ${tag}`);
+    }
+});
+
+// ── Registry / grammar parity ───────────────────────────────────────────────
+// The editor, completion, formatting, diagnostics and used-name collection all
+// read EXPRESSION_TAGS, while the TextMate grammar carries its own copy of the
+// same list. These tests are the guard against the two drifting apart.
+
+const grammar = JSON.parse(
+    fs.readFileSync(path.join(__dirname, '..', 'syntaxes', 'jrxml.tmLanguage.json'), 'utf8')
+);
+const expressionRule = grammar.repository.expression_tag.patterns[0];
+
+/** Tags inside the `(?:a|b|c)` alternation of a grammar regex. */
+function grammarTags(source, open, close) {
+    const start = source.indexOf(open);
+    assert.notStrictEqual(start, -1, `missing ${open} in ${source.slice(0, 60)}…`);
+    const from = start + open.length;
+    const end  = source.indexOf(close, from);
+    assert.notStrictEqual(end, -1, `missing ${close} in ${source.slice(0, 60)}…`);
+    return source.slice(from, end).split('|');
+}
+
+test('every expression tag highlighted by the grammar is in the shared registry', () => {
+    const tags = grammarTags(expressionRule.begin, '<(?:', ')(?=');
+    const missing = tags.filter(tag => !EXPRESSION_TAGS.includes(tag));
+
+    assert.deepStrictEqual(missing, [], `grammar-only tags: ${missing.join(', ')}`);
+});
+
+test('every registry tag is highlighted by the grammar', () => {
+    const tags = new Set(grammarTags(expressionRule.begin, '<(?:', ')(?='));
+    const missing = EXPRESSION_TAGS.filter(tag => !tags.has(tag));
+
+    assert.deepStrictEqual(missing, [], `registry-only tags: ${missing.join(', ')}`);
+});
+
+test('the grammar opens and closes the same expression tags', () => {
+    const begin = grammarTags(expressionRule.begin, '<(?:', ')(?=').sort();
+    const end   = grammarTags(expressionRule.end,   '</(?:', ')>').sort();
+
+    assert.deepStrictEqual(end, begin);
+});
+
+test('the expression editor recognizes every registry tag at the cursor', () => {
+    for (const tag of EXPRESSION_TAGS) {
+        const text = `<jasperReport><${tag}><![CDATA[$F{x}]]></${tag}></jasperReport>`;
+        const offset = text.indexOf('$F{x}') + 2;
+        const result = findExpressionAtCursor(fakeDocument(text), offset);
+
+        assert.ok(result, `no expression found for <${tag}>`);
+        assert.strictEqual(result.tagName, tag);
     }
 });
 

@@ -1,22 +1,7 @@
 // expressionUtils.js
 // Finds the JRXML expression element that the cursor is currently inside.
 
-const EXPRESSION_TAGS = [
-    'textFieldExpression', 'imageExpression', 'variableExpression',
-    'groupExpression', 'printWhenExpression', 'initialValueExpression',
-    'filterExpression', 'expression', 'jr:expression',
-    'defaultValueExpression', 'anchorNameExpression',
-    'hyperlinkReferenceExpression', 'hyperlinkAnchorExpression',
-    'hyperlinkPageExpression', 'hyperlinkTooltipExpression',
-    'labelExpression', 'connectionExpression', 'subreportExpression',
-    'bucketExpression', 'sortFieldExpression', 'keyExpression',
-    'valueExpression', 'seriesExpression', 'categoryExpression',
-    'lowExpression', 'highExpression', 'openExpression', 'closeExpression',
-    'volumeExpression', 'xValueExpression', 'yValueExpression',
-    'zValueExpression', 'startDateExpression', 'endDateExpression',
-    'colorExpression', 'sizeExpression', 'shapeExpression',
-    'datasetExpression', 'customExpression'
-];
+const { EXPRESSION_TAGS } = require('./expressionTags');
 
 const TAG_PATTERN = new RegExp(
     `<(${EXPRESSION_TAGS.join('|')})(\\s[^>]*)?>([\\s\\S]*?)<\\/\\1>`,
