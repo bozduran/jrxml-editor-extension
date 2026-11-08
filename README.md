@@ -222,7 +222,11 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `JRXML: Apply Clear Fixes` | Delete unused declarations, sync descriptions, fix jsonql (previewed) |
 | `JRXML: Migrate SQL Query to jsonql` | Prompt for jsonql and rewrite the `<query>` element |
 | `JRXML: Open Settings` | Open the dedicated JRXML settings panel |
+| `JRXML: Open Tutorial` | Open the built-in guide to the editor, panels and settings |
 | `JRXML: Refresh Include Chain` | Re-scan the workspace for the include-chain view |
+
+The table lists the primary commands; issue context-menu commands and other
+context-only actions are omitted.
 
 ---
 
@@ -327,4 +331,4 @@ The editor activates for cursor positions inside any of these tags:
 
 ## Security notes
 
-The expression editor and If / Else builder webviews are rendered with a nonce-based Content-Security-Policy and no inline event handlers or style attributes. Expression text, file names and declaration names are escaped (or embedded as JSON-escaped data) before they reach the panel, so `.jrxml` content cannot inject script. The builder loads no remote resources and reads the report schema in the extension host, not in the webview. Hovers are rendered as untrusted markdown.
+The expression editor, If / Else builder and design view webviews are rendered with a nonce-based Content-Security-Policy and no inline event handlers or style attributes. Expression text, report layout data, file names and declaration names are escaped (or embedded as JSON-escaped data) before they reach a panel, so `.jrxml` content cannot inject script. The panels load no remote resources and read report data in the extension host, not in the webview. Hovers are rendered as untrusted markdown.
