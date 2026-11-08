@@ -10,6 +10,19 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- `$F`/`$P`/`$V` names containing a dash (for example `$F{my-field}`) are now
+  found by Find All References and the unused-declaration check; the parser,
+  editor and clear pass share one token grammar.
+- Expression-looking text inside an XML comment is no longer treated as an
+  expression by the editor, completion or diagnostics.
+
+### Changed
+- Diagnostics scan each report once per pass instead of eight times, which
+  speeds up large reports and `JRXML: Validate Workspace`.
+- Internal: report symbols, expression regions and report sources now each
+  resolve through one module shared by the editor and the analysis pipeline.
+
 ## [1.1.1] - 2026-11-08
 
 ### Fixed
