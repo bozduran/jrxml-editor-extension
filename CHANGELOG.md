@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-08
+
 ### Added
 - **Subreports:** literal subreport expressions are resolved against the report
   directory and workspace, a missing target or a parameter the target report does
