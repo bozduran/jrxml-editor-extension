@@ -74,7 +74,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   normal `jrxml.booleanEquals` diagnostic with a one-click `EQUALS(...)` fix in
   the Issues view. The separate view, diagnostics collection,
   `jrxml.suppressedBestPractices` setting, and the `jrxml.bp.*` /
-  `jrxml.refreshBestPractices` commands were removed.
+  `jrxml.refreshBestPractices` commands were removed. The view's inline
+  “Elements are not sorted by position” item went with it; the sort command
+  itself remains in the **JRXML** menu and the Command Palette.
 
 ### Fixed
 - **If / Else builder:** loading an expression whose results used arithmetic or
