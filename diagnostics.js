@@ -17,6 +17,7 @@ const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
 const { collectTextCheckIssues } = require('./textCheck');
 const { checkVariableOrder } = require('./evaluationOrder');
 const { checkLayout } = require('./layoutRules');
+const { checkQueries } = require('./queryChecks');
 const { loadResourceBundle } = require('./resourceBundle');
 const { analyseSubreports } = require('./subreportIndex');
 const {
@@ -35,6 +36,7 @@ const DEFAULT_SETTINGS = {
     variableOrder: true,
     duplicateNames: true,
     layout: true,
+    queries: true,
     textcheck: true,
 };
 
@@ -269,6 +271,17 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
         }
     } catch (_) {
         // Malformed XML is already reported by the expression checks above.
+    }
+
+    // ── 4. Query literals and comments ───────────────────────────────────────
+    if (enabled.queries) {
+        try {
+            for (const issue of checkQueries(text)) {
+                add(issue.offset, issue.length, issue.message, 'warning', issue.code);
+            }
+        } catch (_) {
+            // ignore
+        }
     }
 
     // ── 4a. Layout ───────────────────────────────────────────────────────────

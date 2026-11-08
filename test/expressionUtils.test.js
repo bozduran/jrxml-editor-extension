@@ -116,6 +116,16 @@ test('the expression formatter can rewrite every registry tag', () => {
     }
 });
 
+test('the grammar highlights <query> content as an embedded language', () => {
+    assert.ok(grammar.repository.query, 'missing #query rule');
+    assert.ok(grammar.patterns.some(rule => rule.include === '#query'));
+
+    const query = grammar.repository.query.patterns.find(pattern => pattern.begin);
+    assert.ok(query, 'missing query begin/end rule');
+    assert.doesNotThrow(() => new RegExp(query.begin));
+    assert.doesNotThrow(() => new RegExp(query.end));
+});
+
 test('the expression editor recognizes every registry tag at the cursor', () => {
     for (const tag of EXPRESSION_TAGS) {
         const text = `<jasperReport><${tag}><![CDATA[$F{x}]]></${tag}></jasperReport>`;

@@ -83,6 +83,14 @@ test('offers resource keys inside $R{ when a bundle is indexed', () => {
     assert.strictEqual(closed.items[0].insertTextPlain, 'title');
 });
 
+test('offers parameters inside $P!{} query fragments', () => {
+    const result = suggest('$P!{', 4);
+
+    assert.strictEqual(result.mode, 'param');
+    assert.ok(labels(result.items).includes('Total'));
+    assert.ok(result.items[0].insertTextPlain.endsWith('}'));
+});
+
 test('falls back to the general list when no resource bundle is indexed', () => {
     const result = suggest('$R{', 3);
 

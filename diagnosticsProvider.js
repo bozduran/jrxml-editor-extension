@@ -22,6 +22,7 @@ function settingsFromConfig(cfg) {
         variableOrder:      cfg.get('lint.variableOrder', true),
         duplicateNames:     cfg.get('lint.duplicateNames', true),
         layout:             cfg.get('lint.layout', true),
+        queries:            cfg.get('lint.queries', true),
         textcheck:          cfg.get('textcheck.diagnostics', true),
     };
 }

@@ -460,6 +460,11 @@
           "default": true,
           "description": "Error when columns do not fit the page, band heights exceed the margins, or an element extends below its band."
         },
+        "jrxml.lint.queries": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn about an unclosed string literal or block comment inside <query> content."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,
