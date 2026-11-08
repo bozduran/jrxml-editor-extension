@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-08
+
 ### Added
 - **Build bridge:** `JRXML: Run Build` runs the configured Maven/Ant command as
   a VS Code task and parses its output with the contributed `$jrxml-*` problem
