@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-08
+
 ### Added
 - **Layout validation:** columns that do not fit the page width, band heights
   that exceed the space between the margins, and elements that extend below
