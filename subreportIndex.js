@@ -18,10 +18,10 @@ const parameterCache = new Map();
  * @param {{fileName?:string,getText:()=>string}} document
  * @param {string[]} [workspaceRoots]
  */
-function analyseSubreports(document, workspaceRoots = []) {
+function analyseSubreports(document, workspaceRoots = [], providedScan = null) {
     if (!document || typeof document.fileName !== 'string' || !document.fileName) return [];
 
-    return findSubreportLinks(document.getText()).map(link => {
+    return findSubreportLinks(document.getText(), providedScan).map(link => {
         if (link.dynamic || !link.path) {
             return { ...link, target: null, targetParameters: null };
         }

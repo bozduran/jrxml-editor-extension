@@ -43,8 +43,8 @@ function scopeKeyOf(node, root) {
  * @param {string} text
  * @returns {OrderFinding[]}
  */
-function checkVariableOrder(text) {
-    const scan = scanXml(text);
+function checkVariableOrder(text, providedScan = null) {
+    const scan = providedScan || scanXml(text);
     if (scan.error) return [];
 
     const root = scan.doc.root;

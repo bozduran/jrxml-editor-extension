@@ -10,6 +10,7 @@
 //   { offset, length, message, severity: 'error'|'warning', code, data? }
 
 const { parseDeclarations, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
+const { analyse } = require('./analysisContext');
 const { declaredNames, declarationInAnyScope } = require('./reportSymbols');
 const { EXPRESSION_TAGS, stripCdata } = require('./expressionUtils');
 const { isFragmentStart, skipFragment } = require('./jasperTokens');
@@ -66,7 +67,8 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
     };
 
     // Sections are isolated: a failure in one must not blank the others.
-    const parsed = parseSafely(text, fileName);
+    const context = analyse(text);
+    const parsed = parseSafely(text, fileName, context.scan);
 
     // Run one rule, isolating its failures from the rest of the pipeline.
     const runRule = (check, severity) => {
@@ -116,7 +118,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
 
     // ── 0c. Subreport targets and parameter maps ─────────────────────────────
     try {
-        const links = analyseSubreports({ fileName, getText: () => text }, workspaceRoots);
+        const links = analyseSubreports({ fileName, getText: () => text }, workspaceRoots, context.scan);
         for (const link of links) {
             if (link.dynamic || !link.path) continue;
 
@@ -147,7 +149,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
     if (enabled.unused) {
         let used;
         try {
-            used = collectUsedNames(text);
+            used = collectUsedNames(text, context.scan);
         } catch (_) {
             used = null;
         }
@@ -275,7 +277,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
             constantPrintWhen:      enabled.constantPrintWhen,
             removeLineWhenBlank:    enabled.removeLineWhenBlank,
             markupTagWithoutMarkup: enabled.markupTagWithoutMarkup,
-        });
+        }, context.scan);
         if (!lint.error) {
             for (const issue of lint.findings) {
                 add(issue.offset, issue.length, issue.message, 'warning', issue.code);
@@ -286,28 +288,28 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
     }
 
     // ── 4. Query literals and comments ───────────────────────────────────────
-    if (enabled.queries) runRule(() => checkQueries(text), 'warning');
+    if (enabled.queries) runRule(() => checkQueries(text, context.scan), 'warning');
 
     // ── 4a. Layout ───────────────────────────────────────────────────────────
-    if (enabled.layout) runRule(() => checkLayout(text), 'error');
+    if (enabled.layout) runRule(() => checkLayout(text, context.scan), 'error');
 
     // ── 4b. Variable evaluation order ────────────────────────────────────────
-    if (enabled.variableOrder) runRule(() => checkVariableOrder(text), 'warning');
+    if (enabled.variableOrder) runRule(() => checkVariableOrder(text, context.scan), 'warning');
 
     // ── 5. Text check ────────────────────────────────────────────────────────
-    if (enabled.textcheck) runRule(() => collectTextCheckIssues(text), 'warning');
+    if (enabled.textcheck) runRule(() => collectTextCheckIssues(text, context.scan), 'warning');
 
     return findings;
 }
 
 /** Parse with a synthetic document whose version follows the text content. */
-function parseSafely(text, fileName) {
+function parseSafely(text, fileName, scan = null) {
     try {
         return parseDeclarations({
             uri: { toString: () => `jrxml-diagnostics://${fileName || 'untitled'}` },
             version: hashText(text),
             getText: () => text,
-        });
+        }, scan);
     } catch (_) {
         return {
             fields: [], parameters: [], variables: [],

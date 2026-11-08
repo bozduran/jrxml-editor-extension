@@ -17,8 +17,8 @@ const { scanXml } = require('./xmlspan');
  *            offset:number, length:number,
  *            mappings:{name:string,offset:number,length:number}[]}[]}
  */
-function findSubreportLinks(text) {
-    const scan = scanXml(text);
+function findSubreportLinks(text, providedScan = null) {
+    const scan = providedScan || scanXml(text);
     if (scan.error) return [];
 
     const links = [];

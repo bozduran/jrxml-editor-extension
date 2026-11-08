@@ -16,8 +16,8 @@ const SQL_LIKE = new Set(['', 'sql']);
  * @param {string} text JRXML document
  * @returns {{code:string, message:string, offset:number, length:number}[]}
  */
-function checkQueries(text) {
-    const scan = scanXml(text);
+function checkQueries(text, providedScan = null) {
+    const scan = providedScan || scanXml(text);
     if (scan.error) return [];
 
     const findings = [];

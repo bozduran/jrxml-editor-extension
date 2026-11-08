@@ -13,8 +13,8 @@ const { BAND_TAGS } = require('./jrxmlSections');
  * @param {string} text JRXML document
  * @returns {{code:string, message:string, offset:number, length:number}[]}
  */
-function checkLayout(text) {
-    const scan = scanXml(text);
+function checkLayout(text, providedScan = null) {
+    const scan = providedScan || scanXml(text);
     if (scan.error || scan.doc.root.tag !== 'jasperReport') return [];
 
     const root    = scan.doc.root;

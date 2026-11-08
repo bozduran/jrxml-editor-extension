@@ -47,8 +47,8 @@ const MARKUP_TAG_RE = new RegExp(
  * @param {{ constantPrintWhen?:boolean, removeLineWhenBlank?:boolean, markupTagWithoutMarkup?:boolean }} [enabled]
  * @returns {{ findings: LintFinding[], error: string|null }}
  */
-function lintXml(text, enabled = {}) {
-    const scan = scanXml(text);
+function lintXml(text, enabled = {}, providedScan = null) {
+    const scan = providedScan || scanXml(text);
     if (scan.error) return { findings: [], error: scan.error };
 
     const findings = [];

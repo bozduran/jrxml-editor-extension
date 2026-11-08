@@ -22,8 +22,8 @@ const CODE = 'jrxml.textcheck';
  * @returns {{ code:string, message:string, offset:number, length:number,
  *            edit:{start:number,end:number,replacement:string} }[]}
  */
-function collectTextCheckIssues(text) {
-    const scan = scanXml(text);
+function collectTextCheckIssues(text, providedScan = null) {
+    const scan = providedScan || scanXml(text);
     if (scan.error) return [];
 
     const issues = [];

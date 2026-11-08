@@ -51,9 +51,9 @@ const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
  * flagging every declaration as unused.
  * @returns {Set<string>|null}
  */
-function collectUsedNames(text) {
+function collectUsedNames(text, providedScan = null) {
     const used = new Set();
-    const scan = scanXml(text);
+    const scan = providedScan || scanXml(text);
     if (scan.error) return null;
 
     const root = scan.doc.root;

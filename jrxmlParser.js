@@ -25,13 +25,13 @@ const COMMON_TYPES = new Set([
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-function parseDeclarations(document) {
+function parseDeclarations(document, providedScan = null) {
     const key    = document.uri.toString();
     const cached = cache.get(key);
     if (cached && cached.version === document.version) return cached.result;
 
     const text = document.getText();
-    const scan = scanXml(text);
+    const scan = providedScan || scanXml(text);
 
     // Which <field>/<parameter>/<variable> offsets are report declarations
     // (direct children of <jasperReport>) versus dataset declarations (inside
