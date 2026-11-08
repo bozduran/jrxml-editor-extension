@@ -8,7 +8,7 @@ A VS Code extension for working with JasperReports `.jrxml` files — focused on
 
 ### 1. Syntax highlighting
 `.jrxml` files get a dedicated language mode with:
-- **JasperReports built-in functions** (`TODAY`, `IF`, `SUM`, `MIN`, `MAX`, …)
+- **JasperReports built-in functions** (`TODAY`, `IF`, `SUM`, `MIN`, `MAX`, `DATEFORMAT`, `NETWORKDAYS`, …), the `msg()`/`str()` helpers and `$X{}` SQL clause completion
 - **Java keywords** (`if`, `else`, `new`, `null`, `true`, `false`, …)
 - **Java types** (`String`, `Integer`, `BigDecimal`, `Date`, …)
 - **Method calls** and static calls

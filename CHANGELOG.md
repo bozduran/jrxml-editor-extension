@@ -13,6 +13,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [0.8.0] - 2026-11-08
 
 ### Added
+- **Function catalogue:** added `DATEFORMAT`, `DATERANGE`, `DAYS`,
+  `NETWORKDAYS`, `WORKDAY`, `msg()` and `str()` to completion, plus `$X{}` SQL
+  clause completion (`IN`, `BETWEEN`, `GREATEROREQUAL`, …).
 - **Build bridge:** `JRXML: Run Build` runs the configured Maven/Ant command as
   a VS Code task and parses its output with the contributed `$jrxml-*` problem
   matchers into Problems, plus a documented `tasks.json` recipe. The engine is
