@@ -432,3 +432,8 @@ test('resolveDeclarationScope covers crosstab bucket and measure expressions', (
     assert.strictEqual(scope.kind, 'dataset');
     assert.strictEqual(scope.datasetName, 'DS');
 });
+
+test('exposes the report expression language on the parse result', () => {
+    const text = '<jasperReport name="R" language="groovy"><expression><![CDATA["x"]]></expression></jasperReport>';
+    assert.strictEqual(parseDeclarations(makeDoc(text)).language.language, 'groovy');
+});

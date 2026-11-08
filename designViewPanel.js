@@ -81,7 +81,7 @@ function buildCompletionsForDocument(document, expression, offset) {
 
     const config = vscode.workspace.getConfiguration('jrxml');
     const options = suggestionOptions(config);
-    if (reportLanguage(document.getText()).language !== 'java') options.typedCompletion = false;
+    if ((decls.language || reportLanguage(document.getText())).language !== 'java') options.typedCompletion = false;
     const result = buildExpressionSuggestions({
         text: expression,
         offset,

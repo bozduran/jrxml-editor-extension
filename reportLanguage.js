@@ -16,8 +16,16 @@ const JAVA = 'java';
  *   cannot be scanned; `language` is normalized to lower case.
  */
 function reportLanguage(text) {
-    const scan = scanXml(text);
-    if (scan.error || scan.doc.root.tag !== 'jasperReport') {
+    return languageOfScan(scanXml(text));
+}
+
+/**
+ * The same result from an existing scan, so callers that already parsed the
+ * document do not scan it twice.
+ * @param {{doc:object|null,error:string|null}|null} scan
+ */
+function languageOfScan(scan) {
+    if (!scan || scan.error || !scan.doc || scan.doc.root.tag !== 'jasperReport') {
         return { language: JAVA, declared: false, offset: -1, length: 0 };
     }
 
@@ -39,4 +47,4 @@ function isJavaLanguage(text) {
     return reportLanguage(text).language === JAVA;
 }
 
-module.exports = { reportLanguage, isJavaLanguage, JAVA };
+module.exports = { reportLanguage, languageOfScan, isJavaLanguage, JAVA };

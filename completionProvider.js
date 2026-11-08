@@ -185,10 +185,6 @@ const provider = vscode.languages.registerCompletionItemProvider(
 
             const config = vscode.workspace.getConfiguration('jrxml');
             const text   = document.getText();
-            const options = suggestionOptions(config);
-            // The member index models JDK/Java types; do not apply it to a
-            // report that declares Groovy or JavaScript.
-            if (reportLanguage(text).language !== 'java') options.typedCompletion = false;
 
             let decls;
             try {
@@ -199,6 +195,11 @@ const provider = vscode.languages.registerCompletionItemProvider(
                     allFields: [], allParameters: [], allVariables: [], groups: [],
                 };
             }
+
+            const options = suggestionOptions(config);
+            // The member index models JDK/Java types; do not apply it to a
+            // report that declares Groovy or JavaScript.
+            if ((decls.language || reportLanguage(text)).language !== 'java') options.typedCompletion = false;
 
             const offset = document.offsetAt(position);
             const result = buildExpressionSuggestions({

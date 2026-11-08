@@ -65,7 +65,7 @@ function updateDiagnostics(document) {
     // ── 0. Language model ────────────────────────────────────────────────────
     // The parser, formatter and member index are Java-only. Say so at the
     // declaration instead of silently applying Java rules to Groovy/JavaScript.
-    const language = reportLanguage(text);
+    const language = parsed.language || reportLanguage(text);
     if (language.declared && language.language !== 'java') {
         diagnostics.push(makeDiagnostic(
             document, language.offset, language.length,

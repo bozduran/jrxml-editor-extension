@@ -4,6 +4,7 @@
 
 const { scanXml } = require('./xmlspan');
 const { REFERENCE_CONTAINERS } = require('./expressionTags');
+const { languageOfScan } = require('./reportLanguage');
 
 const cache = new Map();
 
@@ -60,6 +61,7 @@ function parseDeclarations(document) {
             parameters: dsParameters,
             variables:  dsVariables,
         },
+        language:    languageOfScan(scan),
         datasets:    buildDatasets(scopes, rawFields, rawParameters, rawVariables),
         // Ranges where a dataset's declarations are the visible scope: the
         // <dataset>/<subDataset> definition itself and, inside list/table
