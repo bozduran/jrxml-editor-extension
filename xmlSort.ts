@@ -1,4 +1,4 @@
-// xmlSort.js
+// xmlSort.ts
 // The hook's `sort` step: reorder each band/frame container's direct <element>
 // children by geometry (y then x, stable), moving each element's preceding
 // trivia with it.
@@ -6,18 +6,51 @@
 // Pure and vscode-free. Returns a single whole-file edit plus the hook's exact
 // summary/warning description lines.
 
-const { scanXml } = require('./xmlspan');
+import { scanXml } from './xmlspan';
+import type { XmlNode } from './xmlspan';
+import type { Edit } from './edits';
 
-function isContainer(node) {
+/** One element positioned inside a band or frame. */
+export interface SortChild {
+    kind: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    start: number;
+    end: number;
+}
+
+/** A band or frame whose direct `element` children can be reordered. */
+export interface SortContainer {
+    kind: string;
+    innerStart: number;
+    innerEnd: number;
+    children: SortChild[];
+}
+
+/** The parsed document: every reorderable container plus coordinate warnings. */
+export interface ParsedSort {
+    containers: SortContainer[];
+    warnings: string[];
+}
+
+/** A whole-file reorder edit and the hook's description lines. */
+export interface SortFix {
+    description: string;
+    edit: Edit;
+}
+
+function isContainer(node: XmlNode): boolean {
     return node.tag === 'band' || (node.tag === 'element' && node.kind === 'frame');
 }
 
-function lineOf(text, offset) {
+function lineOf(text: string, offset: number): number {
     return text.slice(0, offset).split('\n').length;
 }
 
 /** Parse an integer attribute; missing or non-numeric yields 0 + a warning. */
-function coordinate(element, name, text, warnings) {
+function coordinate(element: XmlNode, name: string, text: string, warnings: string[]): number {
     const attr = element.attr(name);
     const value = attr ? attr.value.trim() : null;
 
@@ -28,7 +61,7 @@ function coordinate(element, name, text, warnings) {
     return Number.parseInt(value, 10);
 }
 
-function toChild(element, text, warnings) {
+function toChild(element: XmlNode, text: string, warnings: string[]): SortChild {
     return {
         kind: element.kind,
         x:    coordinate(element, 'x', text, warnings),
@@ -40,17 +73,18 @@ function toChild(element, text, warnings) {
     };
 }
 
-function parse(text) {
+export function parse(text: string): ParsedSort | null {
     const scan = scanXml(text);
-    if (scan.error) return null;
+    if (scan.error || !scan.doc) return null;
 
-    const containers = [];
-    const warnings   = [];
+    const containers: SortContainer[] = [];
+    const warnings: string[] = [];
 
     // Iterative pre-order walk: deep nesting must not overflow the stack.
-    const stack = [scan.doc.root];
+    const stack: XmlNode[] = [scan.doc.root];
     while (stack.length > 0) {
         const node = stack.pop();
+        if (!node) break;
 
         if (isContainer(node)) {
             const children = node.children
@@ -70,23 +104,23 @@ function parse(text) {
     return { containers, warnings };
 }
 
-function sortedChildren(children) {
+export function sortedChildren<T extends { x: number; y: number }>(children: readonly T[]): T[] {
     return [...children].sort((a, b) => (a.y - b.y) || (a.x - b.x));
 }
 
-function reorderChanged(container) {
+export function reorderChanged(container: SortContainer): boolean {
     if (container.children.length < 2) return false;
     const sorted = sortedChildren(container.children);
     return sorted.some((child, i) => child !== container.children[i]);
 }
 
-function rectsOverlap(a, b) {
+export function rectsOverlap(a: SortChild, b: SortChild): boolean {
     return a.x < b.x + b.w && b.x < a.x + a.w
         && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
-function overlaps(children) {
-    const out = [];
+export function overlaps(children: readonly SortChild[]): [SortChild, SortChild][] {
+    const out: [SortChild, SortChild][] = [];
     for (let i = 0; i < children.length; i++) {
         for (let j = i + 1; j < children.length; j++) {
             if (rectsOverlap(children[i], children[j])) out.push([children[i], children[j]]);
@@ -95,13 +129,13 @@ function overlaps(children) {
     return out;
 }
 
-function trailingWhitespace(text) {
+function trailingWhitespace(text: string): string {
     let end = text.length;
     while (end > 0 && /\s/.test(text[end - 1])) end--;
     return text.slice(end);
 }
 
-function reorderContainer(text, container) {
+function reorderContainer(text: string, container: SortContainer): string {
     if (!reorderChanged(container)) return text;
 
     const original = container.children;
@@ -130,27 +164,24 @@ function reorderContainer(text, container) {
     return text.slice(0, container.innerStart) + out + text.slice(container.innerEnd);
 }
 
-function applyReorders(text, containers) {
+export function applyReorders(text: string, containers: readonly SortContainer[]): string {
     const ordered = [...containers].sort((a, b) => b.innerStart - a.innerStart);
     let result = text;
     for (const container of ordered) result = reorderContainer(result, container);
     return result;
 }
 
-function describe(child) {
+function describe(child: SortChild): string {
     return `${child.kind}(${child.x},${child.y})`;
 }
 
-function orderSummary(children) {
+export function orderSummary(children: readonly SortChild[]): string {
     const before = children.map(describe).join(', ');
     const after  = sortedChildren(children).map(describe).join(', ');
     return `reorder [${before}] -> [${after}]`;
 }
 
-/**
- * @returns {{ description:string, edit:{start:number,end:number,replacement:string} }|null}
- */
-function discoverSortFix(text) {
+export function discoverSortFix(text: string): SortFix | null {
     const parsed = parse(text);
     if (!parsed) return null;
 
@@ -170,14 +201,3 @@ function discoverSortFix(text) {
         edit: { start: 0, end: text.length, replacement: applyReorders(text, parsed.containers) },
     };
 }
-
-module.exports = {
-    discoverSortFix,
-    parse,
-    sortedChildren,
-    reorderChanged,
-    overlaps,
-    rectsOverlap,
-    applyReorders,
-    orderSummary,
-};

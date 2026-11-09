@@ -1,26 +1,58 @@
-// ifElsePanelHtml.js
+// ifElsePanelHtml.ts
 // Pure HTML/CSS/client-JS builder for the If / Else expression builder webview.
 //
-// Deliberately free of `vscode` (like expressionPanelHtml.js / settingsPanelHtml.js)
+// Deliberately free of `vscode` (like expressionPanelHtml.ts / settingsPanelHtml.ts)
 // so the document and its CSP hardening can be unit-tested with plain Node.
 //
-// The builder's pure logic lives in ifElseBuilder.js and is inlined into the
+// The builder's pure logic lives in ifElseBuilder.ts and is inlined into the
 // nonce'd script below, so the webview and the tests share one implementation.
 
-const fs = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
-const { jsonForInlineScript, getNonce } = require('./expressionPanelHtml');
+import { jsonForInlineScript, getNonce } from './expressionPanelHtml';
+import type { BuilderSchema } from './ifElseBuilder';
 
 const CORE_FILE = path.join(__dirname, 'ifElseBuilder.js');
+
+/** Builder option defaults passed in by the panel. */
+export interface IfElseBuilderOptions {
+    nullSafe?: boolean;
+    multiline?: boolean;
+    style?: 'ternary' | 'functions';
+}
+
+/** The active report and whether it is the schema document. */
+export interface IfElseActiveFile {
+    fileName?: string | null;
+    isJrxml?: boolean;
+    differs?: boolean;
+}
+
+/** Options the host panel supplies for one render. */
+export interface IfElsePanelOptions {
+    /** Attached .jrxml base name. */
+    fileName?: string | null;
+    schema?: BuilderSchema | null;
+    /** Expression to load on first open. */
+    expression?: string | null;
+    /** Expression tag the Apply target points at. */
+    targetTagName?: string | null;
+    canApply?: boolean;
+    options?: IfElseBuilderOptions;
+    activeFile?: IfElseActiveFile;
+    schemaError?: string | null;
+    nonce?: string;
+    cspSource?: string;
+}
 
 /**
  * The ifElseBuilder.js module wrapped so it can run inside the webview:
  * `window.__JRXML_IFELSE__` receives its exports.
  *
- * @returns {string} JavaScript source without a `<script>` wrapper
+ * Returns JavaScript source without a `<script>` wrapper.
  */
-function buildCoreScript() {
+export function buildCoreScript(): string {
     // Defensive: a string literal containing </script> would close the element.
     const source = fs.readFileSync(CORE_FILE, 'utf8').replace(/<\/script/gi, '<\\/script');
     // The compiled module is CommonJS, so the wrapper provides the `exports`
@@ -34,23 +66,8 @@ function buildCoreScript() {
     ].join('\n');
 }
 
-/**
- * Build the complete webview document.
- *
- * @param {object} opts
- * @param {string|null} [opts.fileName]       attached .jrxml base name
- * @param {{F:Array,P:Array,V:Array}|null} [opts.schema]
- * @param {string|null} [opts.expression]     expression to load on first open
- * @param {string|null} [opts.targetTagName]  expression tag the Apply target points at
- * @param {boolean} [opts.canApply]
- * @param {{nullSafe:boolean,multiline:boolean,style:string}} [opts.options]
- * @param {{fileName:string|null,isJrxml:boolean,differs:boolean}} [opts.activeFile]
- * @param {string} [opts.schemaError]
- * @param {string} opts.nonce
- * @param {string} [opts.cspSource]
- * @returns {string} full HTML document
- */
-function buildIfElsePanelHtml({
+/** Build the complete webview document. */
+export function buildIfElsePanelHtml({
     fileName = null,
     schema = null,
     expression = null,
@@ -61,7 +78,7 @@ function buildIfElsePanelHtml({
     schemaError = null,
     nonce,
     cspSource,
-} = {}) {
+}: IfElsePanelOptions = {}): string {
     const source = cspSource || '';
     const initialJson = jsonForInlineScript({
         fileName: fileName || null,
@@ -813,4 +830,4 @@ updateTargetUi();
 </html>`;
 }
 
-module.exports = { buildIfElsePanelHtml, buildCoreScript, getNonce };
+export { getNonce };

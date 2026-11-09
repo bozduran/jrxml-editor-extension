@@ -1,4 +1,4 @@
-// buildBridge.js
+// buildBridge.ts
 // "JRXML: Run Build" — a thin bridge to the project's own JasperReports build.
 //
 // The extension never embeds the report engine. It runs the configured shell
@@ -6,23 +6,21 @@
 // matchers, so compiler/verifier output lands in the Problems panel. Keep the
 // project's Maven/Ant compile + verifyDesign as the authoritative gate.
 
-const vscode = require('vscode');
-const { defaults } = require('./settingsSchema');
+import * as vscode from 'vscode';
+import { defaults } from './settingsSchema';
 
-const DEFAULT_COMMAND = defaults()['build.command'];
-const PROBLEM_MATCHERS = ['$jrxml-file-line', '$jrxml-javac', '$jrxml-compile'];
+const defaultBuildCommand = defaults()['build.command'];
+export const DEFAULT_COMMAND = typeof defaultBuildCommand === 'string' ? defaultBuildCommand : '';
+export const PROBLEM_MATCHERS = ['$jrxml-file-line', '$jrxml-javac', '$jrxml-compile'];
 
 /** The configured build command, trimmed; empty means "not configured". */
-function configuredCommand() {
+export function configuredCommand(): string {
     const value = vscode.workspace.getConfiguration('jrxml').get('build.command', DEFAULT_COMMAND);
     return typeof value === 'string' ? value.trim() : '';
 }
 
-/**
- * Run the build command as a task with the JRXML problem matchers attached.
- * @returns {Promise<vscode.TaskExecution|undefined>}
- */
-async function runBuild() {
+/** Run the build command as a task with the JRXML problem matchers attached. */
+export async function runBuild(): Promise<vscode.TaskExecution | undefined> {
     const command = configuredCommand();
     if (!command) {
         vscode.window.showWarningMessage('Set jrxml.build.command before running the JRXML build.');
@@ -50,10 +48,8 @@ async function runBuild() {
     return vscode.tasks.executeTask(task);
 }
 
-function register(context) {
+export function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.runBuild', runBuild)
     );
 }
-
-module.exports = { register, runBuild, configuredCommand, DEFAULT_COMMAND, PROBLEM_MATCHERS };

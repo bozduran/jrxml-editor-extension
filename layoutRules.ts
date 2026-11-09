@@ -1,25 +1,42 @@
-// layoutRules.js
+// layoutRules.ts
 // Static layout checks that JasperReports otherwise reports only at compile
 // time: columns that do not fit the page, band heights that exceed the space
 // between the margins, and elements that extend below their band or frame.
 //
 // Pure and vscode-free; diagnosticsProvider maps findings to VS Code ranges.
 
-const { scanXml } = require('./xmlspan');
+import { scanXml } from './xmlspan';
+import type { XmlDocument, XmlNode, XmlScanResult } from './xmlspan';
 
-const { BAND_TAGS } = require('./jrxmlSections');
+import { BAND_TAGS } from './jrxmlSections';
 
-/**
- * @param {string} text JRXML document
- * @returns {{code:string, message:string, offset:number, length:number}[]}
- */
-function checkLayout(text, providedScan = null) {
+/** A layout finding in character offsets. */
+export interface LayoutFinding {
+    code: string;
+    message: string;
+    offset: number;
+    length: number;
+}
+
+interface PageMetrics {
+    pageWidth: number | null;
+    pageHeight: number | null;
+    columnWidth: number | null;
+    columnCount: number;
+    columnSpacing: number;
+    leftMargin: number;
+    rightMargin: number;
+    topMargin: number;
+    bottomMargin: number;
+}
+
+export function checkLayout(text: string, providedScan: XmlScanResult | null = null): LayoutFinding[] {
     const scan = providedScan || scanXml(text);
-    if (scan.error || scan.doc.root.tag !== 'jasperReport') return [];
+    if (scan.error || !scan.doc || scan.doc.root.tag !== 'jasperReport') return [];
 
     const root    = scan.doc.root;
     const page    = pageMetrics(root);
-    const findings = [];
+    const findings: LayoutFinding[] = [];
 
     checkColumns(root, page, findings);
     checkBandHeights(root, page, findings);
@@ -28,7 +45,7 @@ function checkLayout(text, providedScan = null) {
     return findings;
 }
 
-function pageMetrics(root) {
+function pageMetrics(root: XmlNode): PageMetrics {
     return {
         pageWidth:     intAttr(root, 'pageWidth'),
         pageHeight:    intAttr(root, 'pageHeight'),
@@ -42,7 +59,7 @@ function pageMetrics(root) {
     };
 }
 
-function checkColumns(root, page, findings) {
+function checkColumns(root: XmlNode, page: PageMetrics, findings: LayoutFinding[]): void {
     if (page.pageWidth === null || page.columnWidth === null) return;
 
     const spacing = Math.max(0, page.columnCount - 1) * page.columnSpacing;
@@ -58,7 +75,7 @@ function checkColumns(root, page, findings) {
     ));
 }
 
-function checkBandHeights(root, page, findings) {
+function checkBandHeights(root: XmlNode, page: PageMetrics, findings: LayoutFinding[]): void {
     if (page.pageHeight === null) return;
 
     const available = page.pageHeight - page.topMargin - page.bottomMargin;
@@ -78,7 +95,7 @@ function checkBandHeights(root, page, findings) {
 }
 
 /** Height of a direct report section, reading a classic wrapper's <band>. */
-function sectionHeight(root, tag) {
+function sectionHeight(root: XmlNode, tag: string): number {
     const node = root.children.find(child => child.tag === tag);
     if (!node) return 0;
 
@@ -91,7 +108,7 @@ function sectionHeight(root, tag) {
 }
 
 /** The tallest detail band; detail bands are alternatives, not a sum. */
-function detailHeight(root) {
+function detailHeight(root: XmlNode): number {
     const detail = root.children.find(child => child.tag === 'detail');
     if (!detail) return 0;
 
@@ -100,7 +117,7 @@ function detailHeight(root) {
         .map(band => intAttr(band, 'height') ?? 0));
 }
 
-function checkElementBounds(doc, findings) {
+function checkElementBounds(doc: XmlDocument, findings: LayoutFinding[]): void {
     for (const node of doc.walk()) {
         const positioned = node.tag === 'element' || node.tag === 'reportElement';
         if (!positioned) continue;
@@ -135,10 +152,8 @@ function checkElementBounds(doc, findings) {
  * Nearest ancestor that bounds the element: anything with a height attribute
  * (band, contents, Studio 7 frame), or a classic <frame> whose <reportElement>
  * carries the height.
- *
- * @returns {{height:number, label:string}|null}
  */
-function nearestContainer(node) {
+function nearestContainer(node: XmlNode): { height: number; label: string } | null {
     let parent = node.parent;
     while (parent) {
         const height = intAttr(parent, 'height');
@@ -160,18 +175,18 @@ function nearestContainer(node) {
     return null;
 }
 
-function hasBandAncestor(node) {
+function hasBandAncestor(node: XmlNode): boolean {
     return node.ancestors().some(ancestor => BAND_TAGS.has(ancestor.tag));
 }
 
-function intAttr(node, name) {
+function intAttr(node: XmlNode, name: string): number | null {
     const attr = node.attr(name);
     if (!attr) return null;
     const value = parseInt(attr.value, 10);
     return Number.isFinite(value) ? value : null;
 }
 
-function finding(code, message, node) {
+function finding(code: string, message: string, node: XmlNode): LayoutFinding {
     return {
         code,
         message,
@@ -179,5 +194,3 @@ function finding(code, message, node) {
         length: node.startTagEnd - node.startTag,
     };
 }
-
-module.exports = { checkLayout };

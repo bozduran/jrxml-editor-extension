@@ -1,4 +1,4 @@
-// textRules.js
+// textRules.ts
 // Rendered-text rules ported from the hook's textrules package:
 //   Unrenderable — replace characters that fail to render, one finding per
 //                  distinct character
@@ -9,10 +9,21 @@
 // Every function returns the transformed text and appends human-readable
 // findings, in the same order and wording as the hook.
 
-const { literalEnd } = require('./javaExpr');
+import { literalEnd } from './javaExpr';
+
+/** A changed span, relative to the text passed to the rule. */
+export interface TextChange {
+    offset: number;
+    length: number;
+}
+
+interface UnrenderableRule {
+    replacement: string;
+    name: string;
+}
 
 // codepoint → { replacement, name }. Order defines finding order.
-const UNRENDERABLE = new Map([
+export const UNRENDERABLE: ReadonlyMap<number, UnrenderableRule> = new Map([
     [0x00A0, { replacement: ' ',  name: 'non-breaking space' }],
     [0x2007, { replacement: ' ',  name: 'figure space' }],
     [0x2009, { replacement: ' ',  name: 'thin space' }],
@@ -39,21 +50,22 @@ const UNRENDERABLE = new Map([
     [0x2026, { replacement: '...', name: 'ellipsis' }],
 ]);
 
-function quote(value) {
+function quote(value: string): string {
     return '"' + value.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 }
 
-function occurrences(n) {
+function occurrences(n: number): string {
     return n === 1 ? '1 occurrence' : `${n} occurrences`;
 }
 
 /** Replace unrenderable characters; one finding per distinct character. */
-function applyUnrenderable(text, findings, changes) {
+export function applyUnrenderable(text: string, findings: string[], changes?: TextChange[]): string {
     let out = '';
-    const seen = new Set();
+    const seen = new Set<number>();
 
     for (let i = 0; i < text.length; ) {
         const cp = text.codePointAt(i);
+        if (cp === undefined) break;
         const rule = UNRENDERABLE.get(cp);
         if (rule) {
             const length = cp > 0xFFFF ? 2 : 1;
@@ -74,9 +86,9 @@ function applyUnrenderable(text, findings, changes) {
 }
 
 /** Add a space after a '.' directly followed by an uppercase letter. */
-function applyPeriodSpace(text, findings, changes) {
+export function applyPeriodSpace(text: string, findings: string[], changes?: TextChange[]): string {
     let count = 0;
-    const out = text.replace(/\.([A-Z])/g, (match, letter, offset) => {
+    const out = text.replace(/\.([A-Z])/g, (match: string, letter: string, offset: number) => {
         count++;
         changes?.push({ offset, length: 2 });
         return '. ' + letter;
@@ -86,9 +98,9 @@ function applyPeriodSpace(text, findings, changes) {
 }
 
 /** Collapse runs of two or more spaces to one. */
-function applyDoubleSpace(text, findings, changes) {
+export function applyDoubleSpace(text: string, findings: string[], changes?: TextChange[]): string {
     let count = 0;
-    const out = text.replace(/ {2,}/g, (match, offset) => {
+    const out = text.replace(/ {2,}/g, (match: string, offset: number) => {
         count++;
         changes?.push({ offset, length: match.length });
         return ' ';
@@ -98,12 +110,12 @@ function applyDoubleSpace(text, findings, changes) {
 }
 
 /** Normalise newlines to the token implied by `markup`. */
-function applyNewline(text, markup, changes) {
-    let token;
+export function applyNewline(text: string, markup: string, changes?: TextChange[]): string {
+    let token: string;
     switch (markup || '') {
         case 'styled': token = '<br/>'; break;
         case 'html':   token = '<br>';  break;
-        case '': 
+        case '':
         case 'none':   token = '\\n';   break;
         default:       return text;
     }
@@ -136,7 +148,12 @@ function applyNewline(text, markup, changes) {
 }
 
 /** Full chain applied to rendered text content. */
-function transformText(content, markup, findings, changes) {
+export function transformText(
+    content: string,
+    markup: string,
+    findings: string[],
+    changes?: TextChange[]
+): string {
     let out = content;
     out = applyUnrenderable(out, findings, changes);
     out = applyPeriodSpace(out, findings, changes);
@@ -151,7 +168,7 @@ function transformText(content, markup, findings, changes) {
 }
 
 /** Literal-safe subset: no period rule, no newline rule. */
-function transformLiteral(content, findings, changes) {
+export function transformLiteral(content: string, findings: string[], changes?: TextChange[]): string {
     let out = content;
     out = applyUnrenderable(out, findings, changes);
     out = applyDoubleSpace(out, findings, changes);
@@ -166,7 +183,13 @@ function transformLiteral(content, findings, changes) {
  * scanner does not know about comments, so a quote inside a comment could be
  * rewritten; skipping comments is strictly safer.
  */
-function transformExpression(content, isText, markup, findings, changes) {
+export function transformExpression(
+    content: string,
+    isText: boolean,
+    markup: string,
+    findings: string[],
+    changes?: TextChange[]
+): string {
     let out = '';
     let i = 0;
     const n = content.length;
@@ -231,14 +254,3 @@ function transformExpression(content, isText, markup, findings, changes) {
 
     return out;
 }
-
-module.exports = {
-    transformText,
-    transformLiteral,
-    transformExpression,
-    applyUnrenderable,
-    applyPeriodSpace,
-    applyDoubleSpace,
-    applyNewline,
-    UNRENDERABLE,
-};

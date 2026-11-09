@@ -1,13 +1,16 @@
-// declarationInsertion.js
+// declarationInsertion.ts
 // Where a new <field>/<parameter>/<variable> belongs: at report level, in the
 // XSD order, after the last declaration of the same kind. Nested subreport
 // parameters and dataset members are never insertion anchors.
 
-const { scanXml } = require('./xmlspan');
+import { scanXml } from './xmlspan';
 
-const TARGET_RANK = { parameter: 0, field: 2, variable: 4 };
+/** Declaration kinds this module can place in the report-level XSD order. */
+export type DeclarationTag = 'field' | 'parameter' | 'variable';
 
-const CHILD_RANK = {
+const TARGET_RANK: Readonly<Record<string, number>> = { parameter: 0, field: 2, variable: 4 };
+
+const CHILD_RANK: Readonly<Record<string, number>> = {
     // Elements that precede declarations in the JRXML schema.
     property: -5, propertyExpression: -5, import: -5,
     template: -5, reportFont: -5, style: -5,
@@ -19,13 +22,8 @@ const CHILD_RANK = {
     filter: 5, filterExpression: 5,
 };
 
-/**
- * Offset where a declaration of `tagName` should be inserted.
- * @param {string} text JRXML document
- * @param {'field'|'parameter'|'variable'} tagName
- * @returns {number}
- */
-function findInsertionPoint(text, tagName) {
+/** Offset where a declaration of `tagName` should be inserted. */
+export function findInsertionPoint(text: string, tagName: string): number {
     const targetRank = TARGET_RANK[tagName];
     if (targetRank === undefined) return closingTagOffset(text);
 
@@ -47,13 +45,11 @@ function findInsertionPoint(text, tagName) {
     return root.endTag >= 0 ? root.endTag : root.end;
 }
 
-function rankOf(tag) {
+function rankOf(tag: string): number {
     return CHILD_RANK[tag] ?? 10;
 }
 
-function closingTagOffset(text) {
+function closingTagOffset(text: string): number {
     const close = text.lastIndexOf('</jasperReport>');
     return close === -1 ? text.length : close;
 }
-
-module.exports = { findInsertionPoint };

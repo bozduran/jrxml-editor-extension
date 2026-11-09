@@ -1,4 +1,4 @@
-// queryChecks.js
+// queryChecks.ts
 // Conservative static checks for <query> content.
 //
 // SQL and JSONQL are embedded languages: the editor highlights them and this
@@ -7,20 +7,25 @@
 // `$P!{}` / `$X{}` fragments are skipped wholesale: they are raw SQL injected at
 // runtime and may legitimately contain quotes.
 
-const { scanXml } = require('./xmlspan');
-const { isFragmentStart, skipFragment } = require('./jasperTokens');
+import { scanXml } from './xmlspan';
+import type { XmlScanResult } from './xmlspan';
+import { isFragmentStart, skipFragment } from './jasperTokens';
 
-const SQL_LIKE = new Set(['', 'sql']);
+/** A query finding in character offsets. */
+export interface QueryFinding {
+    code: string;
+    message: string;
+    offset: number;
+    length: number;
+}
 
-/**
- * @param {string} text JRXML document
- * @returns {{code:string, message:string, offset:number, length:number}[]}
- */
-function checkQueries(text, providedScan = null) {
+const SQL_LIKE: ReadonlySet<string> = new Set(['', 'sql']);
+
+export function checkQueries(text: string, providedScan: XmlScanResult | null = null): QueryFinding[] {
     const scan = providedScan || scanXml(text);
-    if (scan.error) return [];
+    if (scan.error || !scan.doc) return [];
 
-    const findings = [];
+    const findings: QueryFinding[] = [];
     for (const node of scan.doc.walk()) {
         if (node.tag !== 'query') continue;
 
@@ -37,8 +42,8 @@ function checkQueries(text, providedScan = null) {
     return findings;
 }
 
-function scanSql(text, base) {
-    const findings = [];
+function scanSql(text: string, base: number): QueryFinding[] {
+    const findings: QueryFinding[] = [];
     let index = 0;
 
     while (index < text.length) {
@@ -82,8 +87,8 @@ function scanSql(text, base) {
 }
 
 /** JSON strings cannot be single-quoted and comments are not part of JSON. */
-function scanJsonql(text, base) {
-    const findings = [];
+function scanJsonql(text: string, base: number): QueryFinding[] {
+    const findings: QueryFinding[] = [];
     let index = 0;
 
     while (index < text.length) {
@@ -112,7 +117,7 @@ function scanJsonql(text, base) {
  * Offset just past the closing quote, or -1 when the literal is unclosed.
  * In SQL a doubled quote is an escaped quote; JSON uses backslash escapes.
  */
-function findStringEnd(text, start, quote, allowDoubled) {
+function findStringEnd(text: string, start: number, quote: string, allowDoubled: boolean): number {
     let index = start + 1;
 
     while (index < text.length) {
@@ -133,7 +138,7 @@ function findStringEnd(text, start, quote, allowDoubled) {
     return -1;
 }
 
-function unclosedString(offset) {
+function unclosedString(offset: number): QueryFinding {
     return {
         code: 'jrxml.query.unclosedString',
         message: 'Unclosed string literal in <query>.',
@@ -142,7 +147,7 @@ function unclosedString(offset) {
     };
 }
 
-function unclosedComment(offset) {
+function unclosedComment(offset: number): QueryFinding {
     return {
         code: 'jrxml.query.unclosedComment',
         message: 'Unclosed block comment in <query>.',
@@ -150,5 +155,3 @@ function unclosedComment(offset) {
         length: 2,
     };
 }
-
-module.exports = { checkQueries };

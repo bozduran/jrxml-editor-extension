@@ -1,24 +1,24 @@
-// preview.js
+// preview.ts
 // Shared virtual-document provider for diff previews (sort, clear, …).
 //
 // The extension previews whole-file rewrites before applying them: a diff is
 // opened between the real document and a read-only virtual document holding the
 // proposed result.
 
-const vscode = require('vscode');
-const { isStale, STALE_MESSAGE } = require('./staleGuard');
+import * as vscode from 'vscode';
+import { isStale, STALE_MESSAGE } from './staleGuard';
 
-const SCHEME = 'jrxml-preview';
-const contents = new Map();
+export const SCHEME = 'jrxml-preview';
+const contents = new Map<string, string>();
 
-const provider = vscode.workspace.registerTextDocumentContentProvider(SCHEME, {
-    provideTextDocumentContent(uri) {
+export const provider = vscode.workspace.registerTextDocumentContentProvider(SCHEME, {
+    provideTextDocumentContent(uri: vscode.Uri): string {
         return contents.get(uri.toString()) || '';
     },
 });
 
 /** Register `content` and return a URI that renders it in a diff. */
-function put(name, content) {
+export function put(name: string, content: string): vscode.Uri {
     const uri = vscode.Uri.from({
         scheme: SCHEME,
         path:   '/' + name,
@@ -29,7 +29,7 @@ function put(name, content) {
 }
 
 /** Release a preview URI created by `put`. */
-function drop(uri) {
+export function drop(uri: vscode.Uri): void {
     contents.delete(uri.toString());
 }
 
@@ -37,10 +37,8 @@ function drop(uri) {
  * Guard for destructive applies: returns false (and warns) when the document
  * changed since `discoveredVersion` was captured.
  */
-function ensureUnchanged(document, discoveredVersion) {
+export function ensureUnchanged(document: vscode.TextDocument, discoveredVersion: number): boolean {
     if (!isStale(discoveredVersion, document.version)) return true;
     vscode.window.showWarningMessage(STALE_MESSAGE);
     return false;
 }
-
-module.exports = { provider, put, drop, ensureUnchanged, SCHEME };

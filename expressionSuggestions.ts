@@ -1,4 +1,4 @@
-// expressionSuggestions.js
+// expressionSuggestions.ts
 // Pure suggestion engine shared by the JRXML completion provider and the
 // design-view inspector. It turns an expression + caret into plain suggestion
 // records; the editor maps them to CompletionItems and the webview renders them.
@@ -7,15 +7,133 @@
 // insertion (insertTextPlain) with an optional first-placeholder range, so a
 // textarea can offer the same suggestions without a snippet engine.
 
-const { resolveReceiver } = require('./memberResolver');
-const { getMembers } = require('./jdkMemberIndex');
-const { buildMemberCandidates, buildTypeHint, documentationFor } = require('./typeCompletion');
-const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('./jasperBuiltins');
+import { resolveReceiver } from './memberResolver';
+import type { Declaration } from './memberResolver';
+import { getMembers } from './jdkMemberIndex';
+import type { MemberLookup } from './jdkMemberIndex';
+import { buildMemberCandidates, buildTypeHint, documentationFor } from './typeCompletion';
+import { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } from './jasperBuiltins';
 
 const MEMBER_WINDOW = 4000;
 const MEMBER_RE = /\.\s*([A-Za-z_$][\w$]*)?$/;
 
-const JASPER_FUNCTIONS = [
+/** A declaration as the expression parser reports it to completion. */
+export interface SuggestionDeclaration {
+    name: string;
+    type?: string;
+    fullType?: string;
+    description?: string;
+    isSystem?: boolean;
+    isBuiltin?: boolean;
+}
+
+/** The three declaration collections, in either parser spelling. */
+export interface ExpressionDeclarations {
+    allFields?: SuggestionDeclaration[];
+    allParameters?: SuggestionDeclaration[];
+    allVariables?: SuggestionDeclaration[];
+    fields?: SuggestionDeclaration[];
+    parameters?: SuggestionDeclaration[];
+    variables?: SuggestionDeclaration[];
+}
+
+/** A resource-bundle key offered by `$R{...}` completion. */
+export interface ResourceEntry {
+    key: string;
+    defaultValue?: string | null;
+}
+
+/** A custom method table entry (from the workflow's method catalogue). */
+export interface CustomMethod {
+    label: string;
+    detail: string;
+    doc: string;
+    snippet: string;
+}
+
+/** One snippet-backed table entry shared by the general completion lists. */
+export interface SnippetEntry {
+    label: string;
+    detail?: string;
+    doc?: string;
+    snippet: string;
+}
+
+/** The completion settings read from the workspace configuration. */
+export interface SuggestionOptions {
+    typedCompletion?: boolean;
+    jdkBaseline?: number | string;
+}
+
+/** A VS Code configuration slice, so this module stays vscode-free. */
+export interface ConfigurationLike {
+    get<T>(key: string, fallback: T): T;
+}
+
+/** A range in the plain-text insertion. */
+export interface SuggestionPlaceholder {
+    start: number;
+    end: number;
+}
+
+export type SuggestionKind =
+    | 'field'
+    | 'parameter'
+    | 'variable'
+    | 'function'
+    | 'class'
+    | 'method'
+    | 'reference'
+    | 'text';
+
+/** A rendered completion item, in the editor or the design-view textarea. */
+export interface ExpressionSuggestion {
+    label: string;
+    detail: string;
+    documentation: string;
+    insertTextSnippet: string;
+    insertTextPlain: string;
+    placeholder: SuggestionPlaceholder | null;
+    kind: SuggestionKind;
+    sortText: string;
+    labelDetail?: string;
+    labelDescription?: string;
+    filterText?: string;
+    deprecated?: boolean;
+}
+
+export type SuggestionDraft = Omit<ExpressionSuggestion, 'insertTextPlain' | 'placeholder'>;
+
+/** The result of asking for suggestions at a caret. */
+export interface ExpressionSuggestionResult {
+    mode: string;
+    prefix: string;
+    replace: { start: number; end: number };
+    items: ExpressionSuggestion[];
+}
+
+/** The request the editor provider and design-view inspector both send. */
+export interface ExpressionSuggestionRequest {
+    text: string;
+    offset: number;
+    declarations?: ExpressionDeclarations | null;
+    options?: SuggestionOptions;
+    customMethods?: CustomMethod[];
+    resources?: ResourceEntry[] | null;
+}
+
+interface NormalizedDeclarations {
+    allFields: SuggestionDeclaration[];
+    allParameters: SuggestionDeclaration[];
+    allVariables: SuggestionDeclaration[];
+}
+
+interface MemberContext {
+    textBeforeDot: string;
+    partial: string;
+}
+
+export const JASPER_FUNCTIONS: readonly SnippetEntry[] = [
     { label: 'TODAY',       detail: 'TODAY()',                        doc: 'Returns today\'s date as java.util.Date.',                                    snippet: 'TODAY()' },
     { label: 'NOW',         detail: 'NOW()',                          doc: 'Returns the current date and time as java.util.Date.',                        snippet: 'NOW()' },
     { label: 'DATE',        detail: 'DATE(year, month, day)',         doc: 'Constructs a Date from year, month (1-based), and day.',                      snippet: 'DATE(${1:year}, ${2:month}, ${3:day})' },
@@ -42,7 +160,7 @@ const JASPER_FUNCTIONS = [
     { label: 'ROUNDDOWN',   detail: 'ROUNDDOWN(number, digits)',      doc: 'Rounds number down (toward zero).',                                           snippet: 'ROUNDDOWN(${1:number}, ${2:digits})' },
     { label: 'ROUNDUP',     detail: 'ROUNDUP(number, digits)',        doc: 'Rounds number up (away from zero).',                                          snippet: 'ROUNDUP(${1:number}, ${2:digits})' },
     { label: 'FLOOR',       detail: 'FLOOR(number)',                  doc: 'Returns the largest integer ≤ number.',                                       snippet: 'FLOOR(${1:number})' },
-    { label: 'CEILING',     detail: 'CEILING(number)',                doc: 'Returns the smallest integer ≥ number.',                                      snippet: 'CEILING(${1:number})' },
+    { label: 'CEILING',     detail: 'CEILING(number)',                doc: 'Returns the smallest integer ≥ number.',                                       snippet: 'CEILING(${1:number})' },
     { label: 'ABS',         detail: 'ABS(number)',                    doc: 'Returns the absolute value.',                                                 snippet: 'ABS(${1:number})' },
     { label: 'MOD',         detail: 'MOD(number, divisor)',           doc: 'Returns the remainder of number / divisor.',                                  snippet: 'MOD(${1:number}, ${2:divisor})' },
     { label: 'POWER',       detail: 'POWER(base, exp)',               doc: 'Returns base raised to the power of exp.',                                    snippet: 'POWER(${1:base}, ${2:exp})' },
@@ -89,7 +207,7 @@ const X_CLAUSES = [
     'LESSOREQUAL', 'GREATEROREQUAL', 'BETWEEN', 'NOTBETWEEN',
 ];
 
-const JAVA_TYPES = [
+const JAVA_TYPES: readonly SnippetEntry[] = [
     { label: 'String',               snippet: 'String' },
     { label: 'Integer',              snippet: 'Integer' },
     { label: 'Long',                 snippet: 'Long' },
@@ -117,27 +235,22 @@ const JAVA_TYPES = [
 /**
  * Read the completion options shared by the editor provider and the design
  * inspector from a WorkspaceConfiguration-like object.
- *
- * @param {{get:(key:string, fallback:any)=>any}} config
- * @returns {{typedCompletion:boolean, jdkBaseline:(string|number)}}
  */
-function suggestionOptions(config) {
+export function suggestionOptions(config: ConfigurationLike): SuggestionOptions {
     return {
         typedCompletion: config.get('typeCompletion.enabled', true),
         jdkBaseline:    config.get('typeCompletion.jdkBaseline', '8'),
     };
 }
 
-/**
- * @param {object} opts
- * @param {string} opts.text full expression text
- * @param {number} opts.offset caret offset
- * @param {object} [opts.declarations] parseDeclarations result
- * @param {{typedCompletion?:boolean,jdkBaseline?:number}} [opts.options]
- * @param {Array} [opts.customMethods]
- * @returns {{mode:string,prefix:string,replace:{start:number,end:number},items:Array}}
- */
-function buildExpressionSuggestions({ text, offset, declarations, options = {}, customMethods = [], resources = null }) {
+export function buildExpressionSuggestions({
+    text,
+    offset,
+    declarations,
+    options = {},
+    customMethods = [],
+    resources = null,
+}: ExpressionSuggestionRequest): ExpressionSuggestionResult {
     const expression = typeof text === 'string' ? text : '';
     const caret = Math.max(0, Math.min(Number.isInteger(offset) ? offset : expression.length, expression.length));
     const before = expression.slice(0, caret);
@@ -218,7 +331,7 @@ function buildExpressionSuggestions({ text, offset, declarations, options = {}, 
 
 // ── Contexts ────────────────────────────────────────────────────────────────
 
-function detectMemberContext(expression, offset) {
+function detectMemberContext(expression: string, offset: number): MemberContext | null {
     const text = expression.slice(Math.max(0, offset - MEMBER_WINDOW), offset);
     const match = MEMBER_RE.exec(text);
     if (!match) return null;
@@ -232,7 +345,12 @@ function detectMemberContext(expression, offset) {
     };
 }
 
-function generalResult(linePrefix, caret, decls, customMethods) {
+function generalResult(
+    linePrefix: string,
+    caret: number,
+    decls: NormalizedDeclarations,
+    customMethods: readonly CustomMethod[]
+): ExpressionSuggestionResult {
     const word = /[A-Za-z0-9_$]*$/.exec(linePrefix);
     const prefix = word ? word[0] : '';
 
@@ -246,9 +364,9 @@ function generalResult(linePrefix, caret, decls, customMethods) {
 
 // ── Suggestion builders ─────────────────────────────────────────────────────
 
-function braceItems(decls, sigil) {
+function braceItems(decls: NormalizedDeclarations, sigil: string): ExpressionSuggestion[] {
     const mode = sigil === 'F' ? 'field' : sigil === 'P' ? 'param' : 'variable';
-    const kind = mode === 'field' ? 'field' : mode === 'param' ? 'parameter' : 'variable';
+    const kind: SuggestionKind = mode === 'field' ? 'field' : mode === 'param' ? 'parameter' : 'variable';
 
     if (sigil === 'F') {
         return decls.allFields.map(decl => declarationSuggestion(decl, sigil, true, kind, '0_'));
@@ -268,7 +386,7 @@ function braceItems(decls, sigil) {
  * Close an unclosed `$X{...}` for every suggestion: the caret lands before the
  * inserted closing brace.
  */
-function completeBrace(items, expression, caret) {
+function completeBrace(items: ExpressionSuggestion[], expression: string, caret: number): void {
     if (expression.slice(caret).includes('}')) return;
     for (const item of items) {
         item.insertTextPlain += '}';
@@ -278,7 +396,7 @@ function completeBrace(items, expression, caret) {
 }
 
 /** `$X{CLAUSE, ...}` SQL clause-builder suggestions. */
-function clauseItems() {
+function clauseItems(): ExpressionSuggestion[] {
     return X_CLAUSES.map(clause => withPlain({
         label:             clause,
         detail:            `$X{${clause}, ...}`,
@@ -290,7 +408,7 @@ function clauseItems() {
 }
 
 /** `$R{key}` suggestions from the report's resource bundle. */
-function resourceItems(resources) {
+function resourceItems(resources: readonly ResourceEntry[]): ExpressionSuggestion[] {
     return resources.map(resource => {
         const value = resource && typeof resource.defaultValue === 'string'
             ? resource.defaultValue
@@ -314,7 +432,7 @@ function resourceItems(resources) {
 }
 
 /** Keep property-file content from injecting markdown while it is rendered. */
-function markdownSafe(text) {
+function markdownSafe(text: string): string {
     return String(text ?? '')
         .replace(/\\/g, '\\\\')
         .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
@@ -322,7 +440,7 @@ function markdownSafe(text) {
         .trim();
 }
 
-function shortcutItems() {
+function shortcutItems(): ExpressionSuggestion[] {
     return [
         shortcut('$F{', 'Field', 'field'),
         shortcut('$P{', 'Parameter', 'parameter'),
@@ -332,7 +450,7 @@ function shortcutItems() {
     ];
 }
 
-function shortcut(label, detailText, kind) {
+function shortcut(label: string, detailText: string, kind: SuggestionKind): ExpressionSuggestion {
     const sigil = label[1];
     const plain = `$${sigil}{}`;
     return withPlain({
@@ -345,7 +463,13 @@ function shortcut(label, detailText, kind) {
     }, plain, { start: 3, end: 3 });
 }
 
-function declarationSuggestion(decl, sigil, alreadyInsideBrace, kind, sortPrefix) {
+function declarationSuggestion(
+    decl: SuggestionDeclaration,
+    sigil: string,
+    alreadyInsideBrace: boolean,
+    kind: SuggestionKind,
+    sortPrefix: string
+): ExpressionSuggestion {
     const label   = alreadyInsideBrace ? decl.name : `$${sigil}{${decl.name}}`;
     const plain   = alreadyInsideBrace ? decl.name : `$${sigil}{${decl.name}}`;
     const snippet = alreadyInsideBrace ? decl.name : `\\$${sigil}{${decl.name}}`;
@@ -373,7 +497,13 @@ function declarationSuggestion(decl, sigil, alreadyInsideBrace, kind, sortPrefix
  * Push snippet-backed suggestions, parsing each snippet once.
  * `describe(entry)` supplies the category-specific detail/documentation.
  */
-function pushSnippetSuggestions(target, entries, kind, sortPrefix, describe) {
+function pushSnippetSuggestions<T extends SnippetEntry>(
+    target: ExpressionSuggestion[],
+    entries: readonly T[],
+    kind: SuggestionKind,
+    sortPrefix: string,
+    describe: (entry: T) => { detail: string; documentation: string }
+): void {
     for (const entry of entries) {
         const plain = plainFromSnippet(entry.snippet);
         const meta  = describe(entry);
@@ -384,12 +514,15 @@ function pushSnippetSuggestions(target, entries, kind, sortPrefix, describe) {
             insertTextSnippet: entry.snippet,
             kind,
             sortText:          sortPrefix + entry.label,
-        }, plain.text, plain.placeholder));
+        }, plain.text, plain.placeholder ?? undefined));
     }
 }
 
-function generalItems(decls, customMethods) {
-    const items = [];
+function generalItems(
+    decls: NormalizedDeclarations,
+    customMethods: readonly CustomMethod[]
+): ExpressionSuggestion[] {
+    const items: ExpressionSuggestion[] = [];
 
     for (const decl of decls.allFields) {
         items.push(declarationSuggestion(decl, 'F', false, 'field', '1_F_'));
@@ -402,7 +535,7 @@ function generalItems(decls, customMethods) {
     }
 
     pushSnippetSuggestions(items, JASPER_FUNCTIONS, 'function', '2_', fn => ({
-        detail:        fn.detail,
+        detail:        fn.detail || '',
         documentation: `**JasperReports built-in**\n\n${fn.doc}`,
     }));
     pushSnippetSuggestions(items, JAVA_TYPES, 'class', '3_', type => ({
@@ -419,7 +552,11 @@ function generalItems(decls, customMethods) {
 
 // ── Typed members ───────────────────────────────────────────────────────────
 
-function memberDeclarations(decls) {
+function memberDeclarations(decls: NormalizedDeclarations): {
+    fields: Declaration[];
+    parameters: Declaration[];
+    variables: Declaration[];
+} {
     return {
         fields:     decls.allFields,
         parameters: [...decls.allParameters, ...BUILTIN_PARAMETERS.map(p => ({ ...p, isBuiltin: true }))],
@@ -427,8 +564,12 @@ function memberDeclarations(decls) {
     };
 }
 
-function provideMemberItems(context, decls, baseline) {
-    const lookup = typeKey => getMembers(typeKey, { baseline });
+function provideMemberItems(
+    context: MemberContext,
+    decls: NormalizedDeclarations,
+    baseline: number
+): ExpressionSuggestion[] | null {
+    const lookup = (typeKey: string | null): MemberLookup => getMembers(typeKey, { baseline });
     const resolution = resolveReceiver(context.textBeforeDot, {
         declarations: memberDeclarations(decls),
         lookup,
@@ -447,12 +588,12 @@ function provideMemberItems(context, decls, baseline) {
                         labelDescription: candidate.labelDescription,
                         filterText:       candidate.filterText,
                         detail:           candidate.detail,
-                        documentation:    documentationFor(candidate, resolution.typeKey),
+                        documentation:    documentationFor(candidate, resolution.typeKey || ''),
                         insertTextSnippet: candidate.insertText,
                         kind:             candidate.kind === 'field' ? 'field' : 'method',
                         sortText:         `${candidate.tier}_${String(candidate.rank).padStart(3, '0')}_${candidate.name}_${candidate.arity}`,
                         deprecated:       !!candidate.deprecated,
-                    }, plain.text, plain.placeholder);
+                    }, plain.text, plain.placeholder ?? undefined);
                 });
             }
         }
@@ -462,10 +603,10 @@ function provideMemberItems(context, decls, baseline) {
     if (!hint) return null;
 
     return [withPlain({
-        label:             hint.label,
+        label:             hint.label || '',
         filterText:        hint.label,
-        detail:            hint.detail,
-        documentation:     hint.documentation,
+        detail:            hint.detail || '',
+        documentation:     hint.documentation || '',
         insertTextSnippet: hint.insertText,
         kind:              'text',
         sortText:          '0000_type-hint',
@@ -474,7 +615,7 @@ function provideMemberItems(context, decls, baseline) {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function normalizeDeclarations(declarations) {
+function normalizeDeclarations(declarations: ExpressionDeclarations | null | undefined): NormalizedDeclarations {
     const source = declarations || {};
     return {
         allFields:     source.allFields || source.fields || [],
@@ -483,26 +624,32 @@ function normalizeDeclarations(declarations) {
     };
 }
 
-function normalizeBaseline(value) {
+function normalizeBaseline(value: number | string | undefined): number {
     const number = parseInt(String(value), 10);
     return Number.isFinite(number) && number > 0 ? number : 8;
 }
 
-function withPlain(suggestion, plain, placeholder) {
+function withPlain(
+    suggestion: SuggestionDraft,
+    plain?: string,
+    placeholder?: SuggestionPlaceholder
+): ExpressionSuggestion {
     const converted = plain === undefined ? plainFromSnippet(suggestion.insertTextSnippet) : { text: plain, placeholder };
-    suggestion.insertTextPlain = converted.text;
-    suggestion.placeholder = converted.placeholder || null;
-    return suggestion;
+    return {
+        ...suggestion,
+        insertTextPlain: converted.text,
+        placeholder: converted.placeholder || null,
+    };
 }
 
 /**
  * Convert a VS Code snippet string to plain text plus the first placeholder range.
  * Handles `\$`, `${n:label}`, `${n}` and `$n`.
  */
-function plainFromSnippet(snippet) {
+export function plainFromSnippet(snippet: string): { text: string; placeholder: SuggestionPlaceholder | null } {
     const source = String(snippet ?? '');
     let text = '';
-    let placeholder = null;
+    let placeholder: SuggestionPlaceholder | null = null;
     let i = 0;
 
     while (i < source.length) {
@@ -537,10 +684,3 @@ function plainFromSnippet(snippet) {
 
     return { text, placeholder };
 }
-
-module.exports = {
-    buildExpressionSuggestions,
-    suggestionOptions,
-    plainFromSnippet,
-    JASPER_FUNCTIONS,
-};

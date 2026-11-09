@@ -1,4 +1,4 @@
-// designEdit.js
+// designEdit.ts
 // Pure, vscode-free builder for design-view edits.
 //
 // The webview sends an element offset (its start-tag offset from the design
@@ -9,11 +9,14 @@
 // WorkspaceEdit ranges are built by the host from these edits, so one call is
 // one undoable edit. No formatting or unrelated source is touched.
 
-const { scanXml, nodeStartingAt, attrInsertOffset } = require('./xmlspan');
-const { findOverlap } = require('./edits');
-const {
+import { scanXml, nodeStartingAt, attrInsertOffset } from './xmlspan';
+import type { XmlNode, XmlTextNode } from './xmlspan';
+import { findOverlap } from './edits';
+import type { Edit } from './edits';
+import {
     MAX_CONTENT,
     CONTENT_TAG_BY_KIND,
+    CONTENT_KINDS,
     EXPRESSION_CONTENT_TAGS,
     PROPERTY_SPECS,
     localName,
@@ -22,7 +25,8 @@ const {
     numericAttr,
     escapeXmlAttr,
     escapeXmlText,
-} = require('./designSpec');
+} from './designSpec';
+import type { ContentKind, DesignPropertyName, PropertySpec } from './designSpec';
 
 const MAX_GEOMETRY = 100000;
 
@@ -30,20 +34,67 @@ const GEOMETRY_FIELDS = ['x', 'y', 'width', 'height'];
 const ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_.:-]*$/;
 const LINE_STYLES = ['Solid', 'Dashed', 'Dotted', 'Double'];
 
+/** The result of one design-view patch: non-overlapping edits or an error. */
+export interface ElementPatchResult {
+    edits: Edit[];
+    error: string | null;
+}
+
+/** Geometry values are validated at apply time (the webview may send anything). */
+interface GeometryPatch {
+    [field: string]: unknown;
+}
+
+interface ContentPatch {
+    text: string;
+}
+
+interface AttributesPatch {
+    set?: Record<string, string>;
+    remove?: string[];
+}
+
+interface BoxPatch {
+    border?: boolean;
+    padding?: number;
+    width?: number;
+    style?: string;
+    color?: string;
+}
+
+interface LinePatch {
+    width?: number;
+    style?: string;
+    color?: string;
+}
+
+interface PatchRequest {
+    geometry?: GeometryPatch;
+    properties?: Record<string, unknown>;
+    content?: ContentPatch;
+    attributes?: AttributesPatch;
+    box?: BoxPatch;
+    line?: LinePatch;
+}
+
+interface CanonicalProperty {
+    value: string | null;
+    error: string | null;
+}
+
 /**
- * Build source edits for one design-view patch.
- *
- * @param {string} text current document text
- * @param {number} elementOffset start-tag offset from the model
- * @param {object} patch { geometry?, properties?, content?, attributes?, box?, line? }
- * @returns {{ edits: Array<{start:number,end:number,replacement:string}>, error: string|null }}
+ * Build source edits for one design-view patch. The patch may carry geometry,
+ * properties, content, attributes, box and line changes.
  */
-function buildElementPatch(text, elementOffset, patch) {
+export function buildElementPatch(text: string, elementOffset: number, patch: unknown): ElementPatchResult {
     if (typeof text !== 'string') return fail('The report text is not available.');
     if (!Number.isInteger(elementOffset)) return fail('The selected element is not valid.');
 
     const patchError = validatePatch(patch);
     if (patchError) return fail(patchError);
+
+    // validatePatch has checked every field read below; the cast records that.
+    const request = patch as PatchRequest;
 
     const scan = scanXml(text);
     if (scan.error || !scan.doc) {
@@ -55,36 +106,36 @@ function buildElementPatch(text, elementOffset, patch) {
         return fail('This element was moved or the file changed. Refresh the view and try again.');
     }
 
-    const edits = [];
-    const insertions = [];
+    const edits: Edit[] = [];
+    const insertions: string[] = [];
 
-    if (patch.geometry) {
-        const error = applyGeometry(node, patch.geometry, edits, insertions);
+    if (request.geometry) {
+        const error = applyGeometry(node, request.geometry, edits, insertions);
         if (error) return fail(error);
     }
 
-    if (patch.properties) {
-        const error = applyProperties(node, patch.properties, edits, insertions);
+    if (request.properties) {
+        const error = applyProperties(node, request.properties, edits, insertions);
         if (error) return fail(error);
     }
 
-    if (patch.attributes) {
-        const error = applyAttributes(text, node, patch.attributes, edits, insertions);
+    if (request.attributes) {
+        const error = applyAttributes(text, node, request.attributes, edits, insertions);
         if (error) return fail(error);
     }
 
-    if (patch.content) {
-        const error = applyContent(text, node, patch.content.text, edits, insertions);
+    if (request.content) {
+        const error = applyContent(text, node, request.content.text, edits, insertions);
         if (error) return fail(error);
     }
 
-    if (patch.box) {
-        const error = applyBox(text, node, patch.box, edits, insertions);
+    if (request.box) {
+        const error = applyBox(text, node, request.box, edits, insertions);
         if (error) return fail(error);
     }
 
-    if (patch.line) {
-        const error = applyLine(text, node, patch.line, edits, insertions);
+    if (request.line) {
+        const error = applyLine(text, node, request.line, edits, insertions);
         if (error) return fail(error);
     }
 
@@ -109,8 +160,8 @@ function buildElementPatch(text, elementOffset, patch) {
 
 // ── Patch validation ────────────────────────────────────────────────────────
 
-function validatePatch(patch) {
-    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+function validatePatch(patch: unknown): string | null {
+    if (!isPlainObject(patch)) {
         return 'The edit request is not valid.';
     }
 
@@ -122,25 +173,28 @@ function validatePatch(patch) {
         if (!allowed.has(key)) return `Unknown edit type: ${key}.`;
     }
 
-    if (patch.geometry !== undefined) {
-        if (!isPlainObject(patch.geometry)) return 'The geometry values are not valid.';
-        for (const key of Object.keys(patch.geometry)) {
+    const geometry = patch.geometry;
+    if (geometry !== undefined) {
+        if (!isPlainObject(geometry)) return 'The geometry values are not valid.';
+        for (const key of Object.keys(geometry)) {
             if (!GEOMETRY_FIELDS.includes(key)) return `Unknown geometry field: ${key}.`;
         }
     }
 
-    if (patch.properties !== undefined) {
-        if (!isPlainObject(patch.properties)) return 'The property values are not valid.';
-        for (const key of Object.keys(patch.properties)) {
-            if (!PROPERTY_SPECS[key]) return `Unknown property: ${key}.`;
+    const properties = patch.properties;
+    if (properties !== undefined) {
+        if (!isPlainObject(properties)) return 'The property values are not valid.';
+        for (const key of Object.keys(properties)) {
+            if (!isPropertyName(key)) return `Unknown property: ${key}.`;
         }
     }
 
-    if (patch.content !== undefined) {
-        if (!isPlainObject(patch.content) || typeof patch.content.text !== 'string') {
+    const content = patch.content;
+    if (content !== undefined) {
+        if (!isPlainObject(content) || typeof content.text !== 'string') {
             return 'The content value is not valid.';
         }
-        for (const key of Object.keys(patch.content)) {
+        for (const key of Object.keys(content)) {
             if (key !== 'text') return `Unknown content field: ${key}.`;
         }
     }
@@ -163,7 +217,7 @@ function validatePatch(patch) {
     return null;
 }
 
-function validateAttributesPatch(attributes) {
+function validateAttributesPatch(attributes: unknown): string | null {
     if (!isPlainObject(attributes)) return 'The attribute values are not valid.';
 
     for (const key of Object.keys(attributes)) {
@@ -191,21 +245,23 @@ function validateAttributesPatch(attributes) {
         }
     }
 
-    if (set && remove) {
+    if (set && Array.isArray(remove)) {
         for (const name of remove) {
-            if (Object.prototype.hasOwnProperty.call(set, name)) {
+            if (typeof name === 'string' && Object.prototype.hasOwnProperty.call(set, name)) {
                 return `Attribute ${name} cannot be set and removed at once.`;
             }
         }
     }
 
-    if ((!set || Object.keys(set).length === 0) && (!remove || remove.length === 0)) {
+    const setEmpty = !isPlainObject(set) || Object.keys(set).length === 0;
+    const removeEmpty = !Array.isArray(remove) || remove.length === 0;
+    if (setEmpty && removeEmpty) {
         return 'There is nothing to apply.';
     }
     return null;
 }
 
-function validateAttributeName(name) {
+function validateAttributeName(name: unknown): string | null {
     const text = String(name ?? '');
     if (!ATTRIBUTE_NAME.test(text)) return `Attribute name ${text} is not valid.`;
     if (text.toLowerCase() === 'kind') return 'The element kind cannot be changed from the inspector.';
@@ -215,43 +271,59 @@ function validateAttributeName(name) {
     return null;
 }
 
-function validateBoxPatch(box) {
+function validateBoxPatch(box: unknown): string | null {
     if (!isPlainObject(box)) return 'The box values are not valid.';
     const allowed = new Set(['border', 'padding', 'width', 'style', 'color']);
     for (const key of Object.keys(box)) {
         if (!allowed.has(key)) return `Unknown box field: ${key}.`;
     }
-    if (box.border !== undefined && typeof box.border !== 'boolean') {
+
+    const border = box.border;
+    if (border !== undefined && typeof border !== 'boolean') {
         return 'The border value must be true or false.';
     }
-    if (box.padding !== undefined && (!Number.isFinite(box.padding) || box.padding < 0)) {
+
+    const padding = box.padding;
+    if (padding !== undefined && (!Number.isFinite(padding) || Number(padding) < 0)) {
         return 'Padding must be a non-negative number.';
     }
-    if (box.width !== undefined && (!Number.isFinite(box.width) || box.width <= 0 || box.width > 100)) {
+
+    const width = box.width;
+    if (width !== undefined && (!Number.isFinite(width) || Number(width) <= 0 || Number(width) > 100)) {
         return 'Border width must be between 0 and 100.';
     }
-    if (box.style !== undefined && !normalizedEnum(LINE_STYLES, box.style)) {
+
+    const style = box.style;
+    if (style !== undefined && !normalizedEnum(LINE_STYLES, style)) {
         return `Line style must be one of: ${LINE_STYLES.join(', ')}.`;
     }
-    if (box.color !== undefined && box.color !== '' && !isHexColor(box.color)) {
+
+    const color = box.color;
+    if (color !== undefined && color !== '' && !isHexColor(color)) {
         return 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.';
     }
     return null;
 }
 
-function validateLinePatch(line) {
+function validateLinePatch(line: unknown): string | null {
     if (!isPlainObject(line)) return 'The line values are not valid.';
     const allowed = new Set(['width', 'style', 'color']);
     for (const key of Object.keys(line)) {
         if (!allowed.has(key)) return `Unknown line field: ${key}.`;
     }
-    if (line.width !== undefined && (!Number.isFinite(line.width) || line.width <= 0 || line.width > 100)) {
+
+    const width = line.width;
+    if (width !== undefined && (!Number.isFinite(width) || Number(width) <= 0 || Number(width) > 100)) {
         return 'Line width must be between 0 and 100.';
     }
-    if (line.style !== undefined && !normalizedEnum(LINE_STYLES, line.style)) {
+
+    const style = line.style;
+    if (style !== undefined && !normalizedEnum(LINE_STYLES, style)) {
         return `Line style must be one of: ${LINE_STYLES.join(', ')}.`;
     }
-    if (line.color !== undefined && line.color !== '' && !isHexColor(line.color)) {
+
+    const color = line.color;
+    if (color !== undefined && color !== '' && !isHexColor(color)) {
         return 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.';
     }
     return null;
@@ -259,14 +331,19 @@ function validateLinePatch(line) {
 
 // ── Geometry ────────────────────────────────────────────────────────────────
 
-function applyGeometry(node, geometry, edits, insertions) {
+function applyGeometry(
+    node: XmlNode,
+    geometry: GeometryPatch,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     for (const field of GEOMETRY_FIELDS) {
         if (!(field in geometry)) continue;
 
         const raw = geometry[field];
         if (!Number.isFinite(raw)) return `The ${field} value must be a number.`;
 
-        let value = Math.round(raw);
+        let value = Math.round(Number(raw));
         if (!Number.isFinite(value)) return `The ${field} value must be a number.`;
         if (field === 'width' || field === 'height') {
             value = Math.max(1, Math.min(MAX_GEOMETRY, value));
@@ -281,10 +358,15 @@ function applyGeometry(node, geometry, edits, insertions) {
 
 // ── Properties ──────────────────────────────────────────────────────────────
 
-function applyProperties(node, properties, edits, insertions) {
+function applyProperties(
+    node: XmlNode,
+    properties: Record<string, unknown>,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     for (const key of Object.keys(properties)) {
-        const spec = PROPERTY_SPECS[key];
-        if (!spec) return `Unknown property: ${key}.`;
+        if (!isPropertyName(key)) return `Unknown property: ${key}.`;
+        const spec: PropertySpec = PROPERTY_SPECS[key];
 
         const canonical = canonicalProperty(spec, properties[key]);
         if (canonical.error) return canonical.error;
@@ -295,83 +377,89 @@ function applyProperties(node, properties, edits, insertions) {
     return null;
 }
 
-function canonicalProperty(spec, value) {
+function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalProperty {
     switch (spec.type) {
         case 'fontName': {
             const name = String(value ?? '').trim();
-            if (!name) return { error: 'Font name cannot be empty.' };
-            if (name.length > 120) return { error: 'Font name is too long.' };
-            if (/[\u0000-\u001f]/.test(name)) return { error: 'Font name contains invalid characters.' };
-            return { value: escapeXmlAttr(name) };
+            if (!name) return { value: null, error: 'Font name cannot be empty.' };
+            if (name.length > 120) return { value: null, error: 'Font name is too long.' };
+            if (/[\u0000-\u001f]/.test(name)) return { value: null, error: 'Font name contains invalid characters.' };
+            return { value: escapeXmlAttr(name), error: null };
         }
 
         case 'fontSize': {
             const size = Number(value);
             if (!Number.isFinite(size) || size <= 0 || size > 999) {
-                return { error: 'Font size must be a number between 0 and 999.' };
+                return { value: null, error: 'Font size must be a number between 0 and 999.' };
             }
-            return { value: String(Math.round(size * 100) / 100) };
+            return { value: String(Math.round(size * 100) / 100), error: null };
         }
 
         case 'boolean':
-            if (typeof value !== 'boolean') return { error: 'Boolean properties must be true or false.' };
-            return { value: value ? 'true' : 'false' };
+            if (typeof value !== 'boolean') return { value: null, error: 'Boolean properties must be true or false.' };
+            return { value: value ? 'true' : 'false', error: null };
 
         case 'color': {
             const color = String(value ?? '').trim();
             if (!isHexColor(color)) {
-                return { error: 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.' };
+                return { value: null, error: 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.' };
             }
-            return { value: color };
+            return { value: color, error: null };
         }
 
         case 'enum': {
             const match = normalizedEnum(spec.values, value);
-            if (!match) return { error: `Allowed values: ${spec.values.join(', ')}.` };
-            return { value: match };
+            if (!match) return { value: null, error: `Allowed values: ${spec.values.join(', ')}.` };
+            return { value: match, error: null };
         }
 
         case 'text': {
             const text = String(value ?? '').trim();
-            if (!text) return { error: 'This value cannot be empty.' };
-            if (text.length > 500) return { error: 'This value is too long.' };
-            if (/[\u0000-\u001f]/.test(text)) return { error: 'The value contains invalid characters.' };
-            return { value: escapeXmlAttr(text) };
+            if (!text) return { value: null, error: 'This value cannot be empty.' };
+            if (text.length > 500) return { value: null, error: 'This value is too long.' };
+            if (/[\u0000-\u001f]/.test(text)) return { value: null, error: 'The value contains invalid characters.' };
+            return { value: escapeXmlAttr(text), error: null };
         }
 
         case 'rawString': {
             const text = String(value ?? '');
-            if (text.length > 1000) return { error: 'This value is too long.' };
-            return { value: escapeXmlAttr(text) };
+            if (text.length > 1000) return { value: null, error: 'This value is too long.' };
+            return { value: escapeXmlAttr(text), error: null };
         }
 
         case 'integer': {
             const number = Number(value);
-            if (!Number.isFinite(number)) return { error: 'This value must be a number.' };
+            if (!Number.isFinite(number)) return { value: null, error: 'This value must be a number.' };
             const rounded = Math.round(number);
             if (rounded < spec.min || rounded > spec.max) {
-                return { error: `This value must be between ${spec.min} and ${spec.max}.` };
+                return { value: null, error: `This value must be between ${spec.min} and ${spec.max}.` };
             }
-            return { value: String(rounded) };
+            return { value: String(rounded), error: null };
         }
 
         default:
-            return { error: 'Unsupported property.' };
+            return { value: null, error: 'Unsupported property.' };
     }
 }
 
-function normalizedEnum(values, value) {
+function normalizedEnum(values: readonly string[], value: unknown): string | null {
     const text = String(value ?? '').trim();
     return values.find(allowed => allowed.toLowerCase() === text.toLowerCase()) || null;
 }
 
-function isHexColor(value) {
+function isHexColor(value: unknown): boolean {
     return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(value ?? '').trim());
 }
 
 // ── Free-form attributes ────────────────────────────────────────────────────
 
-function applyAttributes(text, node, attributes, edits, insertions) {
+function applyAttributes(
+    text: string,
+    node: XmlNode,
+    attributes: AttributesPatch,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     const set = attributes.set || {};
 
     for (const [name, value] of Object.entries(set)) {
@@ -384,7 +472,7 @@ function applyAttributes(text, node, attributes, edits, insertions) {
     return null;
 }
 
-function planAttributeRemoval(node, name, text, edits) {
+function planAttributeRemoval(node: XmlNode, name: string, text: string, edits: Edit[]): void {
     const attr = node.attr(name);
     if (!attr) return;
 
@@ -395,10 +483,16 @@ function planAttributeRemoval(node, name, text, edits) {
 
 // ── Box (border + padding) ──────────────────────────────────────────────────
 
-function applyBox(text, node, patch, edits, insertions) {
+function applyBox(
+    text: string,
+    node: XmlNode,
+    patch: BoxPatch,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     const existing = directChild(node, 'box');
     const existingPen = existing ? firstPen(existing) : null;
-    const has = key => Object.prototype.hasOwnProperty.call(patch, key);
+    const has = (key: string): boolean => Object.prototype.hasOwnProperty.call(patch, key);
 
     if (existing) {
         const unsupported = existing.children.filter(child => !isPenTag(localName(child.tag)));
@@ -422,7 +516,7 @@ function applyBox(text, node, patch, edits, insertions) {
         ? String(patch.color || '').trim()
         : (existingPen ? String(attrValue(existingPen, 'lineColor') || '') : '');
 
-    const attrs = [];
+    const attrs: { name: string; value: string }[] = [];
     if (existing) {
         for (const attr of existing.attrList) {
             if (attr.name === 'padding' && has('padding')) continue;
@@ -461,27 +555,33 @@ function applyBox(text, node, patch, edits, insertions) {
     return insertChild(text, node, markup, edits, insertions);
 }
 
-function firstPen(boxNode) {
+function firstPen(boxNode: XmlNode): XmlNode | null {
     for (const child of boxNode.children) {
         if (isPenTag(localName(child.tag))) return child;
     }
     return null;
 }
 
-function isPenTag(tag) {
+function isPenTag(tag: string): boolean {
     return tag === 'pen' || tag === 'toppen' || tag === 'rightpen' ||
         tag === 'bottompen' || tag === 'leftpen';
 }
 
-function rebuildAttrValue(value) {
+function rebuildAttrValue(value: string): string {
     return String(value).replace(/"/g, '&quot;');
 }
 
 // ── Line pen ────────────────────────────────────────────────────────────────
 
-function applyLine(text, node, patch, edits, insertions) {
+function applyLine(
+    text: string,
+    node: XmlNode,
+    patch: LinePatch,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     const existing = directChild(node, 'pen');
-    const has = key => Object.prototype.hasOwnProperty.call(patch, key);
+    const has = (key: string): boolean => Object.prototype.hasOwnProperty.call(patch, key);
 
     const width = has('width')
         ? Math.round(Number(patch.width) * 100) / 100
@@ -507,13 +607,19 @@ function applyLine(text, node, patch, edits, insertions) {
 
 // ── Content ─────────────────────────────────────────────────────────────────
 
-function applyContent(text, node, value, edits, insertions) {
+function applyContent(
+    text: string,
+    node: XmlNode,
+    value: string,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     if (value.length > MAX_CONTENT) {
         return `The content is longer than ${MAX_CONTENT} characters; edit it in the source.`;
     }
 
     const kind = String(node.attrValue('kind') || '').toLowerCase();
-    const expectedTag = CONTENT_TAG_BY_KIND[kind];
+    const expectedTag = contentTagFor(kind);
     if (!expectedTag) return 'This element does not have editable content.';
 
     const contentNode = findContentNode(node, expectedTag);
@@ -548,7 +654,7 @@ function applyContent(text, node, value, edits, insertions) {
         return 'This content contains nested markup; edit it in the source.';
     }
 
-    const textNodes = [];
+    const textNodes: XmlTextNode[] = [];
     for (const descendant of contentNode.walk()) {
         for (const textNode of descendant.textNodes) textNodes.push(textNode);
     }
@@ -583,7 +689,20 @@ function applyContent(text, node, value, edits, insertions) {
     return null;
 }
 
-function findContentNode(node, expectedTag) {
+function contentTagFor(kind: string): string | undefined {
+    if (!isContentKind(kind)) return undefined;
+    return CONTENT_TAG_BY_KIND[kind];
+}
+
+function isContentKind(value: string): value is ContentKind {
+    return CONTENT_KINDS.has(value);
+}
+
+function isPropertyName(value: string): value is DesignPropertyName {
+    return Object.prototype.hasOwnProperty.call(PROPERTY_SPECS, value);
+}
+
+function findContentNode(node: XmlNode, expectedTag: string): XmlNode | null {
     const wanted = expectedTag === 'expression'
         ? EXPRESSION_CONTENT_TAGS
         : [expectedTag];
@@ -596,7 +715,7 @@ function findContentNode(node, expectedTag) {
 
 // ── Attribute planning ──────────────────────────────────────────────────────
 
-function planAttribute(node, name, value, edits, insertions) {
+function planAttribute(node: XmlNode, name: string, value: string, edits: Edit[], insertions: string[]): void {
     const attr = node.attr(name);
 
     if (attr) {
@@ -608,7 +727,13 @@ function planAttribute(node, name, value, edits, insertions) {
 }
 
 /** Insert `markup` before the element's closing tag, opening self-closing tags. */
-function insertChild(text, node, markup, edits, insertions) {
+function insertChild(
+    text: string,
+    node: XmlNode,
+    markup: string,
+    edits: Edit[],
+    insertions: string[]
+): string | null {
     if (node.selfClosing) {
         if (node.endTag !== -1) return 'This element cannot be edited.';
 
@@ -627,29 +752,23 @@ function insertChild(text, node, markup, edits, insertions) {
     return null;
 }
 
-function formatNumber(value) {
+function formatNumber(value: number): string {
     return String(Math.round(Number(value) * 100) / 100);
 }
 
 /** Split a CDATA terminator so user content cannot close the section early. */
-function splitCdata(value) {
+function splitCdata(value: string): string {
     return String(value).replace(/\]\]>/g, ']]]]><![CDATA[>');
 }
 
 // ── Small helpers ───────────────────────────────────────────────────────────
 
-function fail(error) {
+function fail(error: string): ElementPatchResult {
     return { edits: [], error };
 }
 
-function isPlainObject(value) {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
     return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-module.exports = {
-    buildElementPatch,
-    MAX_CONTENT,
-    escapeXmlAttr,
-    escapeXmlText,
-    splitCdata,
-};
+export { MAX_CONTENT, escapeXmlAttr, escapeXmlText, splitCdata };

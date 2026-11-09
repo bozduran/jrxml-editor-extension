@@ -1,4 +1,4 @@
-// xmlLintFixes.js
+// xmlLintFixes.ts
 // Pure quick-fix computation for the structural lint rules ported from the
 // myhooks hook. vscode-free: returns { title, edit } where edit is
 // { start, end, replacement } in character offsets.
@@ -11,17 +11,26 @@
 // actions apply one fix at a time, so that is fine today; a future "apply all"
 // command must merge same-offset insertions before calling applyEdits().
 
-const { scanXml, nodeStartingAt, attrInsertOffset } = require('./xmlspan');
-const { lineAwareSpan } = require('./edits');
+import { scanXml, nodeStartingAt, attrInsertOffset } from './xmlspan';
+import type { XmlNode } from './xmlspan';
+import { lineAwareSpan } from './edits';
+import type { Edit } from './edits';
 
-/**
- * @param {string} text
- * @param {{ code:string, offset:number }} finding
- * @returns {{ title:string, edit:{start:number,end:number,replacement:string} }|null}
- */
-function fixForFinding(text, finding) {
+/** The part of a diagnostic finding a quick fix needs. */
+export interface LintFinding {
+    code: string;
+    offset: number;
+}
+
+/** A quick-fix title and the edit that applies it. */
+export interface LintFix {
+    title: string;
+    edit: Edit;
+}
+
+export function fixForFinding(text: string, finding: LintFinding): LintFix | null {
     const scan = scanXml(text);
-    if (scan.error) return null;
+    if (scan.error || !scan.doc) return null;
 
     const node = nodeStartingAt(scan.doc.root, finding.offset);
     if (!node) return null;
@@ -52,7 +61,7 @@ function fixForFinding(text, finding) {
 }
 
 /** Edit that sets an existing attribute value or inserts the attribute. */
-function setAttrEdit(node, name, value) {
+function setAttrEdit(node: XmlNode, name: string, value: string): Edit {
     const attr = node.attr(name);
     if (attr) {
         return { start: attr.valueStart, end: attr.valueEnd, replacement: value };
@@ -60,5 +69,3 @@ function setAttrEdit(node, name, value) {
     const at = attrInsertOffset(node);
     return { start: at, end: at, replacement: ` ${name}="${value}"` };
 }
-
-module.exports = { fixForFinding };

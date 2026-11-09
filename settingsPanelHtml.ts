@@ -1,21 +1,25 @@
-// settingsPanelHtml.js
+// settingsPanelHtml.ts
 // Pure HTML/CSS/client-JS builder for the JRXML settings panel.
 //
 // Kept free of the `vscode` module so the document (and its CSP hardening) can
 // be unit-tested with plain Node. The host passes the schema, the current values
 // and a fresh nonce for every render.
 
-const { escapeHtmlText, jsonForInlineScript, getNonce } = require('./expressionPanelHtml');
+import { escapeHtmlText, jsonForInlineScript, getNonce } from './expressionPanelHtml';
+import type { SettingsGroup } from './settingsSchema';
 
-/**
- * @param {object} opts
- * @param {{id:string,title:string,description?:string,settings:object[]}[]} opts.groups
- * @param {Record<string, unknown>} opts.values current values, keyed by setting key
- * @param {string} opts.nonce
- * @param {string} [opts.section] settings section name, e.g. "jrxml"
- * @returns {string} full HTML document
- */
-function buildSettingsHtml({ groups, values, nonce, section = 'jrxml' }) {
+/** Options the host supplies for one settings-panel render. */
+export interface SettingsPanelOptions {
+    groups?: readonly SettingsGroup[];
+    /** Current values, keyed by setting key. */
+    values?: Record<string, unknown>;
+    nonce: string;
+    /** Settings section name, e.g. "jrxml". */
+    section?: string;
+}
+
+/** Build the complete settings document. */
+export function buildSettingsHtml({ groups, values, nonce, section = 'jrxml' }: SettingsPanelOptions): string {
     const safeSection = escapeHtmlText(section);
     const groupsJson  = jsonForInlineScript(groups || []);
     const valuesJson  = jsonForInlineScript(values || {});
@@ -331,4 +335,4 @@ render();
 </html>`;
 }
 
-module.exports = { buildSettingsHtml, getNonce };
+export { getNonce };

@@ -1,4 +1,4 @@
-// designViewHtml.js
+// designViewHtml.ts
 // Pure HTML/CSS/client-JS builder for the JRXML design view webview.
 //
 // Like expressionPanelHtml, this module deliberately does NOT require('vscode')
@@ -10,30 +10,41 @@
 //   * no markup from the JRXML is interpolated into the document;
 //   * no inline event handlers and no eval/innerHTML.
 
-const fs   = require('fs');
-const path = require('path');
-const { jsonForInlineScript } = require('./expressionPanelHtml');
-const designViewStyles = require('./designViewStyles');
+import * as fs from 'fs';
+import * as path from 'path';
+import { jsonForInlineScript } from './expressionPanelHtml';
+import designViewStyles from './designViewStyles';
+import type { DesignModel } from './designModel';
 
-const CLIENT_FILE = path.join(__dirname, 'designViewClient.js');
+export const CLIENT_FILE = path.join(__dirname, 'designViewClient.js');
 
 /** Read the client script and keep a literal </script> inside it from closing the element. */
-function clientScript() {
+function clientScript(): string {
     return fs.readFileSync(CLIENT_FILE, 'utf8').replace(/<\/script/gi, '<\\/script');
 }
 
-/**
- * Build the complete design-view document.
- *
- * @param {object} opts
- * @param {object|null} opts.model       designModel result (null = empty state)
- * @param {string} [opts.fileName]       basename shown in the toolbar
- * @param {number|null} [opts.version]   TextDocument version the model was built from
- * @param {string} opts.nonce            CSP nonce for the style/script tags
- * @param {string} [opts.cspSource]      webview.cspSource
- * @returns {string} full HTML document
- */
-function buildDesignViewHtml({ model, fileName, version, nonce, cspSource }) {
+/** Options the host panel supplies for one render. */
+export interface DesignViewHtmlOptions {
+    /** designModel result (null = empty state). */
+    model?: DesignModel | null;
+    /** basename shown in the toolbar. */
+    fileName?: string;
+    /** TextDocument version the model was built from. */
+    version?: number | null;
+    /** CSP nonce for the style/script tags. */
+    nonce: string;
+    /** webview.cspSource. */
+    cspSource?: string;
+}
+
+/** Build the complete design-view document. */
+export function buildDesignViewHtml({
+    model,
+    fileName,
+    version,
+    nonce,
+    cspSource,
+}: DesignViewHtmlOptions): string {
     const source    = cspSource || '';
     const modelJson = jsonForInlineScript(model === undefined ? null : model);
     const fileJson  = jsonForInlineScript(fileName || '');
@@ -381,5 +392,3 @@ ${clientScript()}
 </body>
 </html>`;
 }
-
-module.exports = { buildDesignViewHtml };

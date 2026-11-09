@@ -1,33 +1,40 @@
-// expressionRegions.js
+// expressionRegions.ts
 // The expression elements of a report, derived from the XML scan tree.
 //
 // One region record carries the whole-element span and the content span, so the
 // editor, completion and diagnostics ask the same question of the same data.
 
-const { EXPRESSION_TAGS } = require('./expressionTags');
+import { EXPRESSION_TAGS } from './expressionTags';
+import type { XmlScanResult } from './xmlspan';
 
-const REGION_TAGS = new Set([...EXPRESSION_TAGS, 'query']);
+/** One expression-bearing element and the content span inside it. */
+export interface ExpressionRegion {
+    tag: string;
+    start: number;
+    end: number;
+    innerStart: number;
+    innerEnd: number;
+    expression: string;
+    contentStart: number;
+    cdata: boolean;
+    fullMatch: string;
+}
 
-function stripExpressionContent(raw) {
+const REGION_TAGS: ReadonlySet<string> = new Set([...EXPRESSION_TAGS, 'query']);
+
+function stripExpressionContent(raw: string): string {
     return String(raw ?? '')
         .replace(/^\s*<!\[CDATA\[/, '')
         .replace(/\]\]>\s*$/, '')
         .trim();
 }
 
-/**
- * Every expression-bearing element in document order.
- *
- * @param {{doc:object,error:string|null}} scan
- * @param {string} [text] the scanned source, used for raw spans and CDATA
- * @returns {{tag:string,start:number,end:number,innerStart:number,innerEnd:number,
- *            expression:string,contentStart:number,cdata:boolean,fullMatch:string}[]}
- */
-function regions(scan, text = '') {
+/** Every expression-bearing element in document order. */
+export function regions(scan: XmlScanResult | null, text: string = ''): ExpressionRegion[] {
     if (!scan || scan.error || !scan.doc) return [];
 
     const source = typeof text === 'string' ? text : '';
-    const found = [];
+    const found: ExpressionRegion[] = [];
 
     for (const node of scan.doc.walk()) {
         if (!REGION_TAGS.has(node.tag)) continue;
@@ -57,8 +64,11 @@ function regions(scan, text = '') {
 }
 
 /** The innermost region containing `offset`, or null. */
-function regionAt(found, offset) {
-    let best = null;
+export function regionAt(
+    found: readonly ExpressionRegion[] | null | undefined,
+    offset: number
+): ExpressionRegion | null {
+    let best: ExpressionRegion | null = null;
     for (const region of found || []) {
         if (offset < region.start || offset > region.end) continue;
         if (!best || (region.end - region.start) < (best.end - best.start)) best = region;
@@ -66,8 +76,9 @@ function regionAt(found, offset) {
     return best;
 }
 
-function forEachRegion(found, callback) {
+export function forEachRegion(
+    found: readonly ExpressionRegion[] | null | undefined,
+    callback: (region: ExpressionRegion) => void
+): void {
     for (const region of found || []) callback(region);
 }
-
-module.exports = { regions, regionAt, forEachRegion };

@@ -1,4 +1,4 @@
-// javaParser.js
+// javaParser.ts
 // A small, scoped Java expression parser.
 //
 // It supports the subset the null-dereference rule needs and nothing more:
@@ -10,7 +10,7 @@
 // Nodes carry the character offset where they start so diagnostics can be
 // anchored back onto the original expression.
 
-const { literalEnd } = require('./javaExpr');
+import { literalEnd } from './javaExpr';
 
 // Longest-first so `>>` wins over `>`.
 const OPERATORS = [
@@ -22,7 +22,7 @@ const OPERATORS = [
 
 const NUMBER_RE = /^(?:0[xX][0-9a-fA-F_]+[lL]?|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[fFdDlL]?|\.\d[\d_]*(?:[eE][+-]?\d+)?[fFdDlL]?)/;
 
-const BINARY_PRECEDENCE = {
+const BINARY_PRECEDENCE: Readonly<Record<string, number>> = {
     '||': 1,
     '&&': 2,
     '|': 3,
@@ -35,7 +35,7 @@ const BINARY_PRECEDENCE = {
     '*': 10, '/': 10, '%': 10,
 };
 
-const ASSIGNMENT_OPS = new Set(['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '>>>=']);
+const ASSIGNMENT_OPS: ReadonlySet<string> = new Set(['=', '+=', '-=', '*=', '/=', '%=', '&=', '|=', '^=', '<<=', '>>=', '>>>=']);
 
 const FAIL = new Error('parse-fail');
 
@@ -43,8 +43,116 @@ const FAIL = new Error('parse-fail');
 // stack; exceeding this fails the parse, which callers treat as "not Java".
 const MAX_DEPTH = 200;
 
-function tokenize(code) {
-    const tokens = [];
+/** Lexical token kinds the expression parser produces. */
+export type JavaTokenType = 'ident' | 'number' | 'string' | 'char' | 'textblock' | 'op' | 'punct';
+
+/** One lexical token with its source span. */
+export interface JavaToken {
+    type: JavaTokenType;
+    value: string;
+    start: number;
+    end: number;
+}
+
+/** A binary expression; assignment and `instanceof` are binary too. */
+export interface BinaryNode {
+    kind: 'binary';
+    op: string;
+    left: JavaExpressionNode;
+    right: JavaExpressionNode;
+    start: number;
+}
+
+/** A prefix (`!`, `~`, `+`, `-`, `++`, `--`) or postfix (`post`) unary. */
+export interface UnaryNode {
+    kind: 'unary';
+    op: string;
+    expr: JavaExpressionNode;
+    start: number;
+}
+
+/** `cond ? then : els`. */
+export interface ConditionalNode {
+    kind: 'conditional';
+    cond: JavaExpressionNode;
+    then: JavaExpressionNode;
+    els: JavaExpressionNode;
+    start: number;
+}
+
+/** `(Type) expr`. */
+export interface CastNode {
+    kind: 'cast';
+    expr: JavaExpressionNode;
+    start: number;
+}
+
+/** A parenthesized expression. */
+export interface EnclosedNode {
+    kind: 'enclosed';
+    expr: JavaExpressionNode;
+    start: number;
+}
+
+/** A bare identifier. */
+export interface NameNode {
+    kind: 'name';
+    name: string;
+    start: number;
+}
+
+/** A literal value (number, string, char, text block, `true`, `false`). */
+export interface LiteralNode {
+    kind: 'literal';
+    start: number;
+}
+
+/** The `null` literal. */
+export interface NullNode {
+    kind: 'null';
+    start: number;
+}
+
+/** `scope.name`. */
+export interface FieldAccessNode {
+    kind: 'fieldAccess';
+    scope: JavaExpressionNode;
+    name: string;
+    start: number;
+}
+
+/** A call, with `scope: null` for the unqualified form. */
+export interface MethodCallNode {
+    kind: 'methodCall';
+    scope: JavaExpressionNode | null;
+    name: string;
+    args: JavaExpressionNode[];
+    start: number;
+}
+
+/** Anything the subset does not model in detail (arrays, `new`, blocks, …). */
+export interface OtherNode {
+    kind: 'other';
+    children: JavaExpressionNode[];
+    start: number;
+}
+
+/** The supported expression AST. */
+export type JavaExpressionNode =
+    | BinaryNode
+    | UnaryNode
+    | ConditionalNode
+    | CastNode
+    | EnclosedNode
+    | NameNode
+    | LiteralNode
+    | NullNode
+    | FieldAccessNode
+    | MethodCallNode
+    | OtherNode;
+
+export function tokenize(code: string): JavaToken[] {
+    const tokens: JavaToken[] = [];
     let i = 0;
     const n = code.length;
 
@@ -62,7 +170,7 @@ function tokenize(code) {
         if (c === '"' || c === "'") {
             const start = i;
             const end = literalEnd(code, i);
-            const type = code.startsWith('"""', i) ? 'textblock' : (c === '"' ? 'string' : 'char');
+            const type: JavaTokenType = code.startsWith('"""', i) ? 'textblock' : (c === '"' ? 'string' : 'char');
             tokens.push({ type, value: code.slice(start, end), start, end });
             i = end;
             continue;
@@ -96,14 +204,18 @@ function tokenize(code) {
 }
 
 class Parser {
-    constructor(tokens) {
+    tokens: JavaToken[];
+    i: number;
+    depth: number;
+
+    constructor(tokens: JavaToken[]) {
         this.tokens = tokens;
         this.i = 0;
         this.depth = 0;
     }
 
     /** Depth guard around the recursive-descent entry points. */
-    guarded(fn) {
+    guarded<T>(fn: () => T): T {
         if (++this.depth > MAX_DEPTH) {
             this.depth--;
             throw FAIL;
@@ -115,25 +227,25 @@ class Parser {
         }
     }
 
-    peek(k = 0) { return this.tokens[this.i + k]; }
-    next() { const t = this.tokens[this.i++]; if (!t) throw FAIL; return t; }
-    at(value) { const t = this.peek(); return !!t && t.value === value; }
+    peek(k = 0): JavaToken | undefined { return this.tokens[this.i + k]; }
+    next(): JavaToken { const t = this.tokens[this.i++]; if (!t) throw FAIL; return t; }
+    at(value: string): boolean { const t = this.peek(); return !!t && t.value === value; }
 
-    eat(value) {
+    eat(value: string): boolean {
         if (!this.at(value)) return false;
         this.i++;
         return true;
     }
 
-    expect(value) {
+    expect(value: string): void {
         if (!this.eat(value)) throw FAIL;
     }
 
-    parseExpression() {
+    parseExpression(): JavaExpressionNode {
         return this.parseAssignment();
     }
 
-    parseAssignment() {
+    parseAssignment(): JavaExpressionNode {
         return this.guarded(() => {
             const left = this.parseTernary();
             const t = this.peek();
@@ -145,7 +257,7 @@ class Parser {
         });
     }
 
-    parseTernary() {
+    parseTernary(): JavaExpressionNode {
         const cond = this.parseBinary(1);
         if (this.eat('?')) {
             const then = this.parseAssignment();
@@ -156,7 +268,7 @@ class Parser {
         return cond;
     }
 
-    parseBinary(minPrecedence) {
+    parseBinary(minPrecedence: number): JavaExpressionNode {
         let left = this.parseUnary();
 
         for (;;) {
@@ -175,7 +287,7 @@ class Parser {
         return left;
     }
 
-    parseUnary() {
+    parseUnary(): JavaExpressionNode {
         return this.guarded(() => {
             const t = this.peek();
             if (t && (t.value === '!' || t.value === '~' || t.value === '+' || t.value === '-'
@@ -192,10 +304,11 @@ class Parser {
     }
 
     /** Backtracking cast: `(Type) expr`. Returns null when it is not a cast. */
-    tryCast() {
+    tryCast(): JavaExpressionNode | null {
         if (!this.at('(')) return null;
         const save = this.i;
         const open = this.peek();
+        if (!open) return null;
 
         try {
             this.next();
@@ -210,7 +323,7 @@ class Parser {
         }
     }
 
-    parsePostfix() {
+    parsePostfix(): JavaExpressionNode {
         let node = this.parsePrimary();
 
         for (;;) {
@@ -273,9 +386,9 @@ class Parser {
         return node;
     }
 
-    parseArguments() {
+    parseArguments(): JavaExpressionNode[] {
         this.expect('(');
-        const args = [];
+        const args: JavaExpressionNode[] = [];
         if (this.eat(')')) return args;
 
         for (;;) {
@@ -286,7 +399,7 @@ class Parser {
         }
     }
 
-    parsePrimary() {
+    parsePrimary(): JavaExpressionNode {
         const t = this.peek();
         if (!t) throw FAIL;
 
@@ -316,7 +429,7 @@ class Parser {
         if (t.value === '{') {
             const open = t;
             this.next();
-            const children = [];
+            const children: JavaExpressionNode[] = [];
             if (!this.eat('}')) {
                 for (;;) {
                     children.push(this.parseAssignment());
@@ -331,12 +444,12 @@ class Parser {
         throw FAIL;
     }
 
-    parseNew() {
+    parseNew(): JavaExpressionNode {
         const start = this.next().start; // 'new'
         if (this.at('<')) this.skipTypeArgs();
         this.parseType();
 
-        const children = [];
+        const children: JavaExpressionNode[] = [];
         if (this.at('(')) children.push(...this.parseArguments());
 
         if (this.at('{')) {
@@ -352,7 +465,7 @@ class Parser {
         return { kind: 'other', children, start };
     }
 
-    parseType() {
+    parseType(): void {
         const t = this.peek();
         if (!t || t.type !== 'ident') throw FAIL;
         this.next();
@@ -369,7 +482,7 @@ class Parser {
             break;
         }
 
-        while (this.at('[') && this.peek(1) && this.peek(1).value === ']') {
+        while (this.at('[') && this.peek(1)?.value === ']') {
             this.next();
             this.next();
         }
@@ -379,7 +492,7 @@ class Parser {
      * Skip a balanced generic type-argument list. `>>` / `>>>` close more than
      * one level, which is why the depth is decremented by their length.
      */
-    skipTypeArgs() {
+    skipTypeArgs(): void {
         if (!this.at('<')) return;
         this.next();
 
@@ -398,10 +511,10 @@ class Parser {
  * Parse a Java expression. Returns an AST node, or null when the text is not a
  * single well-formed expression in the supported subset.
  */
-function parseExpression(code) {
+export function parseExpression(code: string | null | undefined): JavaExpressionNode | null {
     if (code === null || code === undefined) return null;
 
-    let tokens;
+    let tokens: JavaToken[];
     try {
         tokens = tokenize(code);
     } catch {
@@ -420,7 +533,7 @@ function parseExpression(code) {
 }
 
 /** Expression children of a node, for generic recursion. */
-function childExpressions(node) {
+export function childExpressions(node: JavaExpressionNode): JavaExpressionNode[] {
     switch (node.kind) {
         case 'binary':      return [node.left, node.right];
         case 'unary':       return [node.expr];
@@ -433,5 +546,3 @@ function childExpressions(node) {
         default:            return [];
     }
 }
-
-module.exports = { parseExpression, childExpressions, tokenize };

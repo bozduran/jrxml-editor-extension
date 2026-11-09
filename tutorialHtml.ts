@@ -1,4 +1,4 @@
-// tutorialHtml.js
+// tutorialHtml.ts
 // Pure HTML/CSS builder for the built-in JRXML tutorial.
 //
 // Deliberately free of the `vscode` module so the document can be unit-tested
@@ -12,33 +12,65 @@
 // group without documenting it here fails `npm test`. The pull-request
 // template repeats the reminder.
 
-const fs   = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
+
+import { SETTINGS_GROUPS } from './settingsSchema';
+import type { SettingsGroup } from './settingsSchema';
+import { escapeHtmlText } from './expressionPanelHtml';
+
+interface PackageCommand {
+    command: string;
+    title: string;
+}
+
+interface PackageKeybinding {
+    command: string;
+    key: string;
+    mac?: string;
+}
+
+interface PackageContributes {
+    commands?: PackageCommand[];
+    keybindings?: PackageKeybinding[];
+}
+
+interface PackageManifest {
+    version: string;
+    contributes: PackageContributes;
+}
 
 /**
  * The package manifest. The compiled module lives in out/, so try the source
  * root first (next to this file) and then the extension root one level up.
  */
-function packageManifest() {
+function packageManifest(): PackageManifest {
     const candidates = [
         path.join(__dirname, 'package.json'),
         path.join(__dirname, '..', 'package.json'),
     ];
     for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) return JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        if (fs.existsSync(candidate)) {
+            // The manifest tests validate package.json; this is the slice read here.
+            return JSON.parse(fs.readFileSync(candidate, 'utf8')) as PackageManifest;
+        }
     }
     throw new Error('package.json not found next to tutorialHtml');
 }
 
 const pkg = packageManifest();
-const { SETTINGS_GROUPS } = require('./settingsSchema');
-const { escapeHtmlText } = require('./expressionPanelHtml');
 
 /**
  * Every command contributed by the extension, in tutorial order.
  * Descriptions are written for users; titles come from package.json.
  */
-const DOCUMENTED_COMMANDS = [
+export interface DocumentedCommand {
+    id: string;
+    group: string;
+    summary: string;
+}
+
+export const DOCUMENTED_COMMANDS: readonly DocumentedCommand[] = [
     { id: 'jrxml.openDesignView', group: 'Open', summary: 'Open the visual report canvas beside the source, in view or edit mode.' },
     { id: 'jrxml.openExpressionEditor', group: 'Open', summary: 'Open the expression under the cursor in a dedicated editor.' },
     { id: 'jrxml.openIfElseBuilder', group: 'Open', summary: 'Build the expression under the cursor as if / else-if / else branches.' },
@@ -74,7 +106,12 @@ const DOCUMENTED_COMMANDS = [
  * Every settings group, with a tutorial summary. The group titles and keys are
  * read from settingsSchema so the reference cannot fall behind the panel.
  */
-const DOCUMENTED_SETTING_GROUPS = [
+export interface DocumentedSettingGroup {
+    id: string;
+    summary: string;
+}
+
+export const DOCUMENTED_SETTING_GROUPS: readonly DocumentedSettingGroup[] = [
     { id: 'editor', summary: 'Indent size, auto-open, auto-format, typed completion and the target Java version.' },
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
     { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, subreport targets and parameter maps, layout bounds, query literals, expression validation, structural lint rules and the Boolean-comparison style rule.' },
@@ -89,7 +126,7 @@ const DOCUMENTED_SETTING_GROUPS = [
  * `enableCommandUris`, so a link outside it is inert; the test checks that
  * every `command:` link is covered.
  */
-const TUTORIAL_COMMAND_URIS = [
+export const TUTORIAL_COMMAND_URIS: readonly string[] = [
     'jrxml.openDesignView',
     'jrxml.openExpressionEditor',
     'jrxml.openIfElseBuilder',
@@ -102,15 +139,15 @@ const TUTORIAL_COMMAND_URIS = [
     'workbench.action.openSettings',
 ];
 
-function escape(value) {
+function escape(value: unknown): string {
     return escapeHtmlText(value == null ? '' : value);
 }
 
-function commandReference() {
-    const declared = new Map(
-        (pkg.contributes.commands || []).map(command => [command.command, command])
+function commandReference(): string {
+    const declared = new Map<string, PackageCommand>(
+        (pkg.contributes.commands || []).map((command): [string, PackageCommand] => [command.command, command])
     );
-    const groups = [];
+    const groups: { title: string; rows: { id: string; title: string; summary: string }[] }[] = [];
 
     for (const item of DOCUMENTED_COMMANDS) {
         const meta = declared.get(item.id);
@@ -139,8 +176,10 @@ function commandReference() {
       </table>`).join('');
 }
 
-function settingsReference() {
-    const byId = new Map(SETTINGS_GROUPS.map(group => [group.id, group]));
+function settingsReference(): string {
+    const byId = new Map<string, SettingsGroup>(
+        SETTINGS_GROUPS.map((group): [string, SettingsGroup] => [group.id, group])
+    );
 
     return DOCUMENTED_SETTING_GROUPS.map(item => {
         const group = byId.get(item.id);
@@ -158,8 +197,8 @@ function settingsReference() {
     }).join('');
 }
 
-function formatKeybinding(binding) {
-    const names = {
+function formatKeybinding(binding: string): string {
+    const names: Record<string, string> = {
         ctrl: 'Ctrl', cmd: 'Cmd', alt: 'Alt', shift: 'Shift', meta: 'Meta',
         up: 'Up', down: 'Down', left: 'Left', right: 'Right',
         escape: 'Esc', enter: 'Enter', space: 'Space', pageup: 'PageUp', pagedown: 'PageDown',
@@ -176,9 +215,9 @@ function formatKeybinding(binding) {
         .join('+');
 }
 
-function keybindingReference() {
-    const declared = new Map(
-        (pkg.contributes.commands || []).map(command => [command.command, command])
+function keybindingReference(): string {
+    const declared = new Map<string, PackageCommand>(
+        (pkg.contributes.commands || []).map((command): [string, PackageCommand] => [command.command, command])
     );
     const bindings = pkg.contributes.keybindings || [];
 
@@ -194,13 +233,8 @@ function keybindingReference() {
     }).join('');
 }
 
-/**
- * Build the complete tutorial document.
- *
- * @param {{nonce:string}} opts
- * @returns {string} full HTML document
- */
-function buildTutorialHtml({ nonce }) {
+/** Build the complete tutorial document. */
+export function buildTutorialHtml({ nonce }: { nonce: string }): string {
     const version = escape(pkg.version);
 
     return /* html */`<!DOCTYPE html>
@@ -658,10 +692,3 @@ Class&lt;? extends Number&gt;</code></div>
 </body>
 </html>`;
 }
-
-module.exports = {
-    buildTutorialHtml,
-    DOCUMENTED_COMMANDS,
-    DOCUMENTED_SETTING_GROUPS,
-    TUTORIAL_COMMAND_URIS,
-};
