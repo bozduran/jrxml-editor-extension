@@ -36,6 +36,12 @@ export interface Reference {
     end?: number;
     fromSubreport?: boolean;
     bang?: boolean;
+    /**
+     * How this reference is written: a `$X{}` token, a navigable name
+     * attribute (`sortField`), or a usage-only name attribute
+     * (`subreportParameter`, `returnValue`, a nested subreport parameter).
+     */
+    role?: 'token' | 'attribute' | 'usage';
 }
 
 /** A `$R{key}` usage inside an expression-bearing element. */
@@ -660,15 +666,21 @@ function extractReferences(scan: XmlScanResult | null): Reference[] {
         } else if (node.tag === 'subreportParameter') {
             // Classic format: the parameter is passed to a subreport, so it
             // counts as used here.
-            addAttributeReference(results, 'P', node, 'name');
+            addAttributeReference(results, 'P', node, 'name', 'usage');
         } else if (node.tag === 'returnValue') {
             // <returnValue toVariable="..."> writes one of this report's variables.
-            addAttributeReference(results, 'V', node, 'toVariable');
+            addAttributeReference(results, 'V', node, 'toVariable', 'usage');
+        } else if (node.tag === 'sortField') {
+            // <sortField name="X" type="Field|Variable"/> names a declaration
+            // and is navigable like a token reference.
+            const type = (node.attrValue('type') || 'field').toLowerCase();
+            if (type === 'none') continue;
+            addAttributeReference(results, type === 'variable' ? 'V' : 'F', node, 'name', 'attribute');
         } else if (node.tag === 'parameter' && insideSubreport(node)) {
             // New format: <parameter name="..."> nested inside a subreport
             // passes a value INTO it, so it is a usage of a parent parameter,
             // not a declaration of this report.
-            addAttributeReference(results, 'P', node, 'name');
+            addAttributeReference(results, 'P', node, 'name', 'usage');
         }
     }
 
@@ -687,6 +699,7 @@ function addTextNodeReferences(node: XmlNode, results: Reference[]): void {
                 bang: token.bang,
                 offset,
                 end:   span.start + token.end,
+                role:  'token',
             });
         });
     }
@@ -697,7 +710,8 @@ function addAttributeReference(
     results: Reference[],
     sigil: ReferenceSigil,
     node: XmlNode,
-    attribute: string
+    attribute: string,
+    role: 'attribute' | 'usage'
 ): void {
     const attr = node.attr(attribute);
     if (!attr || !attr.value) return;
@@ -705,7 +719,9 @@ function addAttributeReference(
         sigil,
         name:          attr.value,
         offset:        attr.valueStart,
+        end:           attr.valueEnd,
         fromSubreport: true,
+        role,
     });
 }
 

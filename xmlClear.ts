@@ -14,20 +14,23 @@
 // and subreport/scoped parameters are neither reported nor deleted here.
 
 import { scanXml } from './xmlspan';
-import type { XmlNode, XmlScanResult } from './xmlspan';
-import { hasRole } from './expressionTags';
-import { forEachReferenceToken } from './referenceTokens';
+import type { XmlScanResult } from './xmlspan';
 import {
     cdataOf,
     decodeXml,
     encodeXml,
     encodeAttribute,
 } from './xmlRules';
-import type { ContentSpan } from './xmlRules';
 import type { Edit, Span } from './edits';
+import {
+    clearDeclarations,
+    usageNames,
+    JSONQL_FIELD_PROPERTY,
+    JSON_FIELD_PROPERTY,
+} from './reportIndex';
+import type { ClearDeclaration } from './reportIndex';
 
-const JSONQL_FIELD_PROPERTY = 'net.sf.jasperreports.jsonql.field.expression';
-const JSON_FIELD_PROPERTY   = 'net.sf.jasperreports.json.field.expression';
+export type { ClearDeclaration, ClearDeclarationKind } from './reportIndex';
 
 /** Built-in parameters the hook never deletes. */
 const BUILTIN_PARAMETERS: ReadonlySet<string> = new Set([
@@ -40,38 +43,6 @@ const BUILTIN_PARAMETERS: ReadonlySet<string> = new Set([
     'REPORT_URL_HANDLER_FACTORY', 'JSON_INPUT_STREAM', 'JSON_SOURCE',
     'JSON_LOCALE', 'JSON_TIME_ZONE', 'JSON_DATE_PATTERN', 'JSON_NUMBER_PATTERN',
 ]);
-
-// The registry's reference role is shared with jrxmlParser so usage
-// collection and reference extraction cannot disagree about which elements
-// carry refs.
-const KIND_BY_SIGIL: Readonly<Record<'F' | 'P' | 'V', ClearDeclarationKind>> = {
-    F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE',
-};
-
-/** The declaration kinds the clear step may delete or annotate. */
-export type ClearDeclarationKind = 'FIELD' | 'PARAMETER' | 'VARIABLE';
-
-/** One report-root declaration, in the clear step's own model. */
-export interface ClearDeclaration {
-    kind: ClearDeclarationKind;
-    name: string;
-    start: number;
-    end: number;
-    endTag: number;
-    hasDescription: boolean;
-    descriptionText: string;
-    descriptionStart: number;
-    descriptionEnd: number;
-    descriptionIndent: string;
-    descriptionCdata: boolean;
-    hasJsonql: boolean;
-    jsonqlValue: string;
-    hasLegacy: boolean;
-    legacyStart: number;
-    legacyEnd: number;
-    legacyNameStart: number;
-    legacyNameEnd: number;
-}
 
 /** The report's top-level `<query>` and the spans a migration rewrites. */
 export interface ClearQuery {
@@ -97,7 +68,7 @@ export interface ClearFixGroup {
     fixes: ClearFix[];
 }
 
-// ── Reference collection (ground-truth style) ─────────────────────────────────
+// ── Reference / declaration views (owned by reportIndex) ────────────────────
 
 /**
  * Names used anywhere an expression can appear, keyed as `KIND:name`.
@@ -106,138 +77,13 @@ export interface ClearFixGroup {
  * flagging every declaration as unused.
  */
 function collectUsedNames(text: string, providedScan: XmlScanResult | null = null): Set<string> | null {
-    const used = new Set<string>();
     const scan = providedScan || scanXml(text);
-    if (scan.error || !scan.doc) return null;
-
-    const root = scan.doc.root;
-
-    for (const node of scan.doc.walk()) {
-        if (hasRole(node.tag, 'reference')) {
-            addReferences(node.textContent(), used);
-        } else if (node.tag === 'subreportParameter') {
-            addName('PARAMETER', node.attrValue('name'), used);
-        } else if (node.tag === 'returnValue') {
-            addName('VARIABLE', node.attrValue('toVariable'), used);
-        } else if (node.tag === 'sortField') {
-            // <sortField name="X" type="Field|Variable"/> references X by name.
-            const type = (node.attrValue('type') || 'Field').toLowerCase();
-            if (type === 'variable') addName('VARIABLE', node.attrValue('name'), used);
-            else if (type !== 'none') addName('FIELD', node.attrValue('name'), used);
-        } else if (node.tag === 'parameter' && node.parent !== root) {
-            // A parameter nested in a subreport or dataset is passed in, not
-            // declared here.
-            addName('PARAMETER', node.attrValue('name'), used);
-        }
-    }
-
-    return used;
+    return usageNames(scan);
 }
 
-function addReferences(body: string, used: Set<string>): void {
-    forEachReferenceToken(body, token => {
-        if (token.sigil === 'R') return;
-        addName(KIND_BY_SIGIL[token.sigil], token.name, used);
-    });
-}
-
-function addName(
-    kind: ClearDeclarationKind,
-    rawName: string | null | undefined,
-    used: Set<string>
-): void {
-    const name = decodeXml(rawName || '').trim();
-    if (name) used.add(kind + ':' + name);
-}
-
-// ── Declaration model ─────────────────────────────────────────────────────────
-
-function lineStartOf(text: string, offset: number): number {
-    let i = offset;
-    while (i > 0 && text[i - 1] !== '\n') i--;
-    return Math.max(0, i);
-}
-
-function descriptionTextSpan(description: XmlNode, text: string): ContentSpan {
-    const cdata = cdataOf(description, text);
-    if (cdata) return cdata;
-
-    const start = description.startTagEnd;
-    const end   = description.endTag >= 0 ? description.endTag : description.end;
-    return { start, end, content: decodeXml(text.slice(start, end).trim()) };
-}
-
+/** Report-root declarations in the clear step's model. */
 function parseDeclarations(text: string): ClearDeclaration[] {
-    const scan = scanXml(text);
-    if (scan.error || !scan.doc) return [];
-
-    const declarations: ClearDeclaration[] = [];
-    for (const child of scan.doc.root.children) {
-        if (child.tag !== 'parameter' && child.tag !== 'field' && child.tag !== 'variable') continue;
-
-        const kind: ClearDeclarationKind =
-            child.tag === 'field' ? 'FIELD'
-            : child.tag === 'parameter' ? 'PARAMETER'
-            : 'VARIABLE';
-
-        const decl: ClearDeclaration = {
-            kind,
-            name:              decodeXml(child.attrValue('name') || ''),
-            start:             child.startTag,
-            end:               child.end,
-            endTag:            child.endTag,
-            hasDescription:    false,
-            descriptionText:   '',
-            descriptionStart:  -1,
-            descriptionEnd:    -1,
-            descriptionIndent: '',
-            descriptionCdata:  false,
-            hasJsonql:         false,
-            jsonqlValue:       '',
-            hasLegacy:         false,
-            legacyStart:       -1,
-            legacyEnd:         -1,
-            legacyNameStart:   -1,
-            legacyNameEnd:     -1,
-        };
-
-        if (decl.kind === 'FIELD') {
-            for (const node of child.children) {
-                if (node.tag === 'description') {
-                    decl.hasDescription = true;
-                    decl.descriptionCdata = cdataOf(node, text) !== null;
-
-                    const span = descriptionTextSpan(node, text);
-                    decl.descriptionText   = span.content.trim();
-                    decl.descriptionStart  = span.start;
-                    decl.descriptionEnd    = span.end;
-                    decl.descriptionIndent = text.slice(lineStartOf(text, node.startTag), node.startTag);
-                } else if (node.tag === 'property') {
-                    const propertyName = decodeXml(node.attrValue('name') || '');
-                    if (propertyName === JSONQL_FIELD_PROPERTY) {
-                        decl.hasJsonql  = true;
-                        decl.jsonqlValue = decodeXml(node.attrValue('value') || '').trim();
-                    } else if (propertyName === JSON_FIELD_PROPERTY) {
-                        decl.hasLegacy    = true;
-                        decl.legacyStart  = node.startTag;
-                        decl.legacyEnd    = node.end;
-                        const nameAttr    = node.attr('name');
-                        if (nameAttr) {
-                            decl.legacyNameStart = nameAttr.valueStart;
-                            decl.legacyNameEnd   = nameAttr.valueEnd;
-                        }
-                    }
-                } else if (node.tag === 'propertyExpression') {
-                    if (decodeXml(node.attrValue('name') || '') === JSONQL_FIELD_PROPERTY) {
-                        decl.hasJsonql = true; // value is not used for syncing
-                    }
-                }
-            }
-        }
-
-        declarations.push(decl);
-    }
-    return declarations;
+    return clearDeclarations(text);
 }
 
 function parseQuery(text: string): ClearQuery | null {
@@ -263,6 +109,12 @@ function parseQuery(text: string): ClearQuery | null {
 }
 
 // ── Removals ──────────────────────────────────────────────────────────────────
+
+function lineStartOf(text: string, offset: number): number {
+    let i = offset;
+    while (i > 0 && text[i - 1] !== '\n') i--;
+    return Math.max(0, i);
+}
 
 /**
  * Line-aware removal span: when the element is alone on its line, its
@@ -295,8 +147,8 @@ function discoverClearFixes(text: string): ClearFixGroup[] {
     if (scan.error) return [];
 
     const groups: ClearFixGroup[] = [];
-    const declarations = parseDeclarations(text);
-    const used = collectUsedNames(text);
+    const declarations = clearDeclarations(text, scan);
+    const used = usageNames(scan);
     // `used === null` means the document could not be scanned; the top-of-
     // function `scan.error` check already covered that, but stay defensive so
     // a future change can never turn "unknown" into "delete everything".
