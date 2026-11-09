@@ -18,17 +18,10 @@ import type { XmlNode } from './xmlspan';
 import { formatExpression } from './javaExpr';
 import { transformText, transformExpression } from './textRules';
 import type { Edit } from './edits';
+import { hasRole } from './expressionTags';
 
 const CDATA_OPEN  = '<![CDATA[';
 const CDATA_CLOSE = ']]>';
-
-// The hook's expression-element set (§11).
-const EXPRESSION_ELEMENTS: ReadonlySet<string> = new Set([
-    'expression', 'defaultValueExpression', 'connectionExpression',
-    'textFieldExpression', 'textExpression', 'patternExpression',
-    'printWhenExpression', 'initialValueExpression', 'variableExpression',
-    'groupExpression',
-]);
 
 const POSITION_TYPE_KINDS: ReadonlySet<string> = new Set(['textField', 'subreport']);
 
@@ -269,7 +262,7 @@ function discoverFormatFixes(
             }
         }
 
-        if (enabled.expression && EXPRESSION_ELEMENTS.has(node.tag)) {
+        if (enabled.expression && hasRole(node.tag, 'format')) {
             const cdata = cdataOf(node, text);
             if (!cdata) continue;
             const formatted = formatExpression(cdata.content);
@@ -311,7 +304,7 @@ function discoverTextcheckFixes(
 
         if (node.tag === 'text') {
             transformed = transformText(cdata.content, markupOf(node), findings);
-        } else if (EXPRESSION_ELEMENTS.has(node.tag)) {
+        } else if (hasRole(node.tag, 'textcheck')) {
             transformed = transformExpression(cdata.content, isTextContext(node), markupOf(node), findings);
         } else {
             continue;
@@ -393,7 +386,7 @@ function combinedFormatterEdits(
             if (transformed !== cdata.content) {
                 edits.push({ start: cdata.start, end: cdata.end, replacement: transformed });
             }
-        } else if (EXPRESSION_ELEMENTS.has(node.tag)) {
+        } else if (hasRole(node.tag, 'format') || hasRole(node.tag, 'textcheck')) {
             let out = cdata.content;
             if (enabled.expression) out = formatExpression(out);
             if (enabled.textcheck) out = transformExpression(out, isTextContext(node), markupOf(node), []);
@@ -421,6 +414,5 @@ export {
     decodeXml,
     encodeXml,
     encodeAttribute,
-    EXPRESSION_ELEMENTS,
     POSITION_TYPE_KINDS,
 };

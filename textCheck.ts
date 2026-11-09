@@ -13,7 +13,8 @@
 
 import { scanXml } from './xmlspan';
 import type { XmlScanResult } from './xmlspan';
-import { EXPRESSION_ELEMENTS, cdataOf, markupOf, isTextContext } from './xmlRules';
+import { cdataOf, markupOf, isTextContext } from './xmlRules';
+import { hasRole } from './expressionTags';
 import { transformText, transformExpression } from './textRules';
 import type { TextChange } from './textRules';
 import type { Edit } from './edits';
@@ -55,7 +56,7 @@ function collectTextCheckIssues(
 
         if (node.tag === 'text') {
             transformed = transformText(cdata.content, markupOf(node), findings, changes);
-        } else if (EXPRESSION_ELEMENTS.has(node.tag)) {
+        } else if (hasRole(node.tag, 'textcheck')) {
             transformed = transformExpression(
                 cdata.content, isTextContext(node), markupOf(node), findings, changes
             );

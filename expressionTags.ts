@@ -18,9 +18,12 @@ export interface ExpressionElementDescriptor {
     readonly roles: readonly ExpressionRole[];
 }
 
+// `textExpression` and `patternExpression` are legacy spellings carried by
+// the old formatter hook; they stay registered so a classic report never loses
+// formatting, linting or text-check coverage.
 const EXPRESSION_ELEMENT_TAGS = [
-    'textFieldExpression', 'imageExpression', 'variableExpression',
-    'groupExpression', 'printWhenExpression', 'initialValueExpression',
+    'textFieldExpression', 'textExpression', 'imageExpression', 'variableExpression',
+    'groupExpression', 'printWhenExpression', 'patternExpression', 'initialValueExpression',
     'filterExpression', 'expression', 'jr:expression',
     'defaultValueExpression', 'anchorNameExpression',
     'bookmarkLevelExpression', 'hyperlinkReferenceExpression',

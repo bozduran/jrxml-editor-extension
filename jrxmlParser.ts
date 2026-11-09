@@ -4,7 +4,7 @@
 
 import { scanXml } from './xmlspan';
 import type { XmlNode, XmlScanResult } from './xmlspan';
-import { EXPRESSION_TAGS, REFERENCE_CONTAINERS } from './expressionTags';
+import { EXPRESSION_TAGS, hasRole } from './expressionTags';
 import { forEachReferenceToken } from './referenceTokens';
 import type { ReferenceSigil } from './referenceTokens';
 import { languageOfScan } from './reportLanguage';
@@ -655,7 +655,7 @@ function extractReferences(scan: XmlScanResult | null): Reference[] {
     if (!scan || scan.error || !scan.doc) return results;
 
     for (const node of scan.doc.walk()) {
-        if (REFERENCE_CONTAINERS.has(node.tag)) {
+        if (hasRole(node.tag, 'reference')) {
             addTextNodeReferences(node, results);
         } else if (node.tag === 'subreportParameter') {
             // Classic format: the parameter is passed to a subreport, so it
@@ -726,7 +726,7 @@ function extractResourceReferences(scan: XmlScanResult | null): ResourceReferenc
     if (!scan || scan.error || !scan.doc) return results;
 
     for (const node of scan.doc.walk()) {
-        if (!REFERENCE_CONTAINERS.has(node.tag)) continue;
+        if (!hasRole(node.tag, 'reference')) continue;
 
         for (const span of node.textNodes) {
             RESOURCE_REFERENCE_RE.lastIndex = 0;

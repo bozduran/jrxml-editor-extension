@@ -14,7 +14,8 @@
 
 import { scanXml } from './xmlspan';
 import type { XmlNode, XmlScanResult } from './xmlspan';
-import { EXPRESSION_ELEMENTS, contentOf } from './xmlRules';
+import { contentOf } from './xmlRules';
+import { hasRole } from './expressionTags';
 import { checkNullDereference } from './lintNullDeref';
 
 const RULE = {
@@ -92,7 +93,7 @@ function lintXml(
             }
         }
 
-        if (EXPRESSION_ELEMENTS.has(node.tag) && enabled.uncheckedNullDereference !== false) {
+        if (hasRole(node.tag, 'expression') && enabled.uncheckedNullDereference !== false) {
             const content = contentOf(node, text);
             if (content && content.content.trim() !== '') {
                 // A rule that throws must never take the whole linter down.

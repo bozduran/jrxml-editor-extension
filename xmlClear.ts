@@ -15,7 +15,7 @@
 
 import { scanXml } from './xmlspan';
 import type { XmlNode, XmlScanResult } from './xmlspan';
-import { REFERENCE_CONTAINERS } from './expressionTags';
+import { hasRole } from './expressionTags';
 import { forEachReferenceToken } from './referenceTokens';
 import {
     cdataOf,
@@ -41,8 +41,9 @@ const BUILTIN_PARAMETERS: ReadonlySet<string> = new Set([
     'JSON_LOCALE', 'JSON_TIME_ZONE', 'JSON_DATE_PATTERN', 'JSON_NUMBER_PATTERN',
 ]);
 
-// REFERENCE_CONTAINERS is shared with jrxmlParser so usage collection and
-// reference extraction can never disagree about which elements carry refs.
+// The registry's reference role is shared with jrxmlParser so usage
+// collection and reference extraction cannot disagree about which elements
+// carry refs.
 const KIND_BY_SIGIL: Readonly<Record<'F' | 'P' | 'V', ClearDeclarationKind>> = {
     F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE',
 };
@@ -112,7 +113,7 @@ function collectUsedNames(text: string, providedScan: XmlScanResult | null = nul
     const root = scan.doc.root;
 
     for (const node of scan.doc.walk()) {
-        if (REFERENCE_CONTAINERS.has(node.tag)) {
+        if (hasRole(node.tag, 'reference')) {
             addReferences(node.textContent(), used);
         } else if (node.tag === 'subreportParameter') {
             addName('PARAMETER', node.attrValue('name'), used);

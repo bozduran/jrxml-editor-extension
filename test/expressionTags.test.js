@@ -16,12 +16,14 @@ const {
     rolesOf,
 } = require('../out/expressionTags');
 
-test('the registry keeps the 44 expression tags in order', () => {
-    assert.strictEqual(EXPRESSION_TAGS.length, 44);
+test('the registry keeps the 46 expression tags in order', () => {
+    assert.strictEqual(EXPRESSION_TAGS.length, 46);
     assert.strictEqual(EXPRESSION_TAGS[0], 'textFieldExpression');
     assert.ok(EXPRESSION_TAGS.includes('filterExpression'));
     assert.ok(EXPRESSION_TAGS.includes('labelExpression'));
     assert.ok(EXPRESSION_TAGS.includes('jr:expression'));
+    assert.ok(EXPRESSION_TAGS.includes('textExpression'));
+    assert.ok(EXPRESSION_TAGS.includes('patternExpression'));
 });
 
 test('expression, format and textcheck roles cover every expression tag', () => {
@@ -63,8 +65,8 @@ test('role matching ignores case and a namespace prefix', () => {
 });
 
 test('legacy sets stay behaviour-identical to the old literals', () => {
-    assert.deepStrictEqual([...REFERENCE_CONTAINERS].slice(0, 44), [...EXPRESSION_TAGS]);
-    assert.strictEqual(REFERENCE_CONTAINERS.size, 48);
+    assert.deepStrictEqual([...REFERENCE_CONTAINERS].slice(0, 46), [...EXPRESSION_TAGS]);
+    assert.strictEqual(REFERENCE_CONTAINERS.size, 50);
     for (const tag of ['query', 'propertyExpression', 'subreportParameterExpression', 'datasetParameterExpression']) {
         assert.ok(REFERENCE_CONTAINERS.has(tag));
     }

@@ -6,6 +6,7 @@
 // means an inspector field cannot drift from what designEdit accepts.
 
 import type { XmlNode } from './xmlspan';
+import { forRole } from './expressionTags';
 
 export const MAX_CONTENT = 8000;
 
@@ -24,7 +25,7 @@ export const CONTENT_KINDS: ReadonlySet<string> = new Set(Object.keys(CONTENT_TA
 
 // Expression content tags, including the classic JasperReports 6 spellings.
 export const EXPRESSION_CONTENT_TAGS: readonly string[] = Object.freeze([
-    'expression', 'textfieldexpression', 'imageexpression', 'subreportexpression', 'chartexpression',
+    ...forRole('designContent'),
 ]);
 
 export interface FontNameSpec {
