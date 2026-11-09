@@ -1,25 +1,26 @@
-// definitionProvider.js
+// definitionProvider.ts
 // Ctrl+Click on $F{name}, $P{name}, $V{name} → jumps to the declaration tag.
 
-const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
-const { findReferenceToken } = require('./expressionUtils');
-const { resolveSymbol } = require('./reportSymbols');
-const { resourcesForDocument } = require('./resourceIndex');
-const { analyseSubreports } = require('./subreportIndex');
+import * as vscode from 'vscode';
+import { parseDeclarations } from './jrxmlParser';
+import { findReferenceToken } from './expressionUtils';
+import { resolveSymbol } from './reportSymbols';
+import { resourcesForDocument } from './resourceIndex';
+import { analyseSubreports } from './subreportIndex';
+import type { AnalysedSubreport } from './subreportIndex';
 
-function detectReferenceAtPosition(document, position) {
+function detectReferenceAtPosition(document: vscode.TextDocument, position: vscode.Position) {
     return findReferenceToken(document.lineAt(position).text, position.character);
 }
 
-function workspaceRoots() {
+function workspaceRoots(): string[] {
     return ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
         .map(folder => folder.uri && folder.uri.fsPath)
-        .filter(Boolean);
+        .filter((root): root is string => Boolean(root));
 }
 
 /** The resolved subreport whose path literal contains the cursor, or null. */
-function subreportAt(document, position) {
+function subreportAt(document: vscode.TextDocument, position: vscode.Position): AnalysedSubreport | undefined {
     const offset = document.offsetAt(position);
     return analyseSubreports(document, workspaceRoots()).find(link =>
         !link.dynamic && link.target &&
@@ -29,11 +30,14 @@ function subreportAt(document, position) {
 const provider = vscode.languages.registerDefinitionProvider(
     { language: 'jrxml' },
     {
-        provideDefinition(document, position) {
+        provideDefinition(
+            document: vscode.TextDocument,
+            position: vscode.Position
+        ): vscode.Location | null {
             const ref = detectReferenceAtPosition(document, position);
             if (!ref) {
                 const subreport = subreportAt(document, position);
-                if (!subreport) return null;
+                if (!subreport || !subreport.target) return null;
                 return new vscode.Location(
                     vscode.Uri.file(subreport.target),
                     new vscode.Range(0, 0, 0, 0)
@@ -67,7 +71,7 @@ const provider = vscode.languages.registerDefinitionProvider(
                 character: position.character,
             });
             const decl = symbol && symbol.declaration;
-            if (!decl || typeof decl.nameOffset !== 'number') return null;
+            if (!decl || !('nameOffset' in decl) || typeof decl.nameOffset !== 'number') return null;
 
             // Point to the name="..." attribute value inside the declaration tag
             const targetPos = document.positionAt(decl.nameOffset);
@@ -81,4 +85,4 @@ const provider = vscode.languages.registerDefinitionProvider(
     }
 );
 
-module.exports = { provider };
+export { provider };

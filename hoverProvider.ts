@@ -1,19 +1,21 @@
-// hoverProvider.js
+// hoverProvider.ts
 // Shows a tooltip when hovering over $F{name}, $P{name}, $V{name} in .jrxml files.
 
-const vscode = require('vscode');
-const path = require('path');
-const { parseDeclarations } = require('./jrxmlParser');
-const { resourcesForDocument } = require('./resourceIndex');
-const { bundleAttribute } = require('./resourceBundle');
-const { findReferenceToken } = require('./expressionUtils');
-const { resolveSymbol } = require('./reportSymbols');
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { parseDeclarations } from './jrxmlParser';
+import { resourcesForDocument } from './resourceIndex';
+import { bundleAttribute } from './resourceBundle';
+import { findReferenceToken } from './expressionUtils';
+import type { ReferenceToken } from './referenceTokens';
+import { resolveSymbol } from './reportSymbols';
+
 /**
  * Sanitize file-derived text before appending it to a MarkdownString.
  * Escapes markdown structural characters and collapses newlines so a crafted
  * `<description>` cannot inject links, code spans, tables or raw HTML.
  */
-function mdSafe(text) {
+function mdSafe(text: unknown): string {
     return String(text ?? '')
         .replace(/\\/g, '\\\\')
         .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
@@ -22,12 +24,16 @@ function mdSafe(text) {
 }
 
 /** Escape text that will be placed inside a markdown code span. */
-function mdCode(text) {
+function mdCode(text: unknown): string {
     return String(text ?? '').replace(/`/g, '\\`');
 }
 
 /** Hover for a `$R{key}` resource-bundle reference. */
-function resourceHover(document, position, ref) {
+function resourceHover(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    ref: ReferenceToken
+): vscode.Hover {
     const text   = document.getText();
     const bundle = bundleAttribute(text);
     const index  = resourcesForDocument(document);
@@ -64,7 +70,10 @@ function resourceHover(document, position, ref) {
 const provider = vscode.languages.registerHoverProvider(
     { language: 'jrxml' },
     {
-        provideHover(document, position) {
+        provideHover(
+            document: vscode.TextDocument,
+            position: vscode.Position
+        ): vscode.Hover | null {
             const ref = findReferenceToken(document.lineAt(position).text, position.character);
             if (!ref) return null;
             if (ref.sigil === 'R') return resourceHover(document, position, ref);
@@ -100,11 +109,12 @@ const provider = vscode.languages.registerHoverProvider(
             if (decl) {
                 const badge  = isBuiltin ? ' *(built-in)*' : '';
                 const sigStr = `$${ref.sigil}${bang}{${ref.name}}`;
+                const typeText = 'fullType' in decl ? (decl.fullType || decl.type) : decl.type;
 
                 md.appendMarkdown(`### ${sigStr}\n\n`);
                 md.appendMarkdown(`| | |\n|---|---|\n`);
                 md.appendMarkdown(`| **Kind** | ${kind}${badge} |\n`);
-                md.appendMarkdown(`| **Type** | \`${mdCode(decl.fullType || decl.type)}\` |\n`);
+                md.appendMarkdown(`| **Type** | \`${mdCode(typeText)}\` |\n`);
                 if (decl.description) {
                     md.appendMarkdown(`| **Info** | ${mdSafe(decl.description)} |\n`);
                 }
@@ -135,4 +145,4 @@ const provider = vscode.languages.registerHoverProvider(
     }
 );
 
-module.exports = { provider };
+export { provider };

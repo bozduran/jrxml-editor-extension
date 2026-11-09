@@ -1,17 +1,18 @@
-// diagnosticsProvider.js
-// VS Code adapter for the vscode-free analysis pipeline in diagnostics.js.
+// diagnosticsProvider.ts
+// VS Code adapter for the vscode-free analysis pipeline in diagnostics.ts.
 //
 // The rules, messages and severities live there so the editor, the
 // "Validate Workspace" command and the CI script all run the same checks.
 
-const vscode = require('vscode');
-const { collectFindings } = require('./diagnostics');
-const { clearCache } = require('./jrxmlParser');
+import * as vscode from 'vscode';
+import { collectFindings } from './diagnostics';
+import type { Finding, FindingSettings } from './diagnostics';
+import { clearCache } from './jrxmlParser';
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
 
 /** Flat settings object for collectFindings, read from jrxml.* configuration. */
-function settingsFromConfig(cfg) {
+function settingsFromConfig(cfg: vscode.WorkspaceConfiguration): FindingSettings {
     return {
         unused:             cfg.get('showUnusedWarnings', true),
         expressions:        cfg.get('validateExpressions', true),
@@ -28,18 +29,23 @@ function settingsFromConfig(cfg) {
 }
 
 /** Accept file documents and in-memory/virtual ones (untitled, remote). */
-function isJrxmlDocument(document) {
+function isJrxmlDocument(document: vscode.TextDocument): boolean {
     return document.languageId === 'jrxml'
         || (typeof document.fileName === 'string' && document.fileName.endsWith('.jrxml'));
 }
 
-function workspaceRoots() {
+function workspaceRoots(): string[] {
     return ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
         .map(folder => folder.uri && folder.uri.fsPath)
-        .filter(Boolean);
+        .filter((root): root is string => Boolean(root));
 }
 
-function toDiagnostic(document, finding) {
+/** VS Code carries quick-fix payloads on Diagnostic.data, which @types/vscode 1.85 omits. */
+interface DiagnosticWithData extends vscode.Diagnostic {
+    data?: unknown;
+}
+
+function toDiagnostic(document: vscode.TextDocument, finding: Finding): vscode.Diagnostic {
     const start = document.positionAt(finding.offset);
     const end   = document.positionAt(finding.offset + finding.length);
     const severity = finding.severity === 'error'
@@ -51,15 +57,14 @@ function toDiagnostic(document, finding) {
     );
     diagnostic.source = 'JRXML';
     diagnostic.code   = finding.code;
-    if (finding.data !== undefined) diagnostic.data = finding.data;
+    if (finding.data !== undefined) (diagnostic as DiagnosticWithData).data = finding.data;
     return diagnostic;
 }
 
 /**
  * Run every check on a document and update the diagnostic collection.
- * @param {vscode.TextDocument} document
  */
-function updateDiagnostics(document) {
+function updateDiagnostics(document: vscode.TextDocument): Finding[] {
     if (!isJrxmlDocument(document)) {
         diagnosticCollection.delete(document.uri);
         return [];
@@ -81,7 +86,7 @@ function updateDiagnostics(document) {
 
 // ── Registration helper ───────────────────────────────────────────────────────
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(diagnosticCollection);
 
     // Run on open
@@ -90,7 +95,7 @@ function register(context) {
     }
 
     // Run when a jrxml doc changes (debounced 500ms)
-    let debounceTimer;
+    let debounceTimer: NodeJS.Timeout | undefined;
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument(e => {
             if (!isJrxmlDocument(e.document)) return;
@@ -126,4 +131,4 @@ function register(context) {
     );
 }
 
-module.exports = { register, updateDiagnostics };
+export { register, updateDiagnostics };

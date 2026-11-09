@@ -1,19 +1,25 @@
-// workspaceValidation.js
+// workspaceValidation.ts
 // "JRXML: Validate Workspace" — runs the same analysis as the editor over every
 // .jrxml file in the workspace and surfaces the results in the Problems panel.
 //
 // The CI equivalent is `node tools/validate-workspace.js`, which shares the
 // same pure pipeline and exits non-zero on errors.
 
-const vscode = require('vscode');
-const { updateDiagnostics } = require('./diagnosticsProvider');
-const { EXCLUDE_GLOB } = require('./workspaceFiles');
+import * as vscode from 'vscode';
+import { updateDiagnostics } from './diagnosticsProvider';
+import { EXCLUDE_GLOB } from './workspaceFiles';
+
+/** The counts reported by one workspace validation run. */
+export interface WorkspaceValidationResult {
+    files: number;
+    errors: number;
+    warnings: number;
+}
 
 /**
  * Validate every JRXML file in the workspace.
- * @returns {Promise<{files:number, errors:number, warnings:number}>}
  */
-async function validateWorkspace() {
+async function validateWorkspace(): Promise<WorkspaceValidationResult> {
     const folders = vscode.workspace.workspaceFolders;
     if (!folders || folders.length === 0) {
         vscode.window.showWarningMessage('Open a folder to validate its JRXML files.');
@@ -38,10 +44,10 @@ async function validateWorkspace() {
                     increment: 100 / uris.length,
                 });
 
-                let document;
+                let document: vscode.TextDocument;
                 try {
                     document = await vscode.workspace.openTextDocument(uris[index]);
-                } catch (_) {
+                } catch {
                     continue; // deleted or unreadable since findFiles ran
                 }
 
@@ -60,10 +66,10 @@ async function validateWorkspace() {
     return { files: uris.length, errors, warnings };
 }
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.validateWorkspace', validateWorkspace)
     );
 }
 
-module.exports = { register, validateWorkspace };
+export { register, validateWorkspace };

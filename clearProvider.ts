@@ -1,4 +1,4 @@
-// clearProvider.js
+// clearProvider.ts
 // The hook's `clear` step as explicit commands.
 //
 //   jrxml.applyClearFixes  — delete unused declarations, sync descriptions and
@@ -9,12 +9,18 @@
 // Clear is destructive, so it is never automatic: the user runs a command, sees
 // a diff, and confirms (unless jrxml.clear.confirm is off).
 
-const vscode = require('vscode');
-const path   = require('path');
-const { discoverClearFixes, queryMigrationEdits } = require('./xmlClear');
-const preview = require('./preview');
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { discoverClearFixes, queryMigrationEdits } from './xmlClear';
+import type { ClearFix } from './xmlClear';
+import * as preview from './preview';
+import { applyEdits as applyTextEdits } from './edits';
+import type { Edit } from './edits';
 
-function applyEdits(document, edits) {
+/** A clear fix that actually carries an edit. */
+type EditableFix = ClearFix & { edit: Edit };
+
+function applyEdits(document: vscode.TextDocument, edits: readonly Edit[]): Thenable<boolean> {
     const workspaceEdit = new vscode.WorkspaceEdit();
     for (const edit of edits) {
         workspaceEdit.replace(
@@ -26,13 +32,20 @@ function applyEdits(document, edits) {
     return vscode.workspace.applyEdit(workspaceEdit);
 }
 
-async function confirm(message) {
+async function confirm(message: string): Promise<boolean> {
     if (!vscode.workspace.getConfiguration('jrxml').get('clear.confirm', true)) return true;
     const choice = await vscode.window.showInformationMessage(message, { modal: true }, 'Apply');
     return choice === 'Apply';
 }
 
-async function previewThenApply(document, version, text, title, edits, message) {
+async function previewThenApply(
+    document: vscode.TextDocument,
+    version: number,
+    text: string,
+    title: string,
+    edits: readonly Edit[],
+    message: string
+): Promise<boolean> {
     const previewUri = preview.put(path.basename(document.fileName), text);
     try {
         await vscode.commands.executeCommand(
@@ -54,7 +67,7 @@ async function previewThenApply(document, version, text, title, edits, message) 
     }
 }
 
-function activeJrxmlDocument() {
+function activeJrxmlDocument(): vscode.TextDocument | null {
     const editor = vscode.window.activeTextEditor;
     if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
         vscode.window.showWarningMessage('Open a .jrxml file first.');
@@ -64,20 +77,23 @@ function activeJrxmlDocument() {
 }
 
 /** Target language for SQL query migration (default jsonql). */
-function readTargetLanguage() {
+function readTargetLanguage(): string {
     const value = vscode.workspace.getConfiguration('jrxml').get('migrate.targetLanguage', 'jsonql');
     return (typeof value === 'string' && value.trim()) ? value.trim() : 'jsonql';
 }
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.applyClearFixes', async () => {
+        vscode.commands.registerCommand('jrxml.applyClearFixes', async (): Promise<void> => {
             const document = activeJrxmlDocument();
             if (!document) return;
 
             const version = document.version;
             const groups = discoverClearFixes(document.getText());
-            const fixes = groups.flatMap(g => g.fixes).filter(f => f.edit);
+            const fixes = groups
+                .flatMap(g => g.fixes)
+                .filter((fix): fix is EditableFix => !!fix.edit)
+                .map(fix => fix.edit);
             if (fixes.length === 0) {
                 vscode.window.showInformationMessage('Nothing to clear.');
                 return;
@@ -88,19 +104,19 @@ function register(context) {
                 .map(g => `${g.label} (${g.fixes.filter(f => f.edit).length})`)
                 .join(', ');
 
-            const proposed = await proposedText(document, fixes.map(f => f.edit));
+            const proposed = await proposedText(document, fixes);
             const applied = await previewThenApply(
                 document,
                 version,
                 proposed,
                 'Clear fixes',
-                fixes.map(f => f.edit),
+                fixes,
                 `Apply ${fixes.length} clear fix(es)? ${summary}`
             );
             if (applied) vscode.window.showInformationMessage(`Applied clear fixes: ${summary}.`);
         }),
 
-        vscode.commands.registerCommand('jrxml.migrateSqlQuery', async () => {
+        vscode.commands.registerCommand('jrxml.migrateSqlQuery', async (): Promise<void> => {
             const document = activeJrxmlDocument();
             if (!document) return;
 
@@ -143,9 +159,8 @@ function register(context) {
 }
 
 /** Apply edits in memory so the preview shows the exact result. */
-async function proposedText(document, edits) {
-    const { applyEdits: apply } = require('./edits');
-    return apply(document.getText(), edits);
+async function proposedText(document: vscode.TextDocument, edits: readonly Edit[]): Promise<string> {
+    return applyTextEdits(document.getText(), edits);
 }
 
-module.exports = { register };
+export { register };

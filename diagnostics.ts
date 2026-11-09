@@ -1,36 +1,75 @@
-// diagnostics.js
+// diagnostics.ts
 // The vscode-free analysis pipeline: one text in, plain findings out.
 //
-// diagnosticsProvider.js maps these findings to VS Code diagnostics for the
+// diagnosticsProvider.ts maps these findings to VS Code diagnostics for the
 // open document; tools/validate-workspace.js runs the same pipeline over every
 // JRXML file for CI. Keeping the rules here means the editor and the CI gate
 // can never disagree.
-//
-// Finding shape:
-//   { offset, length, message, severity: 'error'|'warning', code, data? }
 
-const { parseReport, resolveDeclarationScope, findDuplicateNames } = require('./jrxmlParser');
-const { textSource } = require('./reportSource');
-const { analyse } = require('./analysisContext');
-const { declaredNames, declarationInAnyScope } = require('./reportSymbols');
-const { EXPRESSION_TAGS } = require('./expressionUtils');
-const { regions, forEachRegion } = require('./expressionRegions');
-const { isFragmentStart, skipFragment } = require('./jasperTokens');
-const { lintXml } = require('./xmlLint');
-const { collectUsedNames, BUILTIN_PARAMETERS } = require('./xmlClear');
-const { collectTextCheckIssues } = require('./textCheck');
-const { checkVariableOrder } = require('./evaluationOrder');
-const { checkLayout } = require('./layoutRules');
-const { checkQueries } = require('./queryChecks');
-const { loadResourceBundle } = require('./resourceBundle');
-const { analyseSubreports } = require('./subreportIndex');
-const {
-    CODE: BOOLEAN_EQUALS_CODE,
-    MESSAGE: BOOLEAN_EQUALS_MESSAGE,
+import {
+    parseReport, resolveDeclarationScope, findDuplicateNames,
+} from './jrxmlParser';
+import type { DuplicateName, ParseResult } from './jrxmlParser';
+import { textSource } from './reportSource';
+import { analyse } from './analysisContext';
+import { declaredNames, declarationInAnyScope } from './reportSymbols';
+import { EXPRESSION_TAGS } from './expressionUtils';
+import type { ExpressionSigil } from './expressionUtils';
+import { regions, forEachRegion } from './expressionRegions';
+import { isFragmentStart, skipFragment } from './jasperTokens';
+import { lintXml } from './xmlLint';
+import { collectUsedNames, BUILTIN_PARAMETERS } from './xmlClear';
+import { collectTextCheckIssues } from './textCheck';
+import { checkVariableOrder } from './evaluationOrder';
+import { checkLayout } from './layoutRules';
+import { checkQueries } from './queryChecks';
+import { loadResourceBundle } from './resourceBundle';
+import { analyseSubreports } from './subreportIndex';
+import {
+    CODE as BOOLEAN_EQUALS_CODE,
+    MESSAGE as BOOLEAN_EQUALS_MESSAGE,
     checkBooleanEquals,
-} = require('./booleanEqualsRule');
+} from './booleanEqualsRule';
+import type { XmlScanResult } from './xmlspan';
 
-const DEFAULT_SETTINGS = {
+export type FindingSeverity = 'error' | 'warning';
+
+/** One plain rule hit, anchored at a document offset. */
+export interface Finding {
+    offset: number;
+    length: number;
+    message: string;
+    severity: FindingSeverity;
+    code: string;
+    data?: Record<string, unknown>;
+}
+
+/** The flat rule switches the editor and CI pass to collectFindings. */
+export interface FindingSettings {
+    unused: boolean;
+    expressions: boolean;
+    booleanEquals: boolean;
+    constantPrintWhen: boolean;
+    removeLineWhenBlank: boolean;
+    markupTagWithoutMarkup: boolean;
+    variableOrder: boolean;
+    duplicateNames: boolean;
+    layout: boolean;
+    queries: boolean;
+    textcheck: boolean;
+}
+
+/** One document to analyse, with the settings and roots the checks read. */
+export interface CollectFindingsInput {
+    text: string;
+    /** Absolute path, used for scope checks. */
+    fileName?: string;
+    settings?: Partial<FindingSettings>;
+    /** For bundle/subreport resolution. */
+    workspaceRoots?: readonly string[];
+}
+
+const DEFAULT_SETTINGS: FindingSettings = {
     unused: true,
     expressions: true,
     booleanEquals: true,
@@ -44,26 +83,37 @@ const DEFAULT_SETTINGS = {
     textcheck: true,
 };
 
-function normalizeSettings(settings) {
+function normalizeSettings(settings?: Partial<FindingSettings>): FindingSettings {
     return { ...DEFAULT_SETTINGS, ...(settings || {}) };
+}
+
+/** An empty parse result, used when a malformed document cannot be parsed. */
+function emptyParseResult(): ParseResult {
+    return {
+        fields: [], parameters: [], variables: [],
+        dataset: { fields: [], parameters: [], variables: [] },
+        language: { language: 'java', declared: false, offset: -1, length: 0 },
+        allFields: [], allParameters: [], allVariables: [],
+        groups: [], styles: [], references: [], resourceReferences: [],
+        resourceBundle: null, datasets: [], scopeRanges: [], outline: [],
+    };
 }
 
 /**
  * Run every static check over one JRXML document.
- *
- * @param {object} input
- * @param {string} input.text
- * @param {string} [input.fileName]        absolute path, used for scope checks
- * @param {object} [input.settings]        see DEFAULT_SETTINGS
- * @param {string[]} [input.workspaceRoots] for bundle/subreport resolution
- * @returns {{offset:number,length:number,message:string,
- *            severity:'error'|'warning',code:string,data?:object}[]}
  */
-function collectFindings({ text, fileName = '', settings, workspaceRoots = [] }) {
+function collectFindings({ text, fileName = '', settings, workspaceRoots = [] }: CollectFindingsInput): Finding[] {
     const enabled = normalizeSettings(settings);
-    const findings = [];
-    const add = (offset, length, message, severity, code, data) => {
-        const finding = { offset, length, message, severity, code };
+    const findings: Finding[] = [];
+    const add = (
+        offset: number,
+        length: number,
+        message: string,
+        severity: FindingSeverity,
+        code: string,
+        data?: Record<string, unknown>
+    ): void => {
+        const finding: Finding = { offset, length, message, severity, code };
         if (data !== undefined) finding.data = data;
         findings.push(finding);
     };
@@ -73,12 +123,15 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
     const parsed = parseSafely(text, fileName, context.scan);
 
     // Run one rule, isolating its failures from the rest of the pipeline.
-    const runRule = (check, severity) => {
+    const runRule = (
+        check: () => readonly { offset: number; length: number; message: string; code: string }[],
+        severity: FindingSeverity
+    ): void => {
         try {
             for (const issue of check()) {
                 add(issue.offset, issue.length, issue.message, severity, issue.code);
             }
-        } catch (_) {
+        } catch {
             // A broken rule must not blank the other checks.
         }
     };
@@ -143,16 +196,16 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
                 );
             }
         }
-    } catch (_) {
+    } catch {
         // A broken target must not blank the rest of the document's checks.
     }
 
     // ── 1. Unused declarations ────────────────────────────────────────────────
     if (enabled.unused) {
-        let used;
+        let used: Set<string> | null;
         try {
             used = collectUsedNames(text, context.scan);
-        } catch (_) {
+        } catch {
             used = null;
         }
 
@@ -200,14 +253,16 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
             const scope = resolveDeclarationScope(parsed, ref.offset);
             if (scope.kind === 'unknown') continue;
 
-            if (declaredNames(scope, ref.sigil).has(ref.name)) continue;
+            // Parser references are $F/$P/$V; $R keys are collected separately.
+            const sigil = ref.sigil as ExpressionSigil;
+            if (declaredNames(scope, sigil).has(ref.name)) continue;
 
             const kindName = ref.sigil === 'F' ? 'Field' : ref.sigil === 'P' ? 'Parameter' : 'Variable';
             const tokenLen = typeof ref.end === 'number'
                 ? ref.end - ref.offset
                 : 4 + ref.name.length;
 
-            if (scope.kind === 'dataset' && declarationInAnyScope(parsed, { sigil: ref.sigil, name: ref.name })) {
+            if (scope.kind === 'dataset' && declarationInAnyScope(parsed, { sigil, name: ref.name })) {
                 add(
                     ref.offset, tokenLen,
                     `${kindName} '${ref.name}' is declared at report scope and is not available inside dataset '${scope.datasetName}'. Pass it to the dataset as a parameter.`,
@@ -266,7 +321,8 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
                         exprOffset + hit.start,
                         hit.end - hit.start,
                         BOOLEAN_EQUALS_MESSAGE,
-                        'warning', BOOLEAN_EQUALS_CODE,
+                        'warning',
+                        BOOLEAN_EQUALS_CODE,
                         { replacement: hit.replacement }
                     );
                 }
@@ -286,7 +342,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
                 add(issue.offset, issue.length, issue.message, 'warning', issue.code);
             }
         }
-    } catch (_) {
+    } catch {
         // Malformed XML is already reported by the expression checks above.
     }
 
@@ -306,24 +362,18 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
 }
 
 /** Parse with a synthetic document whose version follows the text content. */
-function parseSafely(text, fileName, scan = null) {
+function parseSafely(text: string, fileName: string, scan: XmlScanResult | null = null): ParseResult {
     try {
         return parseReport(
             textSource(text, `jrxml-diagnostics://${fileName || 'untitled'}`, hashText(text)),
             scan
         );
-    } catch (_) {
-        return {
-            fields: [], parameters: [], variables: [],
-            dataset: { fields: [], parameters: [], variables: [] },
-            allFields: [], allParameters: [], allVariables: [],
-            groups: [], styles: [], references: [], resourceReferences: [],
-            resourceBundle: null, datasets: [], scopeRanges: [], outline: [],
-        };
+    } catch {
+        return emptyParseResult();
     }
 }
 
-function hashText(text) {
+function hashText(text: string): number {
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
         hash = (hash * 31 + text.charCodeAt(i)) | 0;
@@ -331,8 +381,8 @@ function hashText(text) {
     return hash;
 }
 
-function duplicateMessage(duplicate) {
-    const labels = {
+function duplicateMessage(duplicate: DuplicateName): string {
+    const labels: Record<string, string> = {
         field: 'Field', parameter: 'Parameter', variable: 'Variable',
         group: 'Group', dataset: 'Dataset', style: 'Style',
     };
@@ -345,14 +395,24 @@ function duplicateMessage(duplicate) {
 
 // ── Expression syntax checkers ───────────────────────────────────────────────
 
+interface SyntaxProblem {
+    index: number;
+    message: string;
+}
+
+interface OpenParen {
+    ch: string;
+    index: number;
+}
+
 /**
  * Check for unbalanced ( ) [ ] in the expression. Only " is a string delimiter
  * (single quotes are common inside Jasper strings), and $F{}/$P{}/$V{}/$R{}/$X{}
  * tokens are skipped.
  */
-function checkParens(expr) {
-    const stack = [];
-    const pairs = { ')': '(', ']': '[' };
+function checkParens(expr: string): SyntaxProblem | null {
+    const stack: OpenParen[] = [];
+    const pairs: Record<string, string> = { ')': '(', ']': '[' };
     let inStr = false;
 
     for (let i = 0; i < expr.length; i++) {
@@ -374,7 +434,8 @@ function checkParens(expr) {
         if ('(['.includes(ch)) {
             stack.push({ ch, index: i });
         } else if (')]'.includes(ch)) {
-            if (stack.length === 0 || stack[stack.length - 1].ch !== pairs[ch]) {
+            const top = stack[stack.length - 1];
+            if (stack.length === 0 || top.ch !== pairs[ch]) {
                 return { index: i, message: `Unmatched closing '${ch}' in expression.` };
             }
             stack.pop();
@@ -389,7 +450,7 @@ function checkParens(expr) {
 }
 
 /** Unclosed double-quoted string literals; single quotes are ignored. */
-function checkUnclosedString(expr) {
+function checkUnclosedString(expr: string): SyntaxProblem | null {
     for (let i = 0; i < expr.length; i++) {
         const ch = expr[i];
 
@@ -415,7 +476,11 @@ function checkUnclosedString(expr) {
 }
 
 /** Run `callback(rawExpression, startOffset)` for every non-empty expression. */
-function forEachExpression(scan, text, callback) {
+function forEachExpression(
+    scan: XmlScanResult,
+    text: string,
+    callback: (rawExpression: string, startOffset: number) => void
+): void {
     const expressionRegions = regions(scan, text)
         .filter(region => EXPRESSION_TAGS.includes(region.tag));
 
@@ -425,4 +490,4 @@ function forEachExpression(scan, text, callback) {
     });
 }
 
-module.exports = { collectFindings };
+export { collectFindings };

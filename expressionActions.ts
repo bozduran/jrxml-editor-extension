@@ -1,19 +1,24 @@
-// expressionActions.js
+// expressionActions.ts
 // Shared "open the expression at this position" helpers, used by the Issues
 // view and by code actions, plus the internal commands those actions invoke.
 
-const vscode = require('vscode');
-const { findExpressionAtCursor } = require('./expressionUtils');
-const { formatExpression } = require('./expressionFormatter');
-const { applyExpressionToEditor } = require('./expressionApply');
-const ExpressionEditorPanel = require('./expressionEditorPanel');
-const { IfElsePanel } = require('./ifElsePanel');
+import * as vscode from 'vscode';
+import { findExpressionAtCursor } from './expressionUtils';
+import { formatExpression } from './expressionFormatter';
+import { applyExpressionToEditor } from './expressionApply';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- single-value CommonJS module, required as-is by the host suite
+import ExpressionEditorPanel = require('./expressionEditorPanel');
+import { IfElsePanel } from './ifElsePanel';
 
-function isJrxmlDocument(document) {
+function isJrxmlDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
     return !!document && document.fileName.endsWith('.jrxml');
 }
 
-function positionFrom(document, line, character) {
+function positionFrom(
+    document: vscode.TextDocument,
+    line: number | vscode.Position | null | undefined,
+    character?: number
+): vscode.Position {
     if (line && typeof line === 'object' && typeof line.line === 'number') return line;
     const safeLine = Math.max(0, Math.min(document.lineCount - 1, Number(line) || 0));
     const lineText = document.lineAt(safeLine).text;
@@ -21,7 +26,11 @@ function positionFrom(document, line, character) {
     return new vscode.Position(safeLine, safeCharacter);
 }
 
-function openInExpressionEditor(extensionUri, editor, position) {
+function openInExpressionEditor(
+    extensionUri: vscode.Uri,
+    editor: vscode.TextEditor,
+    position?: vscode.Position
+): boolean {
     const target = findExpressionAtCursor(editor.document, position || editor.selection.active);
     if (!target) {
         vscode.window.showInformationMessage('Place the cursor inside a JRXML expression tag first.');
@@ -31,7 +40,11 @@ function openInExpressionEditor(extensionUri, editor, position) {
     return true;
 }
 
-function openInIfElseBuilder(extensionUri, editor, position) {
+function openInIfElseBuilder(
+    extensionUri: vscode.Uri,
+    editor: vscode.TextEditor,
+    position?: vscode.Position
+): boolean {
     const target = findExpressionAtCursor(editor.document, position || editor.selection.active);
     if (!target) {
         vscode.window.showInformationMessage('Place the cursor inside a JRXML expression tag first.');
@@ -45,7 +58,13 @@ function openInIfElseBuilder(extensionUri, editor, position) {
     return true;
 }
 
-async function openAt(extensionUri, uri, line, character, kind) {
+async function openAt(
+    extensionUri: vscode.Uri,
+    uri: vscode.Uri,
+    line: number | vscode.Position | null | undefined,
+    character: number | undefined,
+    kind: 'editor' | 'builder'
+): Promise<boolean> {
     const document = await vscode.workspace.openTextDocument(uri);
     if (!isJrxmlDocument(document)) {
         vscode.window.showWarningMessage('This command works on .jrxml files only.');
@@ -61,15 +80,25 @@ async function openAt(extensionUri, uri, line, character, kind) {
         : openInExpressionEditor(extensionUri, editor, position);
 }
 
-function openExpressionEditorAt(extensionUri, uri, line = 0, character = 0) {
+function openExpressionEditorAt(
+    extensionUri: vscode.Uri,
+    uri: vscode.Uri,
+    line: number | vscode.Position | null = 0,
+    character = 0
+): Promise<boolean> {
     return openAt(extensionUri, uri, line, character, 'editor');
 }
 
-function openIfElseBuilderAt(extensionUri, uri, line = 0, character = 0) {
+function openIfElseBuilderAt(
+    extensionUri: vscode.Uri,
+    uri: vscode.Uri,
+    line: number | vscode.Position | null = 0,
+    character = 0
+): Promise<boolean> {
     return openAt(extensionUri, uri, line, character, 'builder');
 }
 
-async function formatExpressionAtCursor() {
+async function formatExpressionAtCursor(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || !isJrxmlDocument(editor.document)) {
         vscode.window.showWarningMessage('Open a .jrxml file first.');
@@ -86,12 +115,12 @@ async function formatExpressionAtCursor() {
         return;
     }
 
-    let formatted;
+    let formatted: string;
     try {
         const indentSize = vscode.workspace.getConfiguration('jrxml').get('indentSize', 4);
         formatted = formatExpression(target.expression, indentSize);
     } catch (err) {
-        vscode.window.showErrorMessage(`Could not format the expression: ${err.message || err}`);
+        vscode.window.showErrorMessage(`Could not format the expression: ${errorMessage(err)}`);
         return;
     }
 
@@ -102,29 +131,38 @@ async function formatExpressionAtCursor() {
 
     const applied = await applyExpressionToEditor(editor, target, formatted);
     if (!applied.ok) {
-        if (applied.severity === 'warning') vscode.window.showWarningMessage(applied.reason);
-        else vscode.window.showErrorMessage(applied.reason);
+        if (applied.severity === 'warning') vscode.window.showWarningMessage(applied.reason ?? '');
+        else vscode.window.showErrorMessage(applied.reason ?? '');
         return;
     }
 
     vscode.window.setStatusBarMessage('Expression formatted.', 2500);
 }
 
-function register(context) {
+/** The message a thrown value carries, or its string form. */
+function errorMessage(err: unknown): string {
+    if (err && typeof err === 'object' && 'message' in err) {
+        const message = (err as { message?: unknown }).message;
+        if (message) return String(message);
+    }
+    return String(err);
+}
+
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.formatExpressionAtCursor', formatExpressionAtCursor),
         vscode.commands.registerCommand(
             'jrxml.editExpressionAt',
-            (uri, line, character) => openExpressionEditorAt(context.extensionUri, uri, line, character)
+            (uri: vscode.Uri, line?: number, character?: number) => openExpressionEditorAt(context.extensionUri, uri, line, character)
         ),
         vscode.commands.registerCommand(
             'jrxml.openIfElseBuilderAt',
-            (uri, line, character) => openIfElseBuilderAt(context.extensionUri, uri, line, character)
+            (uri: vscode.Uri, line?: number, character?: number) => openIfElseBuilderAt(context.extensionUri, uri, line, character)
         )
     );
 }
 
-module.exports = {
+export {
     register,
     openExpressionEditorAt,
     openIfElseBuilderAt,

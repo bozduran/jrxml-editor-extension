@@ -1,34 +1,60 @@
-// ifElsePanel.js
+// ifElsePanel.ts
 // Host side of the If / Else expression builder webview.
 //
 // The panel reads the attached .jrxml with the shared declaration parser so
 // the webview never needs a file upload. The document itself is built by the
 // vscode-free ifElsePanelHtml module.
 
-const path = require('path');
-const vscode = require('vscode');
+import * as path from 'path';
+import * as vscode from 'vscode';
 
-const { parseDeclarations } = require('./jrxmlParser');
-const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('./jasperBuiltins');
-const { makeSchema } = require('./ifElseBuilder');
-const { buildIfElsePanelHtml, getNonce } = require('./ifElsePanelHtml');
-const { findExpressionAtCursor } = require('./expressionUtils');
-const { applyExpressionToEditor } = require('./expressionApply');
+import { parseDeclarations } from './jrxmlParser';
+import { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } from './jasperBuiltins';
+import { makeSchema } from './ifElseBuilder';
+import type { BuilderSchema, NormalizedOptions } from './ifElseBuilder';
+import { buildIfElsePanelHtml, getNonce } from './ifElsePanelHtml';
+import type { IfElseActiveFile } from './ifElsePanelHtml';
+import { findExpressionAtCursor } from './expressionUtils';
+import type { ExpressionAtCursor } from './expressionUtils';
+import { applyExpressionToEditor } from './expressionApply';
+import type { ExpressionTarget } from './expressionApply';
 
 const VIEW_TYPE = 'jrxmlIfElseBuilder';
 const PANEL_TITLE = 'If / Else Builder';
 const SCHEMA_DEBOUNCE_MS = 300;
 
-function isJrxmlDocument(document) {
+/** The source editor and expression a panel is attached to. */
+export interface IfElsePanelOpenOptions {
+    sourceEditor?: vscode.TextEditor | null;
+    expressionResult?: ExpressionTarget | null;
+    initialExpression?: string | null;
+}
+
+/** One message posted by the if / else webview. */
+interface IfElseMessage {
+    command?: string;
+    text?: unknown;
+}
+
+function isJrxmlDocument(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
     return !!document && document.fileName.endsWith('.jrxml');
 }
 
-function sameDocument(left, right) {
+function sameDocument(left: vscode.TextDocument | null | undefined, right: vscode.TextDocument | null | undefined): boolean {
     return !!left && !!right && left.uri.toString() === right.uri.toString();
 }
 
+/** The message a thrown value carries, or its string form. */
+function errorMessage(err: unknown): string {
+    if (err && typeof err === 'object' && 'message' in err) {
+        const message = (err as { message?: unknown }).message;
+        if (message) return String(message);
+    }
+    return String(err);
+}
+
 /** Find the expression tag under the editor cursor or selection. */
-function findTargetAtEditor(editor) {
+function findTargetAtEditor(editor: vscode.TextEditor | null | undefined): ExpressionAtCursor | null {
     if (!editor || !isJrxmlDocument(editor.document)) return null;
     const document = editor.document;
     for (const position of [editor.selection.active, editor.selection.start, editor.selection.end]) {
@@ -39,23 +65,20 @@ function findTargetAtEditor(editor) {
 }
 
 /** Read the builder defaults from the jrxml settings section. */
-function readOptions() {
+function readOptions(): NormalizedOptions {
     const config = vscode.workspace.getConfiguration('jrxml');
     return {
-        nullSafe: config.get('ifElse.nullSafe', true) !== false,
-        multiline: config.get('ifElse.multiline', true) !== false,
-        style: config.get('ifElse.style', 'ternary') === 'functions' ? 'functions' : 'ternary',
+        nullSafe: config.get<boolean>('ifElse.nullSafe', true) !== false,
+        multiline: config.get<boolean>('ifElse.multiline', true) !== false,
+        style: config.get<string>('ifElse.style', 'ternary') === 'functions' ? 'functions' : 'ternary',
     };
 }
 
 /**
  * Parse the report's fields/parameters/variables and add the JasperReports
  * built-ins. Errors are returned, never thrown into the panel.
- *
- * @param {import('vscode').TextDocument|null} document
- * @returns {{schema: object|null, error: string|null}}
  */
-function readSchema(document) {
+function readSchema(document: vscode.TextDocument | null): { schema: BuilderSchema | null; error: string | null } {
     if (!isJrxmlDocument(document) || document.isClosed) return { schema: null, error: null };
     try {
         const parsed = parseDeclarations(document);
@@ -71,15 +94,33 @@ function readSchema(document) {
         };
     } catch (err) {
         console.error('[JRXML If/Else Builder] Could not read the schema:', err);
-        return { schema: null, error: err && err.message ? err.message : String(err) };
+        return { schema: null, error: errorMessage(err) };
     }
 }
 
 class IfElsePanel {
-    static currentPanel = undefined;
+    static currentPanel: IfElsePanel | undefined = undefined;
     static viewType = VIEW_TYPE;
 
-    constructor(panel, extensionUri, { sourceEditor = null, expressionResult = null, initialExpression = null } = {}) {
+    private readonly _panel: vscode.WebviewPanel;
+    private readonly _extensionUri: vscode.Uri;
+    private _sourceEditor: vscode.TextEditor | null;
+    private _expressionResult: ExpressionTarget | null | undefined;
+    private _schemaDocument: vscode.TextDocument | null;
+    private _initialExpression: string | null;
+    private readonly _options: NormalizedOptions;
+    private _disposables: vscode.Disposable[];
+    private _schemaDebounce: NodeJS.Timeout | null;
+    private _schema: BuilderSchema | null;
+    private _schemaError: string | null;
+    private _schemaFingerprint: string;
+    private _activeFile: IfElseActiveFile;
+
+    constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, {
+        sourceEditor = null,
+        expressionResult = null,
+        initialExpression = null,
+    }: IfElsePanelOpenOptions = {}) {
         this._panel = panel;
         this._extensionUri = extensionUri;
         this._sourceEditor = sourceEditor;
@@ -98,7 +139,7 @@ class IfElsePanel {
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
         this._panel.webview.onDidReceiveMessage(
-            message => this._handleMessage(message),
+            (message: IfElseMessage) => this._handleMessage(message),
             null,
             this._disposables
         );
@@ -132,11 +173,11 @@ class IfElsePanel {
         this._update();
     }
 
-    static createOrShow(extensionUri, {
+    static createOrShow(extensionUri: vscode.Uri, {
         sourceEditor = null,
         expressionResult = null,
         initialExpression = null,
-    } = {}) {
+    }: IfElsePanelOpenOptions = {}): void {
         const column = vscode.ViewColumn.Beside;
 
         if (IfElsePanel.currentPanel) {
@@ -179,7 +220,7 @@ class IfElsePanel {
 
     // ── Webview document ─────────────────────────────────────────────────────
 
-    _update() {
+    private _update(): void {
         this._panel.title = PANEL_TITLE;
         this._panel.webview.html = buildIfElsePanelHtml({
             fileName: this._schemaDocument ? path.basename(this._schemaDocument.fileName) : null,
@@ -195,15 +236,15 @@ class IfElsePanel {
         });
     }
 
-    _post(message) {
+    private _post(message: unknown): Thenable<boolean> {
         return this._panel.webview.postMessage(message);
     }
 
-    _postNotice(level, message) {
-        this._post({ command: 'notice', level, message });
+    private _postNotice(level: string, message: string): Thenable<boolean> {
+        return this._post({ command: 'notice', level, message });
     }
 
-    _postTarget() {
+    private _postTarget(): void {
         this._post({
             command: 'target',
             canApply: !!this._expressionResult,
@@ -213,11 +254,11 @@ class IfElsePanel {
 
     // ── Schema ───────────────────────────────────────────────────────────────
 
-    _fingerprint(schema, error) {
+    private _fingerprint(schema: BuilderSchema | null, error: string | null): string {
         return JSON.stringify({ schema: schema || null, error: error || null });
     }
 
-    _postSchema() {
+    private _postSchema(): void {
         if (this._schemaDocument && !this._schemaDocument.isClosed) {
             const { schema, error } = readSchema(this._schemaDocument);
             this._schema = schema;
@@ -227,7 +268,7 @@ class IfElsePanel {
         this._postSchemaPayload();
     }
 
-    _postSchemaPayload() {
+    private _postSchemaPayload(): void {
         this._post({
             command: 'schema',
             fileName: this._schemaDocument ? path.basename(this._schemaDocument.fileName) : null,
@@ -236,7 +277,7 @@ class IfElsePanel {
         });
     }
 
-    _refreshSchemaIfChanged() {
+    private _refreshSchemaIfChanged(): void {
         if (!this._schemaDocument || this._schemaDocument.isClosed) return;
         const { schema, error } = readSchema(this._schemaDocument);
         const fingerprint = this._fingerprint(schema, error);
@@ -247,7 +288,7 @@ class IfElsePanel {
         this._postSchemaPayload();
     }
 
-    _handleDocumentChange(document) {
+    private _handleDocumentChange(document: vscode.TextDocument): void {
         if (!sameDocument(document, this._schemaDocument)) return;
         if (this._schemaDebounce) clearTimeout(this._schemaDebounce);
         this._schemaDebounce = setTimeout(() => {
@@ -258,7 +299,7 @@ class IfElsePanel {
 
     // ── Attachment / target ──────────────────────────────────────────────────
 
-    _attach(sourceEditor, expressionResult) {
+    private _attach(sourceEditor: vscode.TextEditor | null, expressionResult?: ExpressionTarget | null): void {
         if (!sourceEditor) return;
         this._sourceEditor = sourceEditor;
         this._expressionResult = expressionResult || null;
@@ -273,7 +314,7 @@ class IfElsePanel {
         }
     }
 
-    _activeFilePayload() {
+    private _activeFilePayload(): IfElseActiveFile {
         const editor = vscode.window.activeTextEditor;
         const document = editor ? editor.document : null;
         const isJrxml = isJrxmlDocument(document);
@@ -284,12 +325,12 @@ class IfElsePanel {
         };
     }
 
-    _postActiveFile() {
+    private _postActiveFile(): void {
         this._activeFile = this._activeFilePayload();
         this._post({ command: 'activeFile', ...this._activeFile });
     }
 
-    _handleActiveEditorChange(editor) {
+    private _handleActiveEditorChange(editor: vscode.TextEditor | undefined): void {
         if (!this._schemaDocument && editor && isJrxmlDocument(editor.document)) {
             this._schemaDocument = editor.document;
             this._postSchema();
@@ -301,7 +342,7 @@ class IfElsePanel {
         this._postActiveFile();
     }
 
-    _useActiveFile() {
+    private _useActiveFile(): void {
         const editor = vscode.window.activeTextEditor;
         if (!editor || !isJrxmlDocument(editor.document)) {
             this._postNotice('warn', 'The active editor is not a .jrxml file.');
@@ -332,7 +373,7 @@ class IfElsePanel {
         }
     }
 
-    _reload() {
+    private _reload(): void {
         if (this._schemaDocument && this._schemaDocument.isClosed) {
             this._postNotice('warn', 'The attached report was closed. Open a .jrxml file and click “Use active file”.');
             return;
@@ -357,7 +398,7 @@ class IfElsePanel {
 
     // ── Messages from the webview ────────────────────────────────────────────
 
-    async _handleMessage(message) {
+    private async _handleMessage(message: IfElseMessage): Promise<void> {
         try {
             switch (message.command) {
                 case 'applyExpression':
@@ -381,39 +422,41 @@ class IfElsePanel {
                     break;
             }
         } catch (err) {
-            const reason = err && err.message ? err.message : String(err);
+            const reason = errorMessage(err);
             console.error('[JRXML If/Else Builder] Message error:', err);
             this._postNotice('error', reason);
         }
     }
 
-    async _apply(text) {
+    private async _apply(text: unknown): Promise<void> {
         const applied = await applyExpressionToEditor(
-            this._sourceEditor,
+            this._sourceEditor ?? undefined,
             this._expressionResult,
             String(text == null ? '' : text)
         );
 
         if (!applied.ok) {
             this._post({ command: 'applyResult', ok: false, message: applied.reason });
-            if (applied.severity === 'warning') vscode.window.showWarningMessage(applied.reason);
-            else vscode.window.showErrorMessage(applied.reason);
+            if (applied.severity === 'warning') vscode.window.showWarningMessage(applied.reason ?? '');
+            else vscode.window.showErrorMessage(applied.reason ?? '');
             return;
         }
 
         this._expressionResult = applied.expressionResult;
+        // A successful apply always carries the refreshed target.
+        const target = this._expressionResult as ExpressionTarget;
         this._postTarget();
         this._post({
             command: 'applyResult',
             ok: true,
-            message: `Applied to <${this._expressionResult.tagName}>.`,
+            message: `Applied to <${target.tagName}>.`,
         });
         vscode.window.showInformationMessage(
-            `Expression applied to <${this._expressionResult.tagName}>.`
+            `Expression applied to <${target.tagName}>.`
         );
     }
 
-    dispose() {
+    dispose(): void {
         if (this._schemaDebounce) {
             clearTimeout(this._schemaDebounce);
             this._schemaDebounce = null;
@@ -425,7 +468,7 @@ class IfElsePanel {
     }
 }
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.openIfElseBuilder', () => {
             const editor = vscode.window.activeTextEditor;
@@ -457,4 +500,4 @@ function register(context) {
     );
 }
 
-module.exports = { register, IfElsePanel, findTargetAtEditor, readSchema };
+export { register, IfElsePanel, findTargetAtEditor, readSchema };

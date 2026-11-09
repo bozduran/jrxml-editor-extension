@@ -1,4 +1,4 @@
-// fileIssues.js
+// fileIssues.ts
 // File-level issues that belong in the Issues view but are not
 // per-expression rule hits:
 //
@@ -8,20 +8,27 @@
 // Pure and vscode-free: callers turn each issue into a tree item whose command
 // runs the matching action.
 
-const { discoverSortFix } = require('./xmlSort');
-const { discoverClearFixes } = require('./xmlClear');
+import { discoverSortFix } from './xmlSort';
+import { discoverClearFixes } from './xmlClear';
 
 const SORT_KIND  = 'sort';
 const QUERY_KIND = 'query';
 
-/**
- * @param {string} text
- * @param {{ targetLanguage?:string }} [options]
- * @returns {{ kind:string, title:string, detail:string, command:string }[]}
- */
-function collectFileIssues(text, options = {}) {
+/** One file-level action offered by the Issues view and the JRXML menu. */
+export interface FileIssue {
+    kind: string;
+    title: string;
+    detail: string;
+    command: string;
+}
+
+export interface FileIssueOptions {
+    targetLanguage?: string;
+}
+
+function collectFileIssues(text: string, options: FileIssueOptions = {}): FileIssue[] {
     const targetLanguage = options.targetLanguage || 'jsonql';
-    const issues = [];
+    const issues: FileIssue[] = [];
 
     const sort = discoverSortFix(text);
     if (sort) {
@@ -46,4 +53,4 @@ function collectFileIssues(text, options = {}) {
     return issues;
 }
 
-module.exports = { collectFileIssues, SORT_KIND, QUERY_KIND };
+export { collectFileIssues, SORT_KIND, QUERY_KIND };

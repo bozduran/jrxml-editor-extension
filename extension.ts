@@ -1,39 +1,38 @@
 // JRXML Expression Editor - VS Code Extension
-// extension.js
+// extension.ts
 
-const vscode = require('vscode');
-const ExpressionEditorPanel  = require('./expressionEditorPanel');
-const { findExpressionAtCursor } = require('./expressionUtils');
-const { provider: completionProvider, clearCustomJavaCache } = require('./completionProvider');
-const { provider: hoverProvider }      = require('./hoverProvider');
-const { provider: definitionProvider } = require('./definitionProvider');
-const { provider: referenceProvider }    = require('./referenceProvider');
-const { provider: outlineProvider }    = require('./outlineProvider');
-const { register: registerDiagnostics } = require('./diagnosticsProvider');
-const { provider: codeActionsProvider }  = require('./codeActionsProvider');
-const { register: registerIssuesView } = require('./issuesView');
-const { register: registerContextKeys } = require('./contextKeys');
-const {
-    provider: documentFormatter,
+import * as vscode from 'vscode';
+// eslint-disable-next-line @typescript-eslint/no-require-imports -- single-value CommonJS module, required as-is by the host suite
+import ExpressionEditorPanel  = require('./expressionEditorPanel');
+import { findExpressionAtCursor } from './expressionUtils';
+import { provider as completionProvider, clearCustomJavaCache } from './completionProvider';
+import { provider as hoverProvider }      from './hoverProvider';
+import { provider as definitionProvider } from './definitionProvider';
+import { provider as referenceProvider }    from './referenceProvider';
+import { provider as outlineProvider }    from './outlineProvider';
+import { register as registerDiagnostics } from './diagnosticsProvider';
+import { provider as codeActionsProvider }  from './codeActionsProvider';
+import { register as registerIssuesView } from './issuesView';
+import { register as registerContextKeys } from './contextKeys';
+import {
+    provider as documentFormatter,
     fixAllProvider,
     registerFormatOnSave,
     registerFixAllCommand,
-} = require('./documentFormatter');
-const { register: registerSort } = require('./sortProvider');
-const { register: registerClear } = require('./clearProvider');
-const { register: registerSettingsPanel } = require('./settingsPanel');
-const { register: registerTutorial } = require('./tutorialPanel');
-const { register: registerIncludeChain } = require('./includeChainView');
-const { register: registerIfElsePanel } = require('./ifElsePanel');
-const { register: registerExpressionActions } = require('./expressionActions');
-const { register: registerDesignView } = require('./designViewPanel');
-const { register: registerWorkspaceValidation } = require('./workspaceValidation');
-const { register: registerBuildBridge } = require('./buildBridge');
-const { provider: previewProvider } = require('./preview');
-/**
- * @param {vscode.ExtensionContext} context
- */
-function activate(context) {
+} from './documentFormatter';
+import { register as registerSort } from './sortProvider';
+import { register as registerClear } from './clearProvider';
+import { register as registerSettingsPanel } from './settingsPanel';
+import { register as registerTutorial } from './tutorialPanel';
+import { register as registerIncludeChain } from './includeChainView';
+import { register as registerIfElsePanel } from './ifElsePanel';
+import { register as registerExpressionActions } from './expressionActions';
+import { register as registerDesignView } from './designViewPanel';
+import { register as registerWorkspaceValidation } from './workspaceValidation';
+import { register as registerBuildBridge } from './buildBridge';
+import { provider as previewProvider } from './preview';
+
+function activate(context: vscode.ExtensionContext): void {
     // ── Command: open expression editor ──────────────────────────────────────
     const openEditorCmd = vscode.commands.registerCommand(
         'jrxml.openExpressionEditor',
@@ -78,7 +77,7 @@ function activate(context) {
     // wrapper keeps the built-in `editor.action.formatDocument` out of the
     // manifest (which VS Code flags as an undefined command).
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.formatDocument', async () => {
+        vscode.commands.registerCommand('jrxml.formatDocument', async (): Promise<void> => {
             const editor = vscode.window.activeTextEditor;
             if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
                 vscode.window.showWarningMessage('The JRXML formatter works on .jrxml files only.');
@@ -146,9 +145,12 @@ function activate(context) {
     // Internal command used by the "Go to declaration" quick fix. Uses
     // openTextDocument so it also works for files that are not currently open.
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.goToDeclaration', async (uri, position) => {
+        vscode.commands.registerCommand('jrxml.goToDeclaration', async (
+            uri: vscode.Uri,
+            position?: vscode.Position | number | null
+        ): Promise<void> => {
             const document = await vscode.workspace.openTextDocument(uri);
-            const target = (position && typeof position.line === 'number')
+            const target = (position && typeof position === 'object' && typeof position.line === 'number')
                 ? new vscode.Position(position.line, position.character)
                 : document.positionAt(typeof position === 'number' ? position : 0);
 
@@ -164,7 +166,7 @@ function activate(context) {
     statusBarItem.text    = '$(edit) JRXML Expr';
     statusBarItem.tooltip = 'Open JRXML Expression Editor';
 
-    const updateStatusBar = (editor) => {
+    const updateStatusBar = (editor: vscode.TextEditor | undefined): void => {
         if (editor && editor.document.fileName.endsWith('.jrxml')) statusBarItem.show();
         else statusBarItem.hide();
     };
@@ -183,6 +185,6 @@ function activate(context) {
     context.subscriptions.push(openEditorCmd, statusBarItem);
 }
 
-function deactivate() {}
+function deactivate(): void {}
 
-module.exports = { activate, deactivate };
+export { activate, deactivate };

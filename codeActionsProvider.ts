@@ -1,4 +1,4 @@
-// codeActionsProvider.js
+// codeActionsProvider.ts
 // Provides lightbulb quick-fix actions for JRXML diagnostics:
 //
 //  jrxml.unusedField / unusedParameter / unusedVariable
@@ -13,14 +13,14 @@
 //    → "Add <parameter name='x' class='java.lang.Object'> declaration"
 //    → "Add <variable name='x' ...> declaration"
 
-const vscode = require('vscode');
-const { fixForFinding } = require('./xmlLintFixes');
-const { scanXml } = require('./xmlspan');
-const { findInsertionPoint } = require('./declarationInsertion');
-const { removalSpan } = require('./xmlClear');
-const { decodeXml } = require('./xmlRules');
-const { fixForTextCheck } = require('./textCheck');
-const { findExpressionAtCursor } = require('./expressionUtils');
+import * as vscode from 'vscode';
+import { fixForFinding } from './xmlLintFixes';
+import { scanXml } from './xmlspan';
+import { findInsertionPoint } from './declarationInsertion';
+import { removalSpan } from './xmlClear';
+import { decodeXml } from './xmlRules';
+import { fixForTextCheck } from './textCheck';
+import { findExpressionAtCursor } from './expressionUtils';
 
 // ── Lint rule quick fixes ─────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ const LINT_CODES = new Set([
 /**
  * Build a full declaration snippet for the given kind and name.
  */
-function buildDeclarationSnippet(kind, name) {
+function buildDeclarationSnippet(kind: string, name: string): string {
     switch (kind) {
         case 'field':
             return `\n\t<field name="${name}" class="java.lang.Object">\n\t\t<description><![CDATA[]]></description>\n\t</field>`;
@@ -48,16 +48,39 @@ function buildDeclarationSnippet(kind, name) {
     }
 }
 
+/** A string code; object-shaped diagnostic codes never match a rule here. */
+function codeOf(diagnostic: vscode.Diagnostic): string {
+    return typeof diagnostic.code === 'string' ? diagnostic.code : '';
+}
+
+/** VS Code carries quick-fix payloads on Diagnostic.data, which @types/vscode 1.85 omits. */
+interface DiagnosticWithData extends vscode.Diagnostic {
+    data?: unknown;
+}
+
+/** The quick-fix replacement a boolean-equals finding carries, if any. */
+function replacementOf(diagnostic: vscode.Diagnostic): string | null {
+    const data = (diagnostic as DiagnosticWithData).data;
+    if (!data || typeof data !== 'object') return null;
+    const replacement = (data as { replacement?: unknown }).replacement;
+    return typeof replacement === 'string' ? replacement : null;
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 const provider = vscode.languages.registerCodeActionsProvider(
     { language: 'jrxml' },
     {
-        provideCodeActions(document, range, context) {
-            const actions = [];
+        provideCodeActions(
+            document: vscode.TextDocument,
+            range: vscode.Range,
+            context: vscode.CodeActionContext
+        ): vscode.CodeAction[] {
+            const actions: vscode.CodeAction[] = [];
 
             for (const diag of context.diagnostics) {
                 if (diag.source !== 'JRXML') continue;
+                const code = codeOf(diag);
 
                 // Any diagnostic inside an expression can be inspected there.
                 if (findExpressionAtCursor(document, diag.range.start)) {
@@ -87,10 +110,10 @@ const provider = vscode.languages.registerCodeActionsProvider(
                 }
 
                 // ── Unused declarations ───────────────────────────────────────
-                if (['jrxml.unusedField', 'jrxml.unusedParameter', 'jrxml.unusedVariable'].includes(diag.code)) {
-                    const kind = diag.code === 'jrxml.unusedField'     ? 'field'
-                               : diag.code === 'jrxml.unusedParameter' ? 'parameter'
-                               :                                          'variable';
+                if (['jrxml.unusedField', 'jrxml.unusedParameter', 'jrxml.unusedVariable'].includes(code)) {
+                    const kind = code === 'jrxml.unusedField'     ? 'field'
+                               : code === 'jrxml.unusedParameter' ? 'parameter'
+                               :                                    'variable';
                     const name = decodeXml(document.getText(diag.range));
 
                     // Action 1: Jump to the declaration
@@ -123,7 +146,7 @@ const provider = vscode.languages.registerCodeActionsProvider(
                 }
 
                 // ── Undeclared reference ──────────────────────────────────────
-                if (diag.code === 'jrxml.undeclaredReference') {
+                if (code === 'jrxml.undeclaredReference') {
                     // Extract $F/$P/$V and name from the diagnostic range text
                     const tokenText = document.getText(diag.range); // e.g. $F{salary}
                     const tokenMatch = tokenText.match(/^\$(F|P|V)\{([\w.]+)\}$/);
@@ -131,7 +154,7 @@ const provider = vscode.languages.registerCodeActionsProvider(
 
                     const sigil    = tokenMatch[1];
                     const name     = tokenMatch[2];
-                    const kindMap  = { F: 'field', P: 'parameter', V: 'variable' };
+                    const kindMap: Record<string, string> = { F: 'field', P: 'parameter', V: 'variable' };
                     const kind     = kindMap[sigil];
                     const tagName  = kind === 'field' ? 'field' : kind === 'parameter' ? 'parameter' : 'variable';
 
@@ -153,24 +176,27 @@ const provider = vscode.languages.registerCodeActionsProvider(
                 }
 
                 // ── Boolean comparison style ──────────────────────────────────
-                if (diag.code === 'jrxml.booleanEquals' && diag.data && typeof diag.data.replacement === 'string') {
+                if (code === 'jrxml.booleanEquals') {
+                    const replacement = replacementOf(diag);
+                    if (replacement === null) continue;
+
                     const action = new vscode.CodeAction(
-                        `Replace with ${diag.data.replacement}`,
+                        `Replace with ${replacement}`,
                         vscode.CodeActionKind.QuickFix
                     );
                     action.diagnostics = [diag];
                     action.isPreferred = true;
 
                     const edit = new vscode.WorkspaceEdit();
-                    edit.replace(document.uri, diag.range, diag.data.replacement);
+                    edit.replace(document.uri, diag.range, replacement);
                     action.edit = edit;
                     actions.push(action);
                 }
 
                 // ── Structural lint rules ─────────────────────────────────────
-                if (LINT_CODES.has(diag.code)) {
+                if (LINT_CODES.has(code)) {
                     const fix = fixForFinding(document.getText(), {
-                        code:   diag.code,
+                        code,
                         offset: document.offsetAt(diag.range.start),
                     });
                     if (!fix) continue;
@@ -179,7 +205,7 @@ const provider = vscode.languages.registerCodeActionsProvider(
                     action.diagnostics = [diag];
                     // Removing a constant expression is a convenience; setting the
                     // attribute is the expected fix, so prefer it.
-                    action.isPreferred = diag.code !== 'jrxml.lint.constantPrintWhen';
+                    action.isPreferred = code !== 'jrxml.lint.constantPrintWhen';
 
                     const edit = new vscode.WorkspaceEdit();
                     edit.replace(
@@ -195,7 +221,7 @@ const provider = vscode.languages.registerCodeActionsProvider(
                 }
 
                 // ── Text check ────────────────────────────────────────────────
-                if (diag.code === 'jrxml.textcheck') {
+                if (code === 'jrxml.textcheck') {
                     const fix = fixForTextCheck(document.getText(), document.offsetAt(diag.range.start));
                     if (!fix) continue;
 
@@ -233,9 +259,14 @@ const provider = vscode.languages.registerCodeActionsProvider(
  * its indentation and line break with it, while a shared line (a comment, say)
  * keeps its layout.
  */
-function buildRemovalEdit(document, text, kind, name) {
+function buildRemovalEdit(
+    document: vscode.TextDocument,
+    text: string,
+    kind: string,
+    name: string
+): vscode.WorkspaceEdit | null {
     const scan = scanXml(text);
-    if (scan.error) return null;
+    if (scan.error || !scan.doc) return null;
 
     const node = scan.doc.root.children.find(
         child => child.tag === kind && decodeXml(child.attrValue('name') || '') === name
@@ -251,4 +282,4 @@ function buildRemovalEdit(document, text, kind, name) {
     return edit;
 }
 
-module.exports = { provider };
+export { provider };

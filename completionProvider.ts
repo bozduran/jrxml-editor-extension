@@ -1,4 +1,4 @@
-// completionProvider.js
+// completionProvider.ts
 // Registers the JRXML editor completion provider.
 //
 // The suggestion engine itself lives in the vscode-free expressionSuggestions
@@ -6,26 +6,28 @@
 // both surfaces offer exactly the same fields, parameters, variables, built-ins,
 // Java types and typed-member completions.
 
-const vscode = require('vscode');
-const fs = require('fs');
-const path = require('path');
-const { EXPRESSION_TAGS, findExpressionRegionAt } = require('./expressionUtils');
-const { parseDeclarations } = require('./jrxmlParser');
-const { buildExpressionSuggestions, suggestionOptions } = require('./expressionSuggestions');
-const { reportLanguage } = require('./reportLanguage');
-const { resourceEntriesForDocument } = require('./resourceIndex');
-const { visibleDeclarations } = require('./reportSymbols');
+import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import { EXPRESSION_TAGS, findExpressionRegionAt } from './expressionUtils';
+import { parseDeclarations } from './jrxmlParser';
+import type { ParseResult } from './jrxmlParser';
+import { buildExpressionSuggestions, suggestionOptions } from './expressionSuggestions';
+import type { CustomMethod, ExpressionSuggestion, SuggestionKind } from './expressionSuggestions';
+import { reportLanguage } from './reportLanguage';
+import { resourceEntriesForDocument } from './resourceIndex';
+import { visibleDeclarations } from './reportSymbols';
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
 
-let cachedCustomJavaMethods = null;
+let cachedCustomJavaMethods: CustomMethod[] | null = null;
 
 /** Drop the cached Java scan (call when .java files or workspace folders change). */
-function clearCustomJavaCache() {
+function clearCustomJavaCache(): void {
     cachedCustomJavaMethods = null;
 }
 
-function getCustomJavaMethods() {
+function getCustomJavaMethods(): CustomMethod[] {
     // Return cached results if we already scanned the project
     if (cachedCustomJavaMethods) return cachedCustomJavaMethods;
 
@@ -49,20 +51,20 @@ function getCustomJavaMethods() {
     return cachedCustomJavaMethods;
 }
 
-function scanDirectoryForJavaMethods(dir, results) {
-    let files;
+function scanDirectoryForJavaMethods(dir: string, results: CustomMethod[]): void {
+    let files: string[];
     try {
         files = fs.readdirSync(dir);
-    } catch (_) {
+    } catch {
         return; // unreadable/unavailable directory — skip silently
     }
 
     for (const file of files) {
         const fullPath = path.join(dir, file);
-        let stat;
+        let stat: fs.Stats;
         try {
             stat = fs.statSync(fullPath);
-        } catch (_) {
+        } catch {
             continue; // entry disappeared mid-scan
         }
         if (stat.isDirectory()) {
@@ -73,7 +75,7 @@ function scanDirectoryForJavaMethods(dir, results) {
     }
 }
 
-function extractStaticMethods(filePath, results) {
+function extractStaticMethods(filePath: string, results: CustomMethod[]): void {
 
     try {
         const content = fs.readFileSync(filePath, 'utf-8');
@@ -121,9 +123,9 @@ function extractStaticMethods(filePath, results) {
 // ── Expression tag check ──────────────────────────────────────────────────────
 // <query> is not an expression element for formatting, but it carries $P!{}
 // fragments, so completion must activate inside it too.
-const COMPLETION_TAGS = [...EXPRESSION_TAGS, 'query'];
+const COMPLETION_TAGS: readonly string[] = [...EXPRESSION_TAGS, 'query'];
 
-function isInsideExpressionTag(document, position) {
+function isInsideExpressionTag(document: vscode.TextDocument, position: vscode.Position): boolean {
     return !!findExpressionRegionAt(
         document,
         document.offsetAt(position),
@@ -133,7 +135,7 @@ function isInsideExpressionTag(document, position) {
 
 // ── Mapping suggestions to CompletionItems ──────────────────────────────────
 
-const KIND_MAP = {
+const KIND_MAP: Readonly<Record<SuggestionKind, vscode.CompletionItemKind>> = {
     field:     vscode.CompletionItemKind.Field,
     parameter: vscode.CompletionItemKind.TypeParameter,
     variable:  vscode.CompletionItemKind.Variable,
@@ -144,7 +146,7 @@ const KIND_MAP = {
     text:      vscode.CompletionItemKind.Text,
 };
 
-function toCompletionItem(suggestion) {
+function toCompletionItem(suggestion: ExpressionSuggestion): vscode.CompletionItem {
     const label = suggestion.labelDetail
         ? {
             label:       suggestion.label,
@@ -168,30 +170,41 @@ function toCompletionItem(suggestion) {
     return item;
 }
 
+// A parse result stand-in for documents the parser cannot read; only its
+// (empty) declaration lists and absent bundle are consulted.
+const EMPTY_PARSE: ParseResult = {
+    fields: [], parameters: [], variables: [],
+    dataset: { fields: [], parameters: [], variables: [] },
+    language: { language: 'java', declared: false, offset: -1, length: 0 },
+    allFields: [], allParameters: [], allVariables: [],
+    groups: [], styles: [], references: [], resourceReferences: [],
+    resourceBundle: null, datasets: [], scopeRanges: [], outline: [],
+};
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 const provider = vscode.languages.registerCompletionItemProvider(
     { language: 'jrxml' },
     {
-        provideCompletionItems(document, position) {
+        provideCompletionItems(
+            document: vscode.TextDocument,
+            position: vscode.Position
+        ): vscode.CompletionItem[] {
             if (!isInsideExpressionTag(document, position)) return [];
 
             const config = vscode.workspace.getConfiguration('jrxml');
             const text   = document.getText();
 
-            let decls;
+            let decls: ParseResult | null = null;
             try {
                 decls = parseDeclarations(document);
-            } catch (_) {
-                decls = {
-                    fields: [], parameters: [], variables: [],
-                    allFields: [], allParameters: [], allVariables: [], groups: [],
-                };
+            } catch {
+                decls = null;
             }
 
             const options = suggestionOptions(config);
             // The member index models JDK/Java types; do not apply it to a
             // report that declares Groovy or JavaScript.
-            if ((decls.language || reportLanguage(text)).language !== 'java') options.typedCompletion = false;
+            if (((decls && decls.language) || reportLanguage(text)).language !== 'java') options.typedCompletion = false;
 
             const offset = document.offsetAt(position);
             const result = buildExpressionSuggestions({
@@ -199,10 +212,10 @@ const provider = vscode.languages.registerCompletionItemProvider(
                 offset,
                 // Only the declarations visible at the cursor: a subdataset
                 // must not offer the master report's fields, and vice versa.
-                declarations: visibleDeclarations(decls, offset),
+                declarations: visibleDeclarations(decls ?? EMPTY_PARSE, offset),
                 options,
                 customMethods: getCustomJavaMethods(),
-                resources: resourceEntriesForDocument(document, decls.resourceBundle),
+                resources: resourceEntriesForDocument(document, decls ? decls.resourceBundle : null),
             });
 
             return result.items.map(toCompletionItem);
@@ -211,7 +224,7 @@ const provider = vscode.languages.registerCompletionItemProvider(
     '$', '{', ' ', '.', '('
 );
 
-module.exports = {
+export {
     provider,
     clearCustomJavaCache,
     getCustomJavaMethods,

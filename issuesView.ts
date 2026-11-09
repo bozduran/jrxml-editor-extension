@@ -1,4 +1,4 @@
-// issuesView.js
+// issuesView.ts
 // The "Issues (JRXML)" JRXML Activity Bar view.
 //
 // It is a live mirror of the JRXML diagnostics (source "JRXML": undeclared
@@ -10,27 +10,47 @@
 // Reading vscode.languages.getDiagnostics() keeps the view in lock-step with
 // the squiggles: there is no second copy of the diagnostic logic to drift.
 
-const vscode = require('vscode');
-const { groupIssues, countIssues } = require('./issuesModel');
-const { collectFileIssues, QUERY_KIND } = require('./fileIssues');
-const { openExpressionEditorAt, openIfElseBuilderAt } = require('./expressionActions');
+import * as vscode from 'vscode';
+import { groupIssues, countIssues } from './issuesModel';
+import type { Issue, IssueGroup, IssueGroupView } from './issuesModel';
+import { collectFileIssues, QUERY_KIND } from './fileIssues';
+import { openExpressionEditorAt, openIfElseBuilderAt } from './expressionActions';
 
 const VIEW_ID     = 'jrxmlIssues';
 const JRMXL_SOURCE = 'JRXML';
 const DEBOUNCE_MS = 300;
 
-function isJrxml(document) {
+/** An issue record with the VS Code objects the tree and commands use. */
+interface ViewIssue extends Issue {
+    readonly uri?: vscode.Uri;
+    readonly command?: vscode.Command;
+}
+
+/** The same grouping, narrowed to the view's issue records. */
+interface ViewGroup extends Omit<IssueGroupView, 'items'> {
+    readonly items: ViewIssue[];
+}
+
+/** A rendered group node, carrying the leaves the tree expands to. */
+interface IssueTreeItem extends vscode.TreeItem {
+    issue?: ViewIssue;
+    _groupItems?: ViewIssue[];
+}
+
+function isJrxml(document: vscode.TextDocument | null | undefined): document is vscode.TextDocument {
     return !!document && document.fileName.endsWith('.jrxml');
 }
 
-function codeString(code) {
+function codeString(code: vscode.Diagnostic['code']): string {
     if (!code) return '';
-    return typeof code === 'string' ? code : (code.value || '');
+    if (typeof code === 'string') return code;
+    if (typeof code === 'object') return String(code.value || '');
+    return '';
 }
 
 /** A vscode.Diagnostic as a plain Issue record. */
-function diagnosticToIssue(diagnostic, uri) {
-    const group = diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning';
+function diagnosticToIssue(diagnostic: vscode.Diagnostic, uri: vscode.Uri): ViewIssue {
+    const group: IssueGroup = diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning';
     return {
         group,
         label:    `Line ${diagnostic.range.start.line + 1}: ${diagnostic.message}`,
@@ -45,9 +65,9 @@ function diagnosticToIssue(diagnostic, uri) {
 }
 
 /** All issue records for one document: JRXML diagnostics + file actions. */
-function collectIssueItems(document) {
+function collectIssueItems(document: vscode.TextDocument): ViewIssue[] {
     const uri   = document.uri;
-    const items = [];
+    const items: ViewIssue[] = [];
 
     for (const diagnostic of vscode.languages.getDiagnostics(uri)) {
         if (diagnostic.source !== JRMXL_SOURCE) continue;
@@ -72,17 +92,17 @@ function collectIssueItems(document) {
 
 // ── Tree rendering ────────────────────────────────────────────────────────────
 
-const GROUP_ICON = { error: 'error', warning: 'warning', action: 'lightbulb' };
+const GROUP_ICON: Readonly<Record<string, string>> = { error: 'error', warning: 'warning', action: 'lightbulb' };
 
-function messageItem(message, icon) {
+function messageItem(message: string, icon: string): vscode.TreeItem {
     const item = new vscode.TreeItem(message, vscode.TreeItemCollapsibleState.None);
     item.iconPath     = new vscode.ThemeIcon(icon || 'info');
     item.contextValue = 'jrxmlIssueMessage';
     return item;
 }
 
-function groupItem(group) {
-    const item = new vscode.TreeItem(
+function groupItem(group: ViewGroup): IssueTreeItem {
+    const item: IssueTreeItem = new vscode.TreeItem(
         `${group.title} (${group.items.length})`,
         vscode.TreeItemCollapsibleState.Expanded
     );
@@ -92,8 +112,8 @@ function groupItem(group) {
     return item;
 }
 
-function leafItem(issue) {
-    const item = new vscode.TreeItem(issue.label, vscode.TreeItemCollapsibleState.None);
+function leafItem(issue: ViewIssue): IssueTreeItem {
+    const item: IssueTreeItem = new vscode.TreeItem(issue.label, vscode.TreeItemCollapsibleState.None);
     item.tooltip = issue.code ? `${issue.message}\n\n(${issue.code})` : issue.message;
     item.issue   = issue;
 
@@ -110,6 +130,11 @@ function leafItem(issue) {
 }
 
 class IssuesProvider {
+    private readonly _onDidChangeTreeData: vscode.EventEmitter<IssueTreeItem | undefined | null | void>;
+    readonly onDidChangeTreeData: vscode.Event<IssueTreeItem | undefined | null | void>;
+    private _document: vscode.TextDocument | null;
+    groups: ViewGroup[];
+
     constructor() {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData  = this._onDidChangeTreeData.event;
@@ -117,21 +142,21 @@ class IssuesProvider {
         this.groups    = [];
     }
 
-    refresh() {
+    refresh(): void {
         const editor = vscode.window.activeTextEditor;
         if (!isJrxml(editor?.document)) {
             this._document = null;
             this.groups    = [];
         } else {
             this._document = editor.document;
-            this.groups    = groupIssues(collectIssueItems(editor.document));
+            this.groups    = groupIssues(collectIssueItems(editor.document)) as ViewGroup[];
         }
-        this._onDidChangeTreeData.fire();
+        this._onDidChangeTreeData.fire(undefined);
     }
 
-    getTreeItem(element) { return element; }
+    getTreeItem(element: IssueTreeItem): vscode.TreeItem { return element; }
 
-    getChildren(element) {
+    getChildren(element?: IssueTreeItem): vscode.TreeItem[] {
         if (element) return element._groupItems ? element._groupItems.map(leafItem) : [];
         // No report: return no items so the viewsWelcome content shows.
         if (!this._document) return [];
@@ -139,17 +164,20 @@ class IssuesProvider {
         return this.groups.map(groupItem);
     }
 
-    dispose() { this._onDidChangeTreeData.dispose(); }
+    dispose(): void { this._onDidChangeTreeData.dispose(); }
 }
 
 // ── Commands ──────────────────────────────────────────────────────────────────
 
 /** Tree-item commands receive the TreeItem; item.command passes the issue. */
-function toIssue(arg) {
-    return arg && arg.issue ? arg.issue : arg;
+function toIssue(arg: unknown): ViewIssue | undefined {
+    if (!arg) return undefined;
+    // Command arguments are either a leaf TreeItem or an Issue record.
+    const wrapped = (arg as { issue?: ViewIssue }).issue;
+    return wrapped || (arg as ViewIssue);
 }
 
-function rangeOf(issue) {
+function rangeOf(issue: ViewIssue): vscode.Range {
     return new vscode.Range(
         issue.line,
         issue.character,
@@ -158,7 +186,7 @@ function rangeOf(issue) {
     );
 }
 
-async function jumpToHit(arg) {
+async function jumpToHit(arg: unknown): Promise<void> {
     const issue = toIssue(arg);
     if (!issue || !issue.uri) return;
 
@@ -174,26 +202,32 @@ async function jumpToHit(arg) {
     editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
 }
 
+/** A quick-fix action that carries the edit it applies. */
+type EditAction = vscode.CodeAction & { edit: vscode.WorkspaceEdit };
+
 /** Quick-fix actions offered for one diagnostic range. */
-async function quickFixesFor(uri, range) {
-    const actions = await vscode.commands.executeCommand(
+async function quickFixesFor(uri: vscode.Uri, range: vscode.Range): Promise<EditAction[]> {
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
         'vscode.executeCodeActionProvider',
         uri,
         range,
         vscode.CodeActionKind.QuickFix
     );
-    return (actions || []).filter(action => action && action.edit);
+    return (actions || []).filter((action): action is EditAction => !!action && !!action.edit);
 }
 
 /** The lightbulb's preferred fix, else the first edit-bearing one. */
-function pickFix(actions, { preferredOnly = false } = {}) {
-    const withEdit = (actions || []).filter(action => action && action.edit);
+function pickFix(
+    actions: readonly vscode.CodeAction[] | undefined,
+    { preferredOnly = false }: { preferredOnly?: boolean } = {}
+): EditAction | null {
+    const withEdit = (actions || []).filter((action): action is EditAction => !!action && !!action.edit);
     const preferred = withEdit.find(action => action.isPreferred);
     if (preferred) return preferred;
     return preferredOnly ? null : (withEdit[0] || null);
 }
 
-async function applyFix(arg) {
+async function applyFix(arg: unknown): Promise<void> {
     const issue = toIssue(arg);
     if (!issue || !issue.uri) return;
 
@@ -208,7 +242,7 @@ async function applyFix(arg) {
     }
 }
 
-function overlaps(a, b) {
+function overlaps(a: vscode.Range, b: vscode.Range): boolean {
     return a.start.isBeforeOrEqual(b.end) && b.start.isBeforeOrEqual(a.end);
 }
 
@@ -219,7 +253,7 @@ function overlaps(a, b) {
  * preferred) and constant-expression removal stay opt-in via the lightbulb.
  * Edits that overlap an already-collected one are skipped.
  */
-async function fixAll() {
+async function fixAll(): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!isJrxml(editor?.document)) {
         vscode.window.showWarningMessage('Open a .jrxml file first.');
@@ -229,7 +263,7 @@ async function fixAll() {
     const uri      = editor.document.uri;
     const diags    = vscode.languages.getDiagnostics(uri).filter(d => d.source === JRMXL_SOURCE);
     const merged   = new vscode.WorkspaceEdit();
-    const accepted = [];
+    const accepted: { uri: vscode.Uri; range: vscode.Range }[] = [];
     let fixed = 0;
 
     for (const diagnostic of diags) {
@@ -258,25 +292,33 @@ async function fixAll() {
     }
 }
 
-async function copyMessage(arg) {
+async function copyMessage(arg: unknown): Promise<void> {
     const issue = toIssue(arg);
     if (issue?.message) await vscode.env.clipboard.writeText(issue.message);
 }
 
-async function copyCode(arg) {
+async function copyCode(arg: unknown): Promise<void> {
     const issue = toIssue(arg);
     if (issue?.code) await vscode.env.clipboard.writeText(issue.code);
 }
 
 // ── Issue navigation ──────────────────────────────────────────────────────────
 
-function comparePosition(a, b) {
+interface IssueRange {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+}
+
+function comparePosition(
+    a: { line: number; character: number },
+    b: { line: number; character: number }
+): number {
     if (a.line !== b.line) return a.line - b.line;
     return a.character - b.character;
 }
 
 /** JRXML diagnostic ranges for a document, sorted by position. */
-function issueRanges(uri) {
+function issueRanges(uri: vscode.Uri): IssueRange[] {
     return vscode.languages.getDiagnostics(uri)
         .filter(diagnostic => diagnostic.source === JRMXL_SOURCE)
         .map(diagnostic => ({
@@ -290,7 +332,11 @@ function issueRanges(uri) {
  * The range to move to from `cursor`, or null when there are none. Wraps
  * around the file in both directions.
  */
-function pickNavigationTarget(ranges, cursor, direction) {
+function pickNavigationTarget(
+    ranges: readonly IssueRange[] | null | undefined,
+    cursor: { line: number; character: number },
+    direction: number
+): IssueRange | null {
     if (!ranges || ranges.length === 0) return null;
 
     if (direction >= 0) {
@@ -300,7 +346,7 @@ function pickNavigationTarget(ranges, cursor, direction) {
         || ranges[ranges.length - 1];
 }
 
-async function navigate(direction) {
+async function navigate(direction: number): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!isJrxml(editor?.document)) {
         vscode.window.showWarningMessage('Open a .jrxml file first.');
@@ -319,7 +365,7 @@ async function navigate(direction) {
     editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenter);
 }
 
-function updateBadge(view, count) {
+function updateBadge(view: vscode.TreeView<IssueTreeItem>, count: number): void {
     view.badge = count > 0
         ? { value: count, tooltip: `${count} issue${count === 1 ? '' : 's'}` }
         : undefined;
@@ -327,7 +373,7 @@ function updateBadge(view, count) {
 
 // ── Registration ──────────────────────────────────────────────────────────────
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     const provider = new IssuesProvider();
     const view = vscode.window.createTreeView(VIEW_ID, {
         treeDataProvider: provider,
@@ -338,8 +384,8 @@ function register(context) {
     statusBar.name    = 'JRXML Issues';
     statusBar.command = `${VIEW_ID}.focus`;
 
-    let timer;
-    const refresh = () => {
+    let timer: NodeJS.Timeout | undefined;
+    const refresh = (): void => {
         provider.refresh();
         const count = countIssues(provider.groups);
         updateBadge(view, count);
@@ -352,9 +398,9 @@ function register(context) {
             statusBar.hide();
         }
     };
-    const schedule = () => { clearTimeout(timer); timer = setTimeout(refresh, DEBOUNCE_MS); };
+    const schedule = (): void => { clearTimeout(timer); timer = setTimeout(refresh, DEBOUNCE_MS); };
 
-    const editInExpressionEditor = async arg => {
+    const editInExpressionEditor = async (arg: unknown): Promise<void> => {
         const issue = toIssue(arg);
         if (!issue || !issue.uri) {
             vscode.window.showInformationMessage('Run this from an issue in the Issues (JRXML) view.');
@@ -362,7 +408,7 @@ function register(context) {
         }
         await openExpressionEditorAt(context.extensionUri, issue.uri, issue.line, issue.character);
     };
-    const editInIfElseBuilder = async arg => {
+    const editInIfElseBuilder = async (arg: unknown): Promise<void> => {
         const issue = toIssue(arg);
         if (!issue || !issue.uri) {
             vscode.window.showInformationMessage('Run this from an issue in the Issues (JRXML) view.');
@@ -402,4 +448,4 @@ function register(context) {
     refresh();
 }
 
-module.exports = { register, collectIssueItems, pickFix, overlaps, pickNavigationTarget, VIEW_ID };
+export { register, collectIssueItems, pickFix, overlaps, pickNavigationTarget, VIEW_ID };

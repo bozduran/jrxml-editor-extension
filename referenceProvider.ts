@@ -1,16 +1,20 @@
-// referenceProvider.js
+// referenceProvider.ts
 // "Find All References" for $F{...} / $P{...} / $V{...} in the current file.
 // References in a different declaration scope are a different symbol: a
 // subdataset field named `amount` is not the report field named `amount`.
 
-const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
-const { resolveSymbol, occurrences, declarationInAnyScope } = require('./reportSymbols');
+import * as vscode from 'vscode';
+import { parseDeclarations } from './jrxmlParser';
+import { resolveSymbol, occurrences, declarationInAnyScope } from './reportSymbols';
 
 const provider = vscode.languages.registerReferenceProvider(
     { language: 'jrxml' },
     {
-        provideReferences(document, position, context) {
+        provideReferences(
+            document: vscode.TextDocument,
+            position: vscode.Position,
+            context: vscode.ReferenceContext
+        ): vscode.Location[] | null {
             try {
                 const parsed = parseDeclarations(document);
                 const symbol = resolveSymbol(parsed, {
@@ -20,18 +24,20 @@ const provider = vscode.languages.registerReferenceProvider(
                 });
                 if (!symbol) return null;
 
-                const locations = [];
-                const seen = new Set();
+                const locations: vscode.Location[] = [];
+                const seen = new Set<number>();
 
                 for (const reference of occurrences(parsed, symbol)) {
                     if (seen.has(reference.offset)) continue;
                     seen.add(reference.offset);
 
+                    // occurrences() only returns references that carry a span.
+                    const end = reference.end ?? reference.offset + reference.name.length;
                     locations.push(new vscode.Location(
                         document.uri,
                         new vscode.Range(
                             document.positionAt(reference.offset),
-                            document.positionAt(reference.end)
+                            document.positionAt(end)
                         )
                     ));
                 }
@@ -40,7 +46,7 @@ const provider = vscode.languages.registerReferenceProvider(
                     const declaration = symbol.scope.kind === 'unknown'
                         ? declarationInAnyScope(parsed, symbol.token)
                         : symbol.declaration;
-                    if (declaration && typeof declaration.nameOffset === 'number') {
+                    if (declaration && 'nameOffset' in declaration && typeof declaration.nameOffset === 'number') {
                         locations.push(new vscode.Location(
                             document.uri,
                             new vscode.Range(
@@ -60,4 +66,4 @@ const provider = vscode.languages.registerReferenceProvider(
     }
 );
 
-module.exports = { provider };
+export { provider };
