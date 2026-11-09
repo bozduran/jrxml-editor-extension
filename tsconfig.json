@@ -1,0 +1,38 @@
+{
+  // Host-side compiler for the extension. During the migration this project
+  // accepts JavaScript (allowJs) so tests can run against out/ before every
+  // module is converted; strict checking applies to .ts files immediately.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "node16",
+    "moduleResolution": "node16",
+    "rootDir": ".",
+    "outDir": "out",
+    "types": ["node", "vscode"],
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "sourceMap": true,
+    "noEmitOnError": true,
+    "useDefineForClassFields": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["*.js", "*.ts", "tools/**/*.js", "tools/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "out",
+    ".vscode-test",
+    "test",
+    "integration",
+    "scripts",
+    "webview",
+    "designViewClient.js",
+    "designViewClient.ts"
+  ]
+}

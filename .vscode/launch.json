@@ -9,6 +9,10 @@
 			"name": "Run Extension",
 			"type": "extensionHost",
 			"request": "launch",
+			"preLaunchTask": "npm: build",
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}"
 			]

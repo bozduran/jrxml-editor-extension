@@ -12,7 +12,9 @@
 const fs   = require('fs');
 const path = require('path');
 
-const ROOT = path.resolve(__dirname, '..');
+const { repositoryRoot } = require('./repo-root');
+
+const ROOT = repositoryRoot();
 const CHANGELOG = path.join(ROOT, 'CHANGELOG.md');
 const UNRELEASED = '## [Unreleased]';
 

@@ -17,6 +17,8 @@ const { execFileSync } = require('child_process');
 const fs   = require('fs');
 const path = require('path');
 
+const { repositoryRoot } = require('./repo-root');
+
 // ── Curated class list ────────────────────────────────────────────────────────
 // Deliberately limited to types that can actually be the type of a report
 // field, parameter or variable. Static utility classes (Math, Arrays, …) are
@@ -708,7 +710,7 @@ function main() {
         types,
     };
 
-    const outFile = path.join(__dirname, '..', 'data', 'jdk-members.json');
+    const outFile = path.join(repositoryRoot(), 'data', 'jdk-members.json');
     fs.mkdirSync(path.dirname(outFile), { recursive: true });
     fs.writeFileSync(outFile, JSON.stringify(index, null, 1) + '\n');
 

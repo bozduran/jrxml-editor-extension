@@ -342,16 +342,23 @@ extension are a fast pre-check, not a replacement.
 3. Select the packaged `jrxml-editor-extension-<version>.vsix` (build it with `npm run package`)
 
 ### Manual (development)
+The extension sources are TypeScript; the Extension Host loads the compiled
+output from `out/`.
 ```
 npm install
+npm run build
 ```
-Press `F5` in VS Code to launch the Extension Development Host.
+Press `F5` in VS Code to launch the Extension Development Host (the launch task
+builds first). `npm run watch` keeps both the host and webview projects
+compiling while you work.
 
 ### Tests and linting
 ```
-npm test                          # node:test unit suite (parser, formatter, rules, webview HTML)
+npm run build                     # compile sources to out/ (npm test does this too)
+npm test                          # node:test unit suite against out/
 npm run test:integration          # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
 npm run test:integration:headless # same suite without a display (CI/sandbox)
+npm run typecheck                 # tsc --noEmit for the host and webview projects
 npm run lint                      # eslint
 ```
 The unit suite runs on plain Node with no VS Code needed. The integration suite

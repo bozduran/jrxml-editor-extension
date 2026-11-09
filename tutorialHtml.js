@@ -12,7 +12,25 @@
 // group without documenting it here fails `npm test`. The pull-request
 // template repeats the reminder.
 
-const pkg = require('./package.json');
+const fs   = require('fs');
+const path = require('path');
+
+/**
+ * The package manifest. The compiled module lives in out/, so try the source
+ * root first (next to this file) and then the extension root one level up.
+ */
+function packageManifest() {
+    const candidates = [
+        path.join(__dirname, 'package.json'),
+        path.join(__dirname, '..', 'package.json'),
+    ];
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) return JSON.parse(fs.readFileSync(candidate, 'utf8'));
+    }
+    throw new Error('package.json not found next to tutorialHtml');
+}
+
+const pkg = packageManifest();
 const { SETTINGS_GROUPS } = require('./settingsSchema');
 const { escapeHtmlText } = require('./expressionPanelHtml');
 
