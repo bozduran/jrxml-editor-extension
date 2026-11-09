@@ -10,6 +10,28 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- Format Document, null-dereference lint and text-check now cover every
+  expression element, including `filterExpression`, `labelExpression`, chart
+  expressions and the legacy `textExpression`/`patternExpression` spellings,
+  instead of a ten-element subset.
+- Go to Definition and Find All References work from a `<sortField name="...">`
+  attribute; it still counts as a use of the declaration.
+
+### Fixed
+- The Boolean comparison rule sees dashed names (`$F{my-flag}`) and uses the
+  declaration scope at the expression, so a dataset declaration shadows a
+  report declaration with the same name instead of producing a false positive.
+- `$R{...}` resource keys containing spaces are diagnosed like any other
+  missing key.
+
+### Changed
+- Internal: the extension sources are TypeScript compiled to `out/`; the
+  editor and CI run the same compiled modules. No user-facing behaviour change
+  beyond the fixes above.
+- Internal: one report index now owns declaration scope, references and usage
+  for diagnostics, navigation and the clear pass.
+
 ## [1.1.2] - 2026-11-08
 
 ### Fixed
