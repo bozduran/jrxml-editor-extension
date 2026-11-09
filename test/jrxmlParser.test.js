@@ -496,3 +496,10 @@ test('outline covers datasets, groups, frames, every element kind and styles', (
     const styles = report.children.find(child => child.name === 'Styles');
     assert.strictEqual(styles.children[0].name, 'Style: Title');
 });
+
+test('collects $R keys with spaces and dashes through the shared grammar', () => {
+    const text = `<jasperReport name="R"><textField><textFieldExpression><![CDATA[$R{key with space} $R{my-key}]]></textFieldExpression></textField></jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).resourceReferences;
+
+    assert.deepStrictEqual(refs.map(ref => ref.name), ['key with space', 'my-key']);
+});

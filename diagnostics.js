@@ -260,7 +260,8 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] })
             }
 
             if (enabled.booleanEquals) {
-                for (const hit of checkBooleanEquals(rawExpr, parsed)) {
+                const scope = resolveDeclarationScope(parsed, exprOffset);
+                for (const hit of checkBooleanEquals(rawExpr, parsed, scope.kind === 'unknown' ? null : scope)) {
                     add(
                         exprOffset + hit.start,
                         hit.end - hit.start,

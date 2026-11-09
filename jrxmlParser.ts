@@ -5,7 +5,7 @@
 import { scanXml } from './xmlspan';
 import type { XmlNode, XmlScanResult } from './xmlspan';
 import { EXPRESSION_TAGS, hasRole } from './expressionTags';
-import { forEachReferenceToken } from './referenceTokens';
+import { forEachReferenceToken, referenceTokens } from './referenceTokens';
 import type { ReferenceSigil } from './referenceTokens';
 import { languageOfScan } from './reportLanguage';
 import type { ReportLanguage } from './reportLanguage';
@@ -718,8 +718,6 @@ function insideSubreport(node: XmlNode): boolean {
 
 // ── Resource-bundle references ($R{key}) ─────────────────────────────────────
 
-const RESOURCE_REFERENCE_RE = /\$R\{([\w.\-]+)\}/g;
-
 /** `$R{key}` tokens inside expression-bearing elements (for missing-key checks). */
 function extractResourceReferences(scan: XmlScanResult | null): ResourceReference[] {
     const results: ResourceReference[] = [];
@@ -729,14 +727,12 @@ function extractResourceReferences(scan: XmlScanResult | null): ResourceReferenc
         if (!hasRole(node.tag, 'reference')) continue;
 
         for (const span of node.textNodes) {
-            RESOURCE_REFERENCE_RE.lastIndex = 0;
-            let match: RegExpExecArray | null;
-            while ((match = RESOURCE_REFERENCE_RE.exec(span.text)) !== null) {
-                const offset = span.start + match.index;
+            for (const token of referenceTokens(span.text)) {
+                if (token.sigil !== 'R' || !token.name) continue;
                 results.push({
-                    name: match[1],
-                    offset,
-                    end: offset + match[0].length,
+                    name: token.name,
+                    offset: span.start + token.start,
+                    end: span.start + token.end,
                 });
             }
         }

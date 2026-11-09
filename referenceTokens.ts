@@ -40,6 +40,13 @@ export function findReferenceToken(lineText: string, character: number): Referen
 }
 
 /** Every token in `text`, in order. */
+export function referenceTokens(text: string): ReferenceToken[] {
+    const out: ReferenceToken[] = [];
+    forEachReferenceToken(text, token => out.push(token));
+    return out;
+}
+
+/** Every token in `text`, in order. */
 export function forEachReferenceToken(
     text: string,
     callback: (token: ReferenceToken) => void

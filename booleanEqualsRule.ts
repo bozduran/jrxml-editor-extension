@@ -2,9 +2,12 @@
 // Pure style rule: prefer EQUALS($ref, true/false) / NOT(EQUALS(...)) over
 // == / != on Boolean values and over Boolean.TRUE/FALSE.equals(...).
 //
-// This used to be the only rule in the Best Practices view. It now runs as a
-// normal JRXML diagnostic (and quick fix) so the extension keeps one findings
-// surface. Kept vscode-free for unit testing.
+// The token grammar comes from referenceTokens, and the declaration scope is
+// passed by the caller (the diagnostics pipeline resolves it at the expression
+// offset), so a dataset shadow is judged by the declarations visible there.
+
+import { referenceTokens } from './referenceTokens';
+import type { ReferenceToken } from './referenceTokens';
 
 export const CODE = 'jrxml.booleanEquals';
 export const MESSAGE = 'Prefer EQUALS($ref, true/false) or NOT(EQUALS(...)) instead of == / != or a bare Boolean reference.';
@@ -35,6 +38,12 @@ export interface BooleanEqualsHit {
 
 type TypeSets = Record<ReferenceSigil, Set<string>>;
 
+const BOOL_EQUALS_BEFORE = /(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*$/;
+const BOOL_EQUALS_AFTER = /^\s*\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/;
+const COMPARE_AFTER = /^\s*(==|!=)\s*(true|false)\b/;
+const EXISTING_EQUALS_BEFORE = /EQUALS\s*\(\s*$/;
+const MEMBER_ACCESS_AFTER = /^\./;
+
 function isBoolean(type: string | null | undefined): boolean {
     if (!type) return false;
     const value = String(type).toLowerCase();
@@ -52,83 +61,87 @@ function buildTypeSet(
 
     for (const field of fields)         if (predicate(field.fullType || field.type)) sets.F.add(field.name);
     for (const parameter of parameters) if (predicate(parameter.fullType || parameter.type)) sets.P.add(parameter.name);
-    for (const variable of variables)   if (predicate(variable.fullType || variable.type)) sets.V.add(variable.name);
+    for (const variable of variables)   if (predicate(parameterType(variable))) sets.V.add(variable.name);
     return sets;
+}
+
+function parameterType(declaration: TypeDeclaration): string | null | undefined {
+    return declaration.fullType || declaration.type;
+}
+
+function hit(start: number, end: number, replacement: string): BooleanEqualsHit {
+    return { start, end, label: `Replace with ${replacement}`, replacement };
 }
 
 /**
  * Find Boolean comparisons that should use the JasperReports EQUALS() helper.
- * `expression` is the raw expression text (CDATA markers removed) and
- * `declarations` the parsed report declarations.
+ *
+ * `declarations` is the fallback view (merged declarations); `scope`, when the
+ * caller can resolve one, overrides it so a dataset declaration shadows a
+ * report declaration with the same name.
  */
 export function checkBooleanEquals(
     expression: string,
-    declarations: Declarations
+    declarations: Declarations,
+    scope: Declarations | null = null
 ): BooleanEqualsHit[] {
     const expr = String(expression == null ? '' : expression);
-    const boolNames = buildTypeSet(declarations || {}, isBoolean);
+    const boolNames = buildTypeSet(scope || declarations || {}, isBoolean);
+    const tokens = referenceTokens(expr).filter(token =>
+        token.sigil !== 'R' && !token.bang && token.name && boolNames[token.sigil].has(token.name));
     const hits: BooleanEqualsHit[] = [];
+    const claimed = new Set<number>();
 
-    // Boolean.FALSE.equals($F{x}) and $F{x}.equals(Boolean.FALSE)
-    const boolEqualsRe = /(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*(\$(F|P|V)\{([\w.]+)\})\s*\)|(\$(F|P|V)\{([\w.]+)\})\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/g;
-    let match: RegExpExecArray | null;
-    while ((match = boolEqualsRe.exec(expr)) !== null) {
-        const full      = match[0];
-        const boolConst = match[1] || match[8];
-        const ref       = match[2] || match[5];
-        const sigil     = (match[3] || match[6]) as ReferenceSigil;
-        const name      = match[4] || match[7];
-        if (!boolNames[sigil].has(name)) continue;
+    const referenceText = (token: ReferenceToken): string => expr.slice(token.start, token.end);
 
-        const boolValue   = boolConst === 'TRUE' ? 'true' : 'false';
+    // Boolean.TRUE/FALSE.equals($F{x}) in both directions.
+    for (const token of tokens) {
+        const before = expr.slice(0, token.start);
+        const after = expr.slice(token.end);
+        const ref = referenceText(token);
+
+        const beforeMatch = BOOL_EQUALS_BEFORE.exec(before);
+        const afterMatch = BOOL_EQUALS_AFTER.exec(after);
+        // The prefix form must close immediately after the token.
+        const closeMatch = beforeMatch ? /^\s*\)/.exec(after) : null;
+        if (beforeMatch && !closeMatch) continue;
+        if (!beforeMatch && !afterMatch) continue;
+
+        const boolValue = (beforeMatch ? beforeMatch[1] : afterMatch?.[1]) === 'TRUE' ? 'true' : 'false';
         const replacement = `EQUALS(${ref}, ${boolValue})`;
-        hits.push({
-            start:       match.index,
-            end:         match.index + full.length,
-            label:       `Replace with ${replacement}`,
-            replacement,
-        });
+        const start = beforeMatch ? before.length - beforeMatch[0].length : token.start;
+        const suffix = afterMatch ? afterMatch[0].length : (closeMatch ? closeMatch[0].length : 0);
+        const end = token.end + suffix;
+        hits.push(hit(start, end, replacement));
+        claimed.add(token.start);
     }
 
-    // $F{x} == true|false  /  $F{x} != true|false
-    const compareRe = /(\$(F|P|V)\{([\w.]+)\})\s*(==|!=)\s*(true|false)/g;
-    while ((match = compareRe.exec(expr)) !== null) {
-        const [full, ref, sigilText, name, operator, boolValue] = match;
-        const sigil = sigilText as ReferenceSigil;
-        if (!boolNames[sigil].has(name)) continue;
+    // $F{x} == true|false and $F{x} != true|false.
+    for (const token of tokens) {
+        if (claimed.has(token.start)) continue;
+        const afterMatch = COMPARE_AFTER.exec(expr.slice(token.end));
+        if (!afterMatch) continue;
 
-        const inner       = `EQUALS(${ref}, ${boolValue})`;
-        const replacement = operator === '!=' ? `NOT(${inner})` : inner;
-        hits.push({
-            start:       match.index,
-            end:         match.index + full.length,
-            label:       `Replace with ${replacement}`,
-            replacement,
-        });
+        const ref = referenceText(token);
+        const inner = `EQUALS(${ref}, ${afterMatch[2]})`;
+        const replacement = afterMatch[1] === '!=' ? `NOT(${inner})` : inner;
+        hits.push(hit(token.start, token.end + afterMatch[0].length, replacement));
+        claimed.add(token.start);
     }
 
     // A bare Boolean reference used as a condition.
-    const bareRe = /(\$(F|P|V)\{([\w.]+)\})(?!\s*[=!<>])/g;
-    while ((match = bareRe.exec(expr)) !== null) {
-        const [full, ref, sigilText, name] = match;
-        const sigil = sigilText as ReferenceSigil;
-        if (!boolNames[sigil].has(name)) continue;
+    for (const token of tokens) {
+        if (claimed.has(token.start)) continue;
+        const before = expr.slice(0, token.start);
+        const after = expr.slice(token.end).trimStart();
+        if (EXISTING_EQUALS_BEFORE.test(before)) continue;
+        if (BOOL_EQUALS_BEFORE.test(before)) continue;
+        if (MEMBER_ACCESS_AFTER.test(after)) continue;
+        if (/^\s*[=!<>]/.test(after)) continue;
 
-        const before = expr.slice(0, match.index);
-        const after  = expr.slice(match.index + full.length).trimStart();
-        if (/EQUALS\s*\(\s*$/.test(before)) continue;
-        if (/(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\.equals\s*\(\s*$/.test(before)) continue;
-        if (/^\.equals\s*\(\s*(?:java\.lang\.)?Boolean\.(TRUE|FALSE)\s*\)/.test(after)) continue;
-        if (/^(==|!=)\s*(true|false)/.test(after)) continue;
-        if (/^\./.test(after)) continue; // member access, e.g. .booleanValue()
-
-        const replacement = `EQUALS(${ref}, true)`;
-        hits.push({
-            start:       match.index,
-            end:         match.index + full.length,
-            label:       `Replace with ${replacement}`,
-            replacement,
-        });
+        const ref = referenceText(token);
+        hits.push(hit(token.start, token.end, `EQUALS(${ref}, true)`));
+        claimed.add(token.start);
     }
 
     return hits;
