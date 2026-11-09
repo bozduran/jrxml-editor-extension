@@ -1,23 +1,161 @@
-// jrxmlParser.js
+// jrxmlParser.ts
 // Parses a .jrxml document and extracts declarations, references, and structure.
 // Results are cached per document version.
 
-const { scanXml } = require('./xmlspan');
-const { EXPRESSION_TAGS, REFERENCE_CONTAINERS } = require('./expressionTags');
-const { forEachReferenceToken } = require('./referenceTokens');
-const { languageOfScan } = require('./reportLanguage');
-const { REPORT_SECTIONS } = require('./jrxmlSections');
-const { bundleAttributeOfScan } = require('./resourceBundle');
-const { documentSource } = require('./reportSource');
+import { scanXml } from './xmlspan';
+import type { XmlNode, XmlScanResult } from './xmlspan';
+import { EXPRESSION_TAGS, REFERENCE_CONTAINERS } from './expressionTags';
+import { forEachReferenceToken } from './referenceTokens';
+import type { ReferenceSigil } from './referenceTokens';
+import { languageOfScan } from './reportLanguage';
+import type { ReportLanguage } from './reportLanguage';
+import { REPORT_SECTIONS } from './jrxmlSections';
+import { bundleAttributeOfScan } from './resourceBundle';
+import type { BundleAttribute } from './resourceBundle';
+import { documentSource } from './reportSource';
+import type { ReportSource, TextDocumentLike } from './reportSource';
 
-const cache = new Map();
+/** One report, dataset or group-level declaration. */
+export interface Declaration {
+    name: string;
+    type: string;
+    fullType: string;
+    typeSource?: 'declared' | 'inferred';
+    description: string;
+    offset: number;
+    end: number;
+    nameOffset: number;
+    isSystem?: boolean;
+}
 
-/**
- * @typedef {{ name:string, type:string, fullType:string, typeSource:'declared'|'inferred', description:string, offset:number, end:number, nameOffset:number, isSystem?:boolean }} Declaration
- * @typedef {{ sigil:string, name:string, offset:number, fromSubreport?:boolean }} Reference
- * @typedef {{ kind:string, name:string, offset:number, end:number, children:OutlineNode[] }} OutlineNode
- * @typedef {{ fields:Declaration[], parameters:Declaration[], variables:Declaration[], dataset:{fields:Declaration[],parameters:Declaration[],variables:Declaration[]}, datasets:{name:string,offset:number,end:number,fields:Declaration[],parameters:Declaration[],variables:Declaration[]}[], scopeRanges:{datasetName:string,start:number,end:number}[], allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[], groups:Declaration[], references:Reference[], resourceReferences:{name:string,offset:number,end:number}[], resourceBundle:{name:string,offset:number,length:number}|null, outline:OutlineNode[] }} ParseResult
- */
+/** A `$F`/`$P`/`$V` usage. Attribute-form references carry no `end`. */
+export interface Reference {
+    sigil: ReferenceSigil;
+    name: string;
+    offset: number;
+    end?: number;
+    fromSubreport?: boolean;
+    bang?: boolean;
+}
+
+/** A `$R{key}` usage inside an expression-bearing element. */
+export interface ResourceReference {
+    name: string;
+    offset: number;
+    end: number;
+}
+
+/** One node of the report outline tree. */
+export interface OutlineEntry {
+    kind: string;
+    name: string;
+    offset: number;
+    end: number;
+    children: OutlineEntry[];
+}
+
+/** One `<dataset>`/`<subDataset>` with its own declarations. */
+export interface DatasetDeclaration {
+    name: string;
+    nameOffset: number;
+    offset: number;
+    end: number;
+    fields: Declaration[];
+    parameters: Declaration[];
+    variables: Declaration[];
+}
+
+/** A span in which a dataset owns the visible declarations. */
+export interface ScopeRange {
+    datasetName: string;
+    start: number;
+    end: number;
+}
+
+export type ScopeKind = 'report' | 'dataset' | 'unknown';
+
+/** The declarations visible at one offset. */
+export interface DeclarationScope {
+    kind: ScopeKind;
+    dataset: DatasetDeclaration | null;
+    datasetName: string | null;
+    fields: Declaration[];
+    parameters: Declaration[];
+    variables: Declaration[];
+    allFields: Declaration[];
+    allParameters: Declaration[];
+    allVariables: Declaration[];
+}
+
+export type Scope = DeclarationScope;
+
+/** A declaration that repeats an earlier name within the same scope. */
+export interface DuplicateName {
+    kind: string;
+    name: string;
+    scope: string;
+    offset: number;
+    length: number;
+}
+
+/** Everything one parse pass extracts from a report source. */
+export interface ParseResult {
+    fields: Declaration[];
+    parameters: Declaration[];
+    variables: Declaration[];
+    dataset: {
+        fields: Declaration[];
+        parameters: Declaration[];
+        variables: Declaration[];
+    };
+    language: ReportLanguage;
+    resourceBundle: BundleAttribute | null;
+    datasets: DatasetDeclaration[];
+    scopeRanges: ScopeRange[];
+    allFields: Declaration[];
+    allParameters: Declaration[];
+    allVariables: Declaration[];
+    groups: Declaration[];
+    styles: Declaration[];
+    references: Reference[];
+    resourceReferences: ResourceReference[];
+    outline: OutlineEntry[];
+}
+
+type DeclarationTag = 'field' | 'parameter' | 'variable';
+
+interface DeclarationSets {
+    field: Set<number>;
+    parameter: Set<number>;
+    variable: Set<number>;
+}
+
+interface DatasetClassification {
+    name: string;
+    nameOffset: number;
+    offset: number;
+    end: number;
+    sets: DeclarationSets;
+}
+
+interface ScopeClassification {
+    report: DeclarationSets;
+    dataset: DeclarationSets;
+    datasets: DatasetClassification[];
+}
+
+/** A minimal span shape shared by declarations and datasets. */
+interface NameSpan {
+    name: string;
+    nameOffset: number;
+}
+
+interface CacheEntry {
+    version: number | undefined;
+    result: ParseResult;
+}
+
+const cache = new Map<string, CacheEntry>();
 
 const COMMON_TYPES = new Set([
     'String','Integer','Long','Double','Float','Boolean','Byte','Short','Character',
@@ -26,7 +164,10 @@ const COMMON_TYPES = new Set([
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-function parseDeclarations(document, providedScan = null) {
+function parseDeclarations(
+    document: TextDocumentLike,
+    providedScan: XmlScanResult | null = null
+): ParseResult {
     return parseReport(documentSource(document), providedScan);
 }
 
@@ -34,7 +175,10 @@ function parseDeclarations(document, providedScan = null) {
  * Parse a report source (text + identity + version). This is the headless
  * entry point; parseDeclarations is the VS Code document adapter.
  */
-function parseReport(source, providedScan = null) {
+function parseReport(
+    source: ReportSource | null | undefined,
+    providedScan: XmlScanResult | null = null
+): ParseResult {
     const id      = source && source.id != null ? String(source.id) : null;
     const version = source ? source.version : undefined;
     const cached  = id !== null ? cache.get(id) : null;
@@ -63,9 +207,9 @@ function parseReport(source, providedScan = null) {
     const dsParameters = filterScope(rawParameters, 'parameter', scopes, 'dataset');
     const dsVariables = filterScope(rawVariables,  'variable',  scopes, 'dataset');
 
-    const byOffset = (a, b) => a.offset - b.offset;
+    const byOffset = (a: Declaration, b: Declaration) => a.offset - b.offset;
 
-    const result = {
+    const result: ParseResult = {
         fields,
         parameters,
         variables,
@@ -103,12 +247,12 @@ function parseReport(source, providedScan = null) {
  * consumers can resolve a single scope instead of the merged union.
  * Returns null when the document cannot be scanned.
  */
-function classifyDeclarationScopes(scan) {
-    if (!scan || scan.error) return null;
+function classifyDeclarationScopes(scan: XmlScanResult | null): ScopeClassification | null {
+    if (!scan || scan.error || !scan.doc) return null;
 
     const report   = emptyDeclarationSets();
     const dataset  = emptyDeclarationSets();
-    const datasets = [];
+    const datasets: DatasetClassification[] = [];
 
     for (const node of scan.doc.walk()) {
         if (node.tag !== 'dataset' && node.tag !== 'subDataset') continue;
@@ -136,13 +280,16 @@ function classifyDeclarationScopes(scan) {
     return { report, dataset, datasets };
 }
 
-function emptyDeclarationSets() {
+function emptyDeclarationSets(): DeclarationSets {
     return { field: new Set(), parameter: new Set(), variable: new Set() };
 }
 
 /** The innermost dataset whose span contains `offset`, or null. */
-function containingDataset(datasets, offset) {
-    let best = null;
+function containingDataset(
+    datasets: readonly DatasetClassification[],
+    offset: number
+): DatasetClassification | null {
+    let best: DatasetClassification | null = null;
     for (const ds of datasets) {
         if (ds.offset <= offset && offset < ds.end && (!best || ds.offset >= best.offset)) best = ds;
     }
@@ -150,14 +297,24 @@ function containingDataset(datasets, offset) {
 }
 
 /** Keep only declarations whose start tag belongs to `scope`. */
-function filterScope(list, tag, scopes, scope) {
+function filterScope(
+    list: Declaration[],
+    tag: DeclarationTag,
+    scopes: ScopeClassification | null,
+    scope: 'report' | 'dataset'
+): Declaration[] {
     if (!scopes) return scope === 'report' ? list : [];
     const allowed = scopes[scope][tag];
     return list.filter(decl => allowed.has(decl.offset));
 }
 
 /** One entry per <dataset>/<subDataset>, with that dataset's declarations. */
-function buildDatasets(scopes, rawFields, rawParameters, rawVariables) {
+function buildDatasets(
+    scopes: ScopeClassification | null,
+    rawFields: Declaration[],
+    rawParameters: Declaration[],
+    rawVariables: Declaration[]
+): DatasetDeclaration[] {
     if (!scopes) return [];
     return scopes.datasets.map(ds => ({
         name:       ds.name,
@@ -176,9 +333,12 @@ function buildDatasets(scopes, rawFields, rawParameters, rawVariables) {
  * run dataset) while excluding the <datasetRun> element itself, whose
  * parameter/connection expressions are evaluated in the enclosing scope.
  */
-function buildScopeRanges(scan, scopes) {
-    const ranges = [];
-    if (!scan || scan.error || !scopes) return ranges;
+function buildScopeRanges(
+    scan: XmlScanResult | null,
+    scopes: ScopeClassification | null
+): ScopeRange[] {
+    const ranges: ScopeRange[] = [];
+    if (!scan || scan.error || !scan.doc || !scopes) return ranges;
 
     for (const ds of scopes.datasets) {
         ranges.push({ datasetName: ds.name, start: ds.offset, end: ds.end });
@@ -201,7 +361,7 @@ function buildScopeRanges(scan, scopes) {
 }
 
 /** True for the component that renders a dataset (list/table/crosstab). */
-function consumesDataset(run, parent) {
+function consumesDataset(run: XmlNode, parent: XmlNode): boolean {
     if (!run.attrValue('subDataset')) return false;
     const kind = parent.attrValue('kind') || '';
     return (parent.tag === 'component' || parent.tag === 'element') &&
@@ -209,8 +369,8 @@ function consumesDataset(run, parent) {
 }
 
 /** The dataset scope that owns `offset` when it is inside a scoped region. */
-function scopeRangeAt(parsed, offset) {
-    let best = null;
+function scopeRangeAt(parsed: ParseResult | null, offset: number): ScopeRange | null {
+    let best: ScopeRange | null = null;
     for (const range of (parsed && parsed.scopeRanges) || []) {
         if (offset < range.start || offset >= range.end) continue;
         if (!best || (range.end - range.start) < (best.end - best.start)) best = range;
@@ -225,13 +385,9 @@ function scopeRangeAt(parsed, offset) {
  * a list/table run scope, and `unknown` when a dataset run names a dataset that
  * is not defined in this file (the caller must not guess).
  *
- * @param {ParseResult} parsed
- * @param {number} offset document character offset; negative means report scope
- * @returns {{kind:'report'|'dataset'|'unknown', dataset:object|null, datasetName:string|null,
- *            fields:Declaration[], parameters:Declaration[], variables:Declaration[],
- *            allFields:Declaration[], allParameters:Declaration[], allVariables:Declaration[]}}
+ * @param offset document character offset; negative means report scope
  */
-function resolveDeclarationScope(parsed, offset) {
+function resolveDeclarationScope(parsed: ParseResult | null, offset: number): DeclarationScope {
     const range = scopeRangeAt(parsed, offset);
     if (!range) return reportScope(parsed);
 
@@ -257,7 +413,7 @@ function resolveDeclarationScope(parsed, offset) {
     };
 }
 
-function reportScope(parsed) {
+function reportScope(parsed: ParseResult | null): DeclarationScope {
     const fields     = (parsed && parsed.fields)     || [];
     const parameters = (parsed && parsed.parameters) || [];
     const variables  = (parsed && parsed.variables)  || [];
@@ -269,21 +425,21 @@ function reportScope(parsed) {
 }
 
 /** Drop the cached parse result for a single document (call when it closes). */
-function clearCache(uri) {
+function clearCache(uri: string | { toString(): string }): void {
     cache.delete(typeof uri === 'string' ? uri : uri.toString());
 }
 
 /** Drop every cached parse result. */
-function clearAllCaches() {
+function clearAllCaches(): void {
     cache.clear();
 }
 
 // ── Fields ────────────────────────────────────────────────────────────────────
 
-function extractFields(text) {
-    const results = [];
+function extractFields(text: string): Declaration[] {
+    const results: Declaration[] = [];
     const tagRe = /<field(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/field>)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = tagRe.exec(text)) !== null) {
         const attrs  = m[1] || '';
         const inner  = m[2] || '';
@@ -311,14 +467,14 @@ function extractFields(text) {
 
 // ── Parameters ────────────────────────────────────────────────────────────────
 
-function extractParameters(text, skipSubreports = true) {
-    const results = [];
+function extractParameters(text: string, skipSubreports = true): Declaration[] {
+    const results: Declaration[] = [];
     // Only needed on the whole-document fallback: when the scanner is
     // available, scope classification drops every nested <parameter> instead.
     const subreportRanges = skipSubreports ? buildSubreportRanges(text) : null;
 
     const tagRe = /<parameter(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/parameter>)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = tagRe.exec(text)) !== null) {
         // Skip parameters that are nested inside a subreport element
         if (subreportRanges && inSubreportRange(m.index, subreportRanges)) continue;
@@ -353,10 +509,10 @@ function extractParameters(text, skipSubreports = true) {
 
 // ── Variables ─────────────────────────────────────────────────────────────────
 
-function extractVariables(text) {
-    const results = [];
+function extractVariables(text: string): Declaration[] {
+    const results: Declaration[] = [];
     const tagRe = /<variable(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/variable>)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = tagRe.exec(text)) !== null) {
         const attrs = m[1] || '';
         const inner = m[2] || '';
@@ -386,10 +542,10 @@ function extractVariables(text) {
 
 // ── Groups ────────────────────────────────────────────────────────────────────
 
-function extractGroups(text) {
-    const results = [];
+function extractGroups(text: string): Declaration[] {
+    const results: Declaration[] = [];
     const tagRe = /<group(\s[^>]*?)(?:\/>|>[\s\S]*?<\/group>)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = tagRe.exec(text)) !== null) {
         const attrs = m[1] || '';
         const named = readName(m, 'group', attrs);
@@ -410,10 +566,10 @@ function extractGroups(text) {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-function extractStyles(text) {
-    const results = [];
+function extractStyles(text: string): Declaration[] {
+    const results: Declaration[] = [];
     const tagRe = /<style(\s[^>]*?)(?:\/>|>([\s\S]*?)<\/style>)/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = tagRe.exec(text)) !== null) {
         const attrs = m[1] || '';
         const named = readName(m, 'style', attrs);
@@ -438,15 +594,12 @@ function extractStyles(text) {
  * Every declaration that repeats an earlier name within the same scope.
  * Report and dataset scopes are checked separately: a dataset field may share
  * its name with a master field, but not with another field of the same dataset.
- *
- * @param {ParseResult} parsed
- * @returns {{kind:string,name:string,scope:string,offset:number,length:number}[]}
  */
-function findDuplicateNames(parsed) {
-    const duplicates = [];
+function findDuplicateNames(parsed: ParseResult): DuplicateName[] {
+    const duplicates: DuplicateName[] = [];
 
-    const check = (kind, list, scope) => {
-        const seen = new Set();
+    const check = (kind: string, list: readonly NameSpan[] | null | undefined, scope: string) => {
+        const seen = new Set<string>();
         for (const declaration of list || []) {
             if (!declaration.name || typeof declaration.nameOffset !== 'number') continue;
             if (seen.has(declaration.name)) {
@@ -481,7 +634,7 @@ function findDuplicateNames(parsed) {
     return duplicates;
 }
 
-function insideAnyDataset(parsed, offset) {
+function insideAnyDataset(parsed: ParseResult, offset: number): boolean {
     return (parsed.datasets || []).some(dataset =>
         dataset.offset <= offset && offset < dataset.end);
 }
@@ -497,9 +650,9 @@ function insideAnyDataset(parsed, offset) {
 // a nested subreport <parameter>) have no `end`.
 
 
-function extractReferences(scan) {
-    const results = [];
-    if (!scan || scan.error) return results;
+function extractReferences(scan: XmlScanResult | null): Reference[] {
+    const results: Reference[] = [];
+    if (!scan || scan.error || !scan.doc) return results;
 
     for (const node of scan.doc.walk()) {
         if (REFERENCE_CONTAINERS.has(node.tag)) {
@@ -523,7 +676,7 @@ function extractReferences(scan) {
 }
 
 /** Scan the plain-text/CDATA spans of one expression-bearing element. */
-function addTextNodeReferences(node, results) {
+function addTextNodeReferences(node: XmlNode, results: Reference[]): void {
     for (const span of node.textNodes) {
         forEachReferenceToken(span.text, token => {
             if (token.sigil === 'R' || !token.name) return;
@@ -540,7 +693,12 @@ function addTextNodeReferences(node, results) {
 }
 
 /** A name attribute that behaves like a reference but has no `$X{}` token. */
-function addAttributeReference(results, sigil, node, attribute) {
+function addAttributeReference(
+    results: Reference[],
+    sigil: ReferenceSigil,
+    node: XmlNode,
+    attribute: string
+): void {
     const attr = node.attr(attribute);
     if (!attr || !attr.value) return;
     results.push({
@@ -551,7 +709,7 @@ function addAttributeReference(results, sigil, node, attribute) {
     });
 }
 
-function insideSubreport(node) {
+function insideSubreport(node: XmlNode): boolean {
     return node.ancestors().some(ancestor =>
         ancestor.tag === 'subreport' ||
         ((ancestor.tag === 'element' || ancestor.tag === 'component') &&
@@ -563,16 +721,16 @@ function insideSubreport(node) {
 const RESOURCE_REFERENCE_RE = /\$R\{([\w.\-]+)\}/g;
 
 /** `$R{key}` tokens inside expression-bearing elements (for missing-key checks). */
-function extractResourceReferences(scan) {
-    const results = [];
-    if (!scan || scan.error) return results;
+function extractResourceReferences(scan: XmlScanResult | null): ResourceReference[] {
+    const results: ResourceReference[] = [];
+    if (!scan || scan.error || !scan.doc) return results;
 
     for (const node of scan.doc.walk()) {
         if (!REFERENCE_CONTAINERS.has(node.tag)) continue;
 
         for (const span of node.textNodes) {
             RESOURCE_REFERENCE_RE.lastIndex = 0;
-            let match;
+            let match: RegExpExecArray | null;
             while ((match = RESOURCE_REFERENCE_RE.exec(span.text)) !== null) {
                 const offset = span.start + match.index;
                 results.push({
@@ -595,20 +753,25 @@ const CLASSIC_ELEMENTS = new Set([
     'break',
 ]);
 
+interface OutlineDeclarations {
+    fields?: readonly Declaration[];
+    parameters?: readonly Declaration[];
+    variables?: readonly Declaration[];
+}
+
 /**
  * Build the outline from the scanner tree: report → declarations → datasets →
  * groups (with header/footer bands) → bands with every element kind → styles.
- *
- * @param {{doc:object|null,error:string|null}} scan
- * @param {{fields?:Declaration[],parameters?:Declaration[],variables?:Declaration[]}} declarations
- * @returns {OutlineNode[]}
  */
-function extractOutline(scan, declarations = {}) {
-    if (!scan || scan.error) return [];
+function extractOutline(
+    scan: XmlScanResult | null,
+    declarations: OutlineDeclarations = {}
+): OutlineEntry[] {
+    if (!scan || scan.error || !scan.doc) return [];
     const root = scan.doc.root;
     if (root.tag !== 'jasperReport') return [];
 
-    const reportNode = {
+    const reportNode: OutlineEntry = {
         kind: 'report',
         name: root.attrValue('name') || 'Report',
         offset: root.startTag,
@@ -617,7 +780,7 @@ function extractOutline(scan, declarations = {}) {
     };
 
     // ── Declarations ─────────────────────────────────────────────────────────
-    const declChildren = [];
+    const declChildren: OutlineEntry[] = [];
     for (const field of declarations.fields || []) {
         declChildren.push(leaf('field', `${field.name} : ${field.type}`, field));
     }
@@ -670,15 +833,21 @@ function extractOutline(scan, declarations = {}) {
     return [reportNode];
 }
 
-function nodeSpan(node) {
+function nodeSpan(node: XmlNode): { offset: number; end: number } {
     return { offset: node.startTag, end: node.end };
 }
 
-function leaf(kind, name, span) {
+function leaf(kind: string, name: string, span: { offset: number; end: number }): OutlineEntry {
     return { kind, name, offset: span.offset, end: span.end, children: [] };
 }
 
-function container(kind, name, children, offset, end) {
+function container(
+    kind: string,
+    name: string,
+    children: OutlineEntry[],
+    offset?: number,
+    end?: number
+): OutlineEntry {
     return {
         kind,
         name,
@@ -688,9 +857,9 @@ function container(kind, name, children, offset, end) {
     };
 }
 
-function datasetNode(dataset) {
+function datasetNode(dataset: XmlNode): OutlineEntry {
     const name = dataset.attrValue('name') || 'Dataset';
-    const children = [];
+    const children: OutlineEntry[] = [];
 
     for (const child of dataset.children) {
         if (child.tag === 'field' || child.tag === 'parameter' || child.tag === 'variable') {
@@ -709,9 +878,9 @@ function datasetNode(dataset) {
     };
 }
 
-function groupNode(group) {
+function groupNode(group: XmlNode): OutlineEntry {
     const name = group.attrValue('name') || 'Group';
-    const children = [];
+    const children: OutlineEntry[] = [];
 
     for (const part of group.children.filter(child =>
         child.tag === 'groupHeader' || child.tag === 'groupFooter')) {
@@ -732,7 +901,7 @@ function groupNode(group) {
     };
 }
 
-function bandNode(node, label) {
+function bandNode(node: XmlNode, label: string): OutlineEntry {
     return {
         kind: 'band',
         name: label,
@@ -743,8 +912,8 @@ function bandNode(node, label) {
 }
 
 /** Top-level elements inside a band/frame, with nested elements as children. */
-function elementsIn(containerNode) {
-    const nodes = [];
+function elementsIn(containerNode: XmlNode): OutlineEntry[] {
+    const nodes: OutlineEntry[] = [];
 
     for (const child of containerNode.children) {
         if (isElementNode(child)) nodes.push(elementNode(child));
@@ -753,13 +922,13 @@ function elementsIn(containerNode) {
     return nodes;
 }
 
-function isElementNode(node) {
+function isElementNode(node: XmlNode): boolean {
     if (node.tag === 'element') return true;
     return CLASSIC_ELEMENTS.has(node.tag)
         && node.children.some(child => child.tag === 'reportElement');
 }
 
-function elementNode(node) {
+function elementNode(node: XmlNode): OutlineEntry {
     return {
         kind: node.tag === 'element' ? (node.attrValue('kind') || 'element') : node.tag,
         name: elementLabel(node),
@@ -769,7 +938,7 @@ function elementNode(node) {
     };
 }
 
-function elementLabel(node) {
+function elementLabel(node: XmlNode): string {
     const kind = node.tag === 'element' ? (node.attrValue('kind') || 'element') : node.tag;
     const expression = node.children.find(child => EXPRESSION_TAGS.includes(child.tag));
     const expressionText = expression ? expression.textContent().trim() : '';
@@ -782,14 +951,14 @@ function elementLabel(node) {
     return kind;
 }
 
-function truncateLabel(text) {
+function truncateLabel(text: string): string {
     const singleLine = text.replace(/\s+/g, ' ').trim();
     return singleLine.length > 60 ? `${singleLine.slice(0, 57)}…` : singleLine;
 }
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
 
-function escapeRegExp(str) {
+function escapeRegExp(str: string): string {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
@@ -798,7 +967,7 @@ function escapeRegExp(str) {
  * longer attribute name). Returns `{ value, valueOffset }` where `valueOffset`
  * is relative to the start of `attrs`, or null.
  */
-function matchAttr(attrs, attrName) {
+function matchAttr(attrs: string, attrName: string): { value: string; valueOffset: number } | null {
     const re = new RegExp(`(?:^|\\s)${escapeRegExp(attrName)}\\s*=\\s*(["'])([^"']*)\\1`);
     const m  = re.exec(attrs);
     if (!m) return null;
@@ -811,22 +980,27 @@ function matchAttr(attrs, attrName) {
  * offset in the document. Works for both single- and double-quoted values.
  * `tagName` is needed because the attribute group starts right after `<tag`.
  */
-function readName(match, tagName, attrs) {
+function readName(
+    match: RegExpExecArray,
+    tagName: string,
+    attrs: string
+): { name: string; nameOffset: number } | null {
     const nameAttr = matchAttr(attrs, 'name');
     if (!nameAttr || !nameAttr.value) return null;
     const attrsStart = match.index + 1 + tagName.length;
     return { name: nameAttr.value, nameOffset: attrsStart + nameAttr.valueOffset };
 }
 
-function extractTagContent(inner, tagName) {
+function extractTagContent(inner: string, tagName: string): string {
     const re = new RegExp(`<${escapeRegExp(tagName)}[^>]*>([\\s\\S]*?)<\\/${escapeRegExp(tagName)}>`);
     const m  = re.exec(inner);
     return m ? m[1] : '';
 }
 
-function shortType(fullType) {
+function shortType(fullType: string): string {
     if (!fullType) return 'Object';
-    const last = fullType.split('.').pop();
+    const parts = fullType.split('.');
+    const last = parts[parts.length - 1];
     return COMMON_TYPES.has(last) ? last : fullType;
 }
 
@@ -840,12 +1014,12 @@ function shortType(fullType) {
  *   Classic:  <subreport>...</subreport>
  *   New JRXL: <element kind="subreport" ...>...</element>
  */
-function buildSubreportRanges(text) {
-    const ranges = [];
+function buildSubreportRanges(text: string): [number, number][] {
+    const ranges: [number, number][] = [];
 
     // Classic format: <subreport>...</subreport>
     const classicRe = /<subreport[\s>][\s\S]*?<\/subreport>/g;
-    let m;
+    let m: RegExpExecArray | null;
     while ((m = classicRe.exec(text)) !== null) {
         ranges.push([m.index, m.index + m[0].length]);
     }
@@ -910,11 +1084,11 @@ function buildSubreportRanges(text) {
 }
 
 /** Return true if offset falls inside any of the given ranges */
-function inSubreportRange(offset, ranges) {
+function inSubreportRange(offset: number, ranges: readonly [number, number][]): boolean {
     return ranges.some(([s, e]) => offset >= s && offset < e);
 }
 
-module.exports = {
+export {
     parseDeclarations,
     parseReport,
     resolveDeclarationScope,

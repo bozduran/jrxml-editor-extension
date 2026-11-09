@@ -1,12 +1,13 @@
-// outlineProvider.js
+// outlineProvider.ts
 // Provides the report structure tree in VS Code's Outline panel (and breadcrumbs).
 // Shows: Report → Declarations (fields/params/vars) → Bands → Groups
 
-const vscode = require('vscode');
-const { parseDeclarations } = require('./jrxmlParser');
+import * as vscode from 'vscode';
+import { parseDeclarations } from './jrxmlParser';
+import type { OutlineEntry } from './jrxmlParser';
 
 // Map our kind strings to VS Code SymbolKind icons
-const KIND_MAP = {
+const KIND_MAP: Readonly<Record<string, vscode.SymbolKind>> = {
     report:     vscode.SymbolKind.File,
     group:      vscode.SymbolKind.Module,
     band:       vscode.SymbolKind.Namespace,
@@ -31,17 +32,16 @@ const KIND_MAP = {
 };
 
 /**
- * Convert our internal OutlineNode tree into VS Code DocumentSymbol tree.
+ * Convert our internal OutlineEntry tree into VS Code DocumentSymbol tree.
  *
  * Every node carries an explicit `[offset, end]` span so that a parent's range
  * contains its children's ranges — VS Code rejects symbol trees that violate
  * this, and selection/breadcrumb navigation depends on it.
- *
- * @param {import('./jrxmlParser').OutlineNode[]} nodes
- * @param {vscode.TextDocument} document
- * @returns {vscode.DocumentSymbol[]}
  */
-function nodesToSymbols(nodes, document) {
+function nodesToSymbols(
+    nodes: readonly OutlineEntry[],
+    document: vscode.TextDocument
+): vscode.DocumentSymbol[] {
     return nodes.map(node => {
         const start = document.positionAt(node.offset);
         const end   = document.positionAt(Math.max(node.offset, node.end ?? node.offset));
@@ -67,7 +67,7 @@ function nodesToSymbols(nodes, document) {
 const provider = vscode.languages.registerDocumentSymbolProvider(
     { language: 'jrxml' },
     {
-        provideDocumentSymbols(document) {
+        provideDocumentSymbols(document: vscode.TextDocument): vscode.DocumentSymbol[] {
             try {
                 const parsed = parseDeclarations(document);
                 return nodesToSymbols(parsed.outline, document);
@@ -79,4 +79,4 @@ const provider = vscode.languages.registerDocumentSymbolProvider(
     }
 );
 
-module.exports = { provider, nodesToSymbols };
+export { provider, nodesToSymbols };

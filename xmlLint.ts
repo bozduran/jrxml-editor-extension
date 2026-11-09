@@ -1,4 +1,4 @@
-// xmlLint.js
+// xmlLint.ts
 // Structural lint rules ported from the myhooks pre-commit hook's `lint` step.
 //
 // Pure and vscode-free: takes document text, returns plain findings with
@@ -12,16 +12,17 @@
 // Findings are emitted in document order; for one element the rule order matches
 // the hook (markup, then removeLineWhenBlank).
 
-const { scanXml } = require('./xmlspan');
-const { EXPRESSION_ELEMENTS, contentOf } = require('./xmlRules');
-const { checkNullDereference } = require('./lintNullDeref');
+import { scanXml } from './xmlspan';
+import type { XmlNode, XmlScanResult } from './xmlspan';
+import { EXPRESSION_ELEMENTS, contentOf } from './xmlRules';
+import { checkNullDereference } from './lintNullDeref';
 
 const RULE = {
     constantPrintWhen:        'jrxml.lint.constantPrintWhen',
     removeLineWhenBlank:      'jrxml.lint.removeLineWhenBlank',
     markupTagWithoutMarkup:   'jrxml.lint.markupTagWithoutMarkup',
     uncheckedNullDereference: 'jrxml.lint.uncheckedNullDereference',
-};
+} as const;
 
 // HTML / styled-text tags recognised by the markup rule.
 const MARKUP_TAGS = [
@@ -36,22 +37,48 @@ const MARKUP_TAG_RE = new RegExp(
     'i'
 );
 
-/**
- * @typedef {{ rule:string, code:string, message:string, offset:number, length:number }} LintFinding
- */
+/** One lint finding with its document span. */
+export interface LintFinding {
+    rule: string;
+    code: string;
+    message: string;
+    offset: number;
+    length: number;
+}
+
+/** The rule switches the diagnostics provider passes, all on by default. */
+export interface LintEnabled {
+    constantPrintWhen?: boolean;
+    removeLineWhenBlank?: boolean;
+    markupTagWithoutMarkup?: boolean;
+    uncheckedNullDereference?: boolean;
+}
+
+export interface LintResult {
+    findings: LintFinding[];
+    error: string | null;
+}
+
+/** A string or text-block literal found in a Java expression. */
+export interface StringLiteral {
+    start: number;
+    end: number;
+    raw: string;
+    kind: 'string' | 'textblock';
+}
 
 /**
  * Run the lint rules over a document.
- *
- * @param {string} text
- * @param {{ constantPrintWhen?:boolean, removeLineWhenBlank?:boolean, markupTagWithoutMarkup?:boolean }} [enabled]
- * @returns {{ findings: LintFinding[], error: string|null }}
  */
-function lintXml(text, enabled = {}, providedScan = null) {
+function lintXml(
+    text: string,
+    enabled: LintEnabled = {},
+    providedScan: XmlScanResult | null = null
+): LintResult {
     const scan = providedScan || scanXml(text);
-    if (scan.error) return { findings: [], error: scan.error };
+    if (scan.error || !scan.doc) return { findings: [], error: scan.error };
 
-    const findings = [];
+    const findings: LintFinding[] = [];
 
     for (const node of scan.doc.walk()) {
         if (node.tag === 'printWhenExpression' && enabled.constantPrintWhen !== false) {
@@ -134,7 +161,7 @@ function lintXml(text, enabled = {}, providedScan = null) {
     return { findings, error: null };
 }
 
-function makeFinding(code, message, node) {
+function makeFinding(code: string, message: string, node: XmlNode): LintFinding {
     return {
         rule:   code.slice('jrxml.lint.'.length),
         code,
@@ -145,7 +172,7 @@ function makeFinding(code, message, node) {
 }
 
 /** First recognised markup tag inside the string / text-block literals of `java`. */
-function firstMarkupTag(java) {
+function firstMarkupTag(java: string): string | null {
     for (const literal of findStringLiterals(java)) {
         const match = literal.raw.match(MARKUP_TAG_RE);
         if (match) {
@@ -160,12 +187,9 @@ function firstMarkupTag(java) {
  * Locate string and text-block literals in a Java expression. Escape-aware so a
  * quote inside a char literal cannot open a string. Char literals themselves are
  * never returned — the markup rule only inspects string/text-block content.
- *
- * @param {string} java
- * @returns {{ start:number, end:number, raw:string, kind:'string'|'textblock' }[]}
  */
-function findStringLiterals(java) {
-    const out = [];
+function findStringLiterals(java: string): StringLiteral[] {
+    const out: StringLiteral[] = [];
     const n = java.length;
     let i = 0;
 
@@ -226,4 +250,4 @@ function findStringLiterals(java) {
     return out;
 }
 
-module.exports = { lintXml, findStringLiterals, firstMarkupTag, MARKUP_TAGS, RULE };
+export { lintXml, findStringLiterals, firstMarkupTag, MARKUP_TAGS, RULE };

@@ -1,4 +1,4 @@
-// textCheck.js
+// textCheck.ts
 // Surfaces the text-check rules as diagnostics with a quick fix, so the
 // problems the formatter would silently fix are visible in the editor too:
 //
@@ -11,31 +11,47 @@
 // textcheck fix granularity; the diagnostic is anchored at the first change and
 // its fix rewrites that node.
 
-const { scanXml } = require('./xmlspan');
-const { EXPRESSION_ELEMENTS, cdataOf, markupOf, isTextContext } = require('./xmlRules');
-const { transformText, transformExpression } = require('./textRules');
+import { scanXml } from './xmlspan';
+import type { XmlScanResult } from './xmlspan';
+import { EXPRESSION_ELEMENTS, cdataOf, markupOf, isTextContext } from './xmlRules';
+import { transformText, transformExpression } from './textRules';
+import type { TextChange } from './textRules';
+import type { Edit } from './edits';
 
 const CODE = 'jrxml.textcheck';
 
-/**
- * @param {string} text
- * @returns {{ code:string, message:string, offset:number, length:number,
- *            edit:{start:number,end:number,replacement:string} }[]}
- */
-function collectTextCheckIssues(text, providedScan = null) {
-    const scan = providedScan || scanXml(text);
-    if (scan.error) return [];
+/** One text-check issue with its anchoring offset and rewrite. */
+export interface TextCheckIssue {
+    code: string;
+    message: string;
+    offset: number;
+    length: number;
+    edit: Edit;
+}
 
-    const issues = [];
+/** The quick fix for one issue. */
+export interface TextCheckFix {
+    title: string;
+    edit: Edit;
+}
+
+function collectTextCheckIssues(
+    text: string,
+    providedScan: XmlScanResult | null = null
+): TextCheckIssue[] {
+    const scan = providedScan || scanXml(text);
+    if (scan.error || !scan.doc) return [];
+
+    const issues: TextCheckIssue[] = [];
 
     for (const node of scan.doc.walk()) {
         // The hook only inspects CDATA bodies; plain element text is skipped.
         const cdata = cdataOf(node, text);
         if (!cdata) continue;
 
-        const changes  = [];
-        const findings = [];
-        let transformed;
+        const changes: TextChange[] = [];
+        const findings: string[] = [];
+        let transformed: string;
 
         if (node.tag === 'text') {
             transformed = transformText(cdata.content, markupOf(node), findings, changes);
@@ -64,7 +80,7 @@ function collectTextCheckIssues(text, providedScan = null) {
 }
 
 /** The quick fix for the issue anchored at `offset`, or null. */
-function fixForTextCheck(text, offset) {
+function fixForTextCheck(text: string, offset: number): TextCheckFix | null {
     const issue = collectTextCheckIssues(text).find(candidate => candidate.offset === offset);
     if (!issue) return null;
 
@@ -74,4 +90,4 @@ function fixForTextCheck(text, offset) {
     };
 }
 
-module.exports = { collectTextCheckIssues, fixForTextCheck, CODE };
+export { collectTextCheckIssues, fixForTextCheck, CODE };

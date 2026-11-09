@@ -1,4 +1,4 @@
-// lintNullDeref.js
+// lintNullDeref.ts
 // The hook's `unchecked-null-dereference` rule: warn when a $F/$P/$V reference
 // is the receiver of a method call without a dominating null check.
 //
@@ -15,10 +15,32 @@
 // offsets map back to the raw expression. Anything that is not parseable Java
 // (or a reference name that is not an identifier) is skipped, never guessed at.
 
-const { literalEnd } = require('./javaExpr');
-const { parseExpression, childExpressions } = require('./javaParser');
+import { literalEnd } from './javaExpr';
+import { parseExpression, childExpressions } from './javaParser';
+import type { BinaryNode, JavaExpressionNode, MethodCallNode } from './javaParser';
 
-const KINDS = new Set(['F', 'P', 'V']);
+export type NullDerefSigil = 'F' | 'P' | 'V';
+
+const KINDS: ReadonlySet<string> = new Set(['F', 'P', 'V']);
+
+function isSigil(value: string): value is NullDerefSigil {
+    return value === 'F' || value === 'P' || value === 'V';
+}
+
+/** The reference behind a masked `$K_name_` name. */
+export interface NullDerefReference {
+    kind: NullDerefSigil;
+    name: string;
+    key: string;
+    display: string;
+}
+
+/** One warning, with offsets relative to the checked expression. */
+export interface NullDerefWarning {
+    offset: number;
+    length: number;
+    message: string;
+}
 
 // ── Masking ───────────────────────────────────────────────────────────────────
 
@@ -27,7 +49,7 @@ const KINDS = new Set(['F', 'P', 'V']);
  * the text parses as Java. Literals are copied unchanged, so a reference inside
  * a string or char literal is never masked.
  */
-function maskReferences(code) {
+function maskReferences(code: string): string {
     let out = '';
     let i = 0;
     const n = code.length;
@@ -64,7 +86,7 @@ function maskReferences(code) {
     return out;
 }
 
-function isIdentifier(name) {
+function isIdentifier(name: string): boolean {
     if (!name || !/[A-Za-z_]/.test(name[0])) return false;
     for (let i = 1; i < name.length; i++) {
         if (!/[A-Za-z0-9_]/.test(name[i])) return false;
@@ -75,7 +97,7 @@ function isIdentifier(name) {
 // ── Reference recognition ─────────────────────────────────────────────────────
 
 /** The reference behind a masked `$K_name_` name, or null. */
-function refName(node) {
+function refName(node: JavaExpressionNode): NullDerefReference | null {
     const e = unwrap(node);
     if (e.kind !== 'name') return null;
 
@@ -83,7 +105,7 @@ function refName(node) {
     if (id.length < 5 || id[0] !== '$' || id[2] !== '_' || id[id.length - 1] !== '_') return null;
 
     const kind = id[1];
-    if (!KINDS.has(kind)) return null;
+    if (!isSigil(kind)) return null;
 
     const name = id.slice(3, id.length - 1);
     if (!name) return null;
@@ -91,13 +113,13 @@ function refName(node) {
     return { kind, name, key: `${kind}:${name}`, display: `$${kind}{${name}}` };
 }
 
-function unwrap(node) {
+function unwrap(node: JavaExpressionNode): JavaExpressionNode {
     let e = node;
     while (e && e.kind === 'enclosed') e = e.expr;
     return e;
 }
 
-function union(base, extra) {
+function union(base: ReadonlySet<string>, extra: ReadonlySet<string>): ReadonlySet<string> {
     if (extra.size === 0) return base;
     return new Set([...base, ...extra]);
 }
@@ -105,7 +127,7 @@ function union(base, extra) {
 // ── Null-check recognition ────────────────────────────────────────────────────
 
 /** `ref == null` / `ref != null`, either operand order. */
-function refComparedToNull(binary) {
+function refComparedToNull(binary: BinaryNode): NullDerefReference | null {
     const left = refName(binary.left);
     if (left && unwrap(binary.right).kind === 'null') return left;
 
@@ -115,14 +137,14 @@ function refComparedToNull(binary) {
     return null;
 }
 
-function isObjects(scope) {
+function isObjects(scope: JavaExpressionNode | null): boolean {
     if (!scope) return false;
     if (scope.kind === 'name') return scope.name === 'Objects';
     if (scope.kind === 'fieldAccess') return scope.name === 'Objects';
     return false;
 }
 
-function refWithNullArgument(args) {
+function refWithNullArgument(args: readonly JavaExpressionNode[]): NullDerefReference | null {
     if (args.length !== 2) return null;
 
     const first = refName(args[0]);
@@ -134,12 +156,12 @@ function refWithNullArgument(args) {
     return null;
 }
 
-function oneRefArgument(args) {
+function oneRefArgument(args: readonly JavaExpressionNode[]): NullDerefReference | null {
     return args.length === 1 ? refName(args[0]) : null;
 }
 
 /** True when the call asserts the reference is null. */
-function nullCheckCall(call) {
+function nullCheckCall(call: MethodCallNode): NullDerefReference | null {
     const name = call.name || '';
     const scope = call.scope || null;
 
@@ -152,13 +174,13 @@ function nullCheckCall(call) {
 }
 
 /** True when the call asserts the reference is non-null (Objects.nonNull). */
-function nonNullCall(call) {
+function nonNullCall(call: MethodCallNode): NullDerefReference | null {
     if (call.name !== 'nonNull' || !isObjects(call.scope || null)) return null;
     return oneRefArgument(call.args);
 }
 
 /** References guaranteed non-null when `node` is true. */
-function whenTrue(node) {
+function whenTrue(node: JavaExpressionNode): ReadonlySet<string> {
     const e = unwrap(node);
 
     if (e.kind === 'unary' && e.op === '!') return whenFalse(e.expr);
@@ -181,7 +203,7 @@ function whenTrue(node) {
 }
 
 /** References guaranteed non-null when `node` is false. */
-function whenFalse(node) {
+function whenFalse(node: JavaExpressionNode): ReadonlySet<string> {
     const e = unwrap(node);
 
     if (e.kind === 'unary' && e.op === '!') return whenTrue(e.expr);
@@ -205,7 +227,11 @@ function whenFalse(node) {
 
 // ── Flow walk ─────────────────────────────────────────────────────────────────
 
-function walk(node, nonNull, warnings) {
+function walk(
+    node: JavaExpressionNode,
+    nonNull: ReadonlySet<string>,
+    warnings: NullDerefWarning[]
+): void {
     const e = unwrap(node);
     if (!e) return;
 
@@ -260,18 +286,18 @@ function walk(node, nonNull, warnings) {
 }
 
 /**
- * @param {string} code raw expression text (no CDATA markers)
- * @returns {{ offset:number, length:number, message:string }[]} offsets relative to `code`
+ * @param code raw expression text (no CDATA markers)
+ * @returns warnings whose offsets are relative to `code`
  */
-function checkNullDereference(code) {
+function checkNullDereference(code: string): NullDerefWarning[] {
     if (!code || code.trim() === '') return [];
 
     const ast = parseExpression(maskReferences(code));
     if (!ast) return [];
 
-    const warnings = [];
+    const warnings: NullDerefWarning[] = [];
     walk(ast, new Set(), warnings);
     return warnings;
 }
 
-module.exports = { checkNullDereference, maskReferences, refName };
+export { checkNullDereference, maskReferences, refName };

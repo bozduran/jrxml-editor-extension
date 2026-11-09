@@ -1,4 +1,4 @@
-// xmlClear.js
+// xmlClear.ts
 // The hook's `clear` step: SQL->jsonql query migration, unused-declaration
 // deletion, description<->jsonql synchronization, and jsonql property
 // rename/removal/addition.
@@ -13,21 +13,24 @@
 // Only direct children of the report root are declarations, so dataset members
 // and subreport/scoped parameters are neither reported nor deleted here.
 
-const { scanXml } = require('./xmlspan');
-const { REFERENCE_CONTAINERS } = require('./expressionTags');
-const { forEachReferenceToken } = require('./referenceTokens');
-const {
+import { scanXml } from './xmlspan';
+import type { XmlNode, XmlScanResult } from './xmlspan';
+import { REFERENCE_CONTAINERS } from './expressionTags';
+import { forEachReferenceToken } from './referenceTokens';
+import {
     cdataOf,
     decodeXml,
     encodeXml,
     encodeAttribute,
-} = require('./xmlRules');
+} from './xmlRules';
+import type { ContentSpan } from './xmlRules';
+import type { Edit, Span } from './edits';
 
 const JSONQL_FIELD_PROPERTY = 'net.sf.jasperreports.jsonql.field.expression';
 const JSON_FIELD_PROPERTY   = 'net.sf.jasperreports.json.field.expression';
 
 /** Built-in parameters the hook never deletes. */
-const BUILTIN_PARAMETERS = new Set([
+const BUILTIN_PARAMETERS: ReadonlySet<string> = new Set([
     'REPORT_PARAMETERS_MAP', 'REPORT_DATA_SOURCE', 'REPORT_CONNECTION',
     'JASPER_REPORT', 'JASPER_REPORT_PARAMETERS_MAP', 'REPORT_CONTEXT',
     'REPORT_CLASS_LOADER', 'REPORT_VIRTUALIZER', 'REPORT_FORMAT_FACTORY',
@@ -40,7 +43,58 @@ const BUILTIN_PARAMETERS = new Set([
 
 // REFERENCE_CONTAINERS is shared with jrxmlParser so usage collection and
 // reference extraction can never disagree about which elements carry refs.
-const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
+const KIND_BY_SIGIL: Readonly<Record<'F' | 'P' | 'V', ClearDeclarationKind>> = {
+    F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE',
+};
+
+/** The declaration kinds the clear step may delete or annotate. */
+export type ClearDeclarationKind = 'FIELD' | 'PARAMETER' | 'VARIABLE';
+
+/** One report-root declaration, in the clear step's own model. */
+export interface ClearDeclaration {
+    kind: ClearDeclarationKind;
+    name: string;
+    start: number;
+    end: number;
+    endTag: number;
+    hasDescription: boolean;
+    descriptionText: string;
+    descriptionStart: number;
+    descriptionEnd: number;
+    descriptionIndent: string;
+    descriptionCdata: boolean;
+    hasJsonql: boolean;
+    jsonqlValue: string;
+    hasLegacy: boolean;
+    legacyStart: number;
+    legacyEnd: number;
+    legacyNameStart: number;
+    legacyNameEnd: number;
+}
+
+/** The report's top-level `<query>` and the spans a migration rewrites. */
+export interface ClearQuery {
+    language: string;
+    langValueStart: number;
+    langValueEnd: number;
+    bodyStart: number;
+    bodyEnd: number;
+    start: number;
+    end: number;
+}
+
+/** A query-migration fix carries the query instead of an edit. */
+export interface ClearFix {
+    description: string;
+    kind?: 'queryMigration';
+    query?: ClearQuery;
+    edit?: Edit;
+}
+
+export interface ClearFixGroup {
+    label: string;
+    fixes: ClearFix[];
+}
 
 // ── Reference collection (ground-truth style) ─────────────────────────────────
 
@@ -49,12 +103,11 @@ const KIND_BY_SIGIL = { F: 'FIELD', P: 'PARAMETER', V: 'VARIABLE' };
  * Returns null when the document cannot be scanned, so callers can tell
  * "nothing is used" apart from "usage could not be determined" and avoid
  * flagging every declaration as unused.
- * @returns {Set<string>|null}
  */
-function collectUsedNames(text, providedScan = null) {
-    const used = new Set();
+function collectUsedNames(text: string, providedScan: XmlScanResult | null = null): Set<string> | null {
+    const used = new Set<string>();
     const scan = providedScan || scanXml(text);
-    if (scan.error) return null;
+    if (scan.error || !scan.doc) return null;
 
     const root = scan.doc.root;
 
@@ -80,27 +133,31 @@ function collectUsedNames(text, providedScan = null) {
     return used;
 }
 
-function addReferences(body, used) {
+function addReferences(body: string, used: Set<string>): void {
     forEachReferenceToken(body, token => {
         if (token.sigil === 'R') return;
         addName(KIND_BY_SIGIL[token.sigil], token.name, used);
     });
 }
 
-function addName(kind, rawName, used) {
+function addName(
+    kind: ClearDeclarationKind,
+    rawName: string | null | undefined,
+    used: Set<string>
+): void {
     const name = decodeXml(rawName || '').trim();
     if (name) used.add(kind + ':' + name);
 }
 
 // ── Declaration model ─────────────────────────────────────────────────────────
 
-function lineStartOf(text, offset) {
+function lineStartOf(text: string, offset: number): number {
     let i = offset;
     while (i > 0 && text[i - 1] !== '\n') i--;
     return Math.max(0, i);
 }
 
-function descriptionTextSpan(description, text) {
+function descriptionTextSpan(description: XmlNode, text: string): ContentSpan {
     const cdata = cdataOf(description, text);
     if (cdata) return cdata;
 
@@ -109,16 +166,21 @@ function descriptionTextSpan(description, text) {
     return { start, end, content: decodeXml(text.slice(start, end).trim()) };
 }
 
-function parseDeclarations(text) {
+function parseDeclarations(text: string): ClearDeclaration[] {
     const scan = scanXml(text);
-    if (scan.error) return [];
+    if (scan.error || !scan.doc) return [];
 
-    const declarations = [];
+    const declarations: ClearDeclaration[] = [];
     for (const child of scan.doc.root.children) {
         if (child.tag !== 'parameter' && child.tag !== 'field' && child.tag !== 'variable') continue;
 
-        const decl = {
-            kind:              child.tag.toUpperCase(),
+        const kind: ClearDeclarationKind =
+            child.tag === 'field' ? 'FIELD'
+            : child.tag === 'parameter' ? 'PARAMETER'
+            : 'VARIABLE';
+
+        const decl: ClearDeclaration = {
+            kind,
             name:              decodeXml(child.attrValue('name') || ''),
             start:             child.startTag,
             end:               child.end,
@@ -177,9 +239,9 @@ function parseDeclarations(text) {
     return declarations;
 }
 
-function parseQuery(text) {
+function parseQuery(text: string): ClearQuery | null {
     const scan = scanXml(text);
-    if (scan.error) return null;
+    if (scan.error || !scan.doc) return null;
 
     for (const child of scan.doc.root.children) {
         if (child.tag !== 'query') continue;
@@ -206,7 +268,7 @@ function parseQuery(text) {
  * indentation and the whole line terminator (CRLF included) go with it;
  * otherwise only the element itself, so neighbours and explanations survive.
  */
-function removalSpan(text, start, end) {
+function removalSpan(text: string, start: number, end: number): Span {
     const lineStart = lineStartOf(text, start);
     let lineEnd = end;
     while (lineEnd < text.length && text[lineEnd] !== '\n' && text[lineEnd] !== '\r') lineEnd++;
@@ -223,24 +285,21 @@ function removalSpan(text, start, end) {
 
 // ── Discovery ─────────────────────────────────────────────────────────────────
 
-function jsonqlPropertyLine(decl) {
+function jsonqlPropertyLine(decl: ClearDeclaration): string {
     return `${decl.descriptionIndent}<property name="${JSONQL_FIELD_PROPERTY}" value="${encodeAttribute(decl.descriptionText)}"/>`;
 }
 
-/**
- * @returns {{ label:string, fixes:object[] }[]}
- */
-function discoverClearFixes(text) {
+function discoverClearFixes(text: string): ClearFixGroup[] {
     const scan = scanXml(text);
     if (scan.error) return [];
 
-    const groups = [];
+    const groups: ClearFixGroup[] = [];
     const declarations = parseDeclarations(text);
     const used = collectUsedNames(text);
     // `used === null` means the document could not be scanned; the top-of-
     // function `scan.error` check already covered that, but stay defensive so
     // a future change can never turn "unknown" into "delete everything".
-    const unusedFieldNames = new Set();
+    const unusedFieldNames = new Set<string>();
 
     // 1. SQL query migration (the edit depends on a free-form answer)
     const query = parseQuery(text);
@@ -252,7 +311,7 @@ function discoverClearFixes(text) {
     }
 
     // 2. Unused declarations
-    const unusedFixes = [];
+    const unusedFixes: ClearFix[] = [];
     if (used) {
         for (const decl of declarations) {
             if (decl.kind === 'PARAMETER' && BUILTIN_PARAMETERS.has(decl.name)) continue;
@@ -269,7 +328,7 @@ function discoverClearFixes(text) {
     if (unusedFixes.length) groups.push({ label: 'unused declarations', fixes: unusedFixes });
 
     // 3. Description <-> jsonql synchronization
-    const syncFixes = [];
+    const syncFixes: ClearFix[] = [];
     for (const decl of declarations) {
         if (decl.kind !== 'FIELD' || !decl.hasDescription || !decl.hasJsonql) continue;
         if (unusedFieldNames.has(decl.name)) continue;
@@ -287,7 +346,7 @@ function discoverClearFixes(text) {
     if (syncFixes.length) groups.push({ label: 'description sync', fixes: syncFixes });
 
     // 4. jsonql property rename / removal / addition
-    const jsonqlFixes = [];
+    const jsonqlFixes: ClearFix[] = [];
     for (const decl of declarations) {
         if (decl.kind !== 'FIELD' || unusedFieldNames.has(decl.name)) continue;
 
@@ -321,10 +380,14 @@ function discoverClearFixes(text) {
  * Edits for a query-migration fix once the user supplies the expression.
  * An empty answer applies nothing; the target language defaults to jsonql.
  */
-function queryMigrationEdits(query, expression, targetLanguage = 'jsonql') {
+function queryMigrationEdits(
+    query: ClearQuery | null | undefined,
+    expression: string,
+    targetLanguage = 'jsonql'
+): Edit[] {
     if (!query || !expression) return [];
 
-    const edits = [];
+    const edits: Edit[] = [];
     if (query.langValueStart >= 0 && query.langValueEnd > query.langValueStart) {
         edits.push({ start: query.langValueStart, end: query.langValueEnd, replacement: targetLanguage });
     }
@@ -335,7 +398,7 @@ function queryMigrationEdits(query, expression, targetLanguage = 'jsonql') {
     return edits;
 }
 
-module.exports = {
+export {
     discoverClearFixes,
     queryMigrationEdits,
     collectUsedNames,

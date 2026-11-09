@@ -1,26 +1,44 @@
-// settingsPanel.js
+// settingsPanel.ts
 // A dedicated webview panel for every jrxml.* setting, grouped by area.
 //
 // Toggles are bound live to workspace settings, so the panel, the native
 // Settings UI and the running features always agree. The document itself is
 // built by the vscode-free settingsPanelHtml module.
 
-const vscode = require('vscode');
-const { SECTION, SETTINGS_GROUPS, allSettings } = require('./settingsSchema');
-const { buildSettingsHtml, getNonce } = require('./settingsPanelHtml');
+import * as vscode from 'vscode';
+import { SECTION, SETTINGS_GROUPS, allSettings } from './settingsSchema';
+import { buildSettingsHtml, getNonce } from './settingsPanelHtml';
+
+/** One message posted by the settings webview. */
+interface SettingsMessage {
+    command?: string;
+    key: string;
+    value?: unknown;
+}
+
+function errorText(err: unknown): string {
+    return err instanceof Error && err.message ? err.message : String(err);
+}
 
 class SettingsPanel {
-    static currentPanel = undefined;
+    static currentPanel: SettingsPanel | undefined = undefined;
     static viewType     = 'jrxmlSettingsPanel';
 
-    constructor(panel) {
+    private readonly _panel: vscode.WebviewPanel;
+    private _disposables: vscode.Disposable[];
+
+    constructor(panel: vscode.WebviewPanel) {
         this._panel       = panel;
         this._disposables = [];
 
         this._update();
 
         this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-        this._panel.webview.onDidReceiveMessage(message => this._handleMessage(message), null, this._disposables);
+        this._panel.webview.onDidReceiveMessage(
+            (message: unknown) => this._handleMessage(message),
+            null,
+            this._disposables
+        );
 
         // Keep the panel in step with changes made in the native Settings UI.
         vscode.workspace.onDidChangeConfiguration(event => {
@@ -28,10 +46,11 @@ class SettingsPanel {
         }, null, this._disposables);
     }
 
-    static createOrShow() {
-        if (SettingsPanel.currentPanel) {
-            SettingsPanel.currentPanel._panel.reveal(vscode.ViewColumn.Active);
-            SettingsPanel.currentPanel._postState();
+    static createOrShow(): void {
+        const current = SettingsPanel.currentPanel;
+        if (current) {
+            current._panel.reveal(vscode.ViewColumn.Active);
+            current._postState();
             return;
         }
 
@@ -49,20 +68,20 @@ class SettingsPanel {
         SettingsPanel.currentPanel = new SettingsPanel(panel);
     }
 
-    _configuration() {
+    _configuration(): vscode.WorkspaceConfiguration {
         return vscode.workspace.getConfiguration(SECTION);
     }
 
-    _values() {
+    _values(): Record<string, unknown> {
         const config = this._configuration();
-        const values = {};
+        const values: Record<string, unknown> = {};
         for (const setting of allSettings()) {
             values[setting.key] = config.get(setting.key, setting.default);
         }
         return values;
     }
 
-    _update() {
+    _update(): void {
         this._panel.title = 'JRXML Settings';
         this._panel.webview.html = buildSettingsHtml({
             groups:  SETTINGS_GROUPS,
@@ -72,11 +91,12 @@ class SettingsPanel {
         });
     }
 
-    _postState() {
+    _postState(): void {
         this._panel.webview.postMessage({ command: 'state', values: this._values() });
     }
 
-    async _handleMessage(message) {
+    async _handleMessage(raw: unknown): Promise<void> {
+        const message = raw as SettingsMessage;
         try {
             switch (message.command) {
                 case 'update':
@@ -107,11 +127,11 @@ class SettingsPanel {
                     break;
             }
         } catch (err) {
-            vscode.window.showErrorMessage(`JRXML settings: ${err.message || err}`);
+            vscode.window.showErrorMessage(`JRXML settings: ${errorText(err)}`);
         }
     }
 
-    dispose() {
+    dispose(): void {
         SettingsPanel.currentPanel = undefined;
         this._panel.dispose();
         this._disposables.forEach(disposable => disposable.dispose());
@@ -119,10 +139,10 @@ class SettingsPanel {
     }
 }
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.openSettingsPanel', () => SettingsPanel.createOrShow())
     );
 }
 
-module.exports = { register, SettingsPanel };
+export { register, SettingsPanel };

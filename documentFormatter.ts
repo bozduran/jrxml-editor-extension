@@ -1,4 +1,4 @@
-// documentFormatter.js
+// documentFormatter.ts
 // Document formatting for .jrxml: the hook's `format` + `textcheck` steps.
 //
 // Returns the combined edits as a DocumentFormattingEditProvider (Format
@@ -6,11 +6,12 @@
 // path. Only format + textcheck run here — never the destructive clear/sort
 // steps.
 
-const vscode = require('vscode');
-const path   = require('path');
-const { combinedFormatterEdits } = require('./xmlRules');
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { combinedFormatterEdits } from './xmlRules';
+import type { EnabledSteps } from './xmlRules';
 
-function readSettings() {
+function readSettings(): EnabledSteps {
     const cfg = vscode.workspace.getConfiguration('jrxml');
     return {
         reportName:   cfg.get('format.reportName', true),
@@ -22,17 +23,14 @@ function readSettings() {
 }
 
 /** File base name without extension — the expected `jasperReport/@name`. */
-function baseNameOf(document) {
+function baseNameOf(document: vscode.TextDocument): string {
     const name = path.basename(document.fileName);
     const dot  = name.lastIndexOf('.');
     return dot > 0 ? name.slice(0, dot) : name;
 }
 
-/**
- * Formatting edits for a document, or null when there is nothing to do.
- * @returns {vscode.TextEdit[]|null}
- */
-function computeEdits(document) {
+/** Formatting edits for a document, or null when there is nothing to do. */
+function computeEdits(document: vscode.TextDocument): vscode.TextEdit[] | null {
     if (!document.fileName.endsWith('.jrxml')) return null;
 
     const edits = combinedFormatterEdits(document.getText(), baseNameOf(document), readSettings());
@@ -49,7 +47,7 @@ function computeEdits(document) {
 const provider = vscode.languages.registerDocumentFormattingEditProvider(
     { language: 'jrxml' },
     {
-        provideDocumentFormattingEdits(document) {
+        provideDocumentFormattingEdits(document: vscode.TextDocument): vscode.TextEdit[] {
             return computeEdits(document) || [];
         }
     }
@@ -62,7 +60,7 @@ const fixAllKind = vscode.CodeActionKind.SourceFixAll.append('jrxml');
 const fixAllProvider = vscode.languages.registerCodeActionsProvider(
     { language: 'jrxml' },
     {
-        provideCodeActions(document) {
+        provideCodeActions(document: vscode.TextDocument): vscode.CodeAction[] {
             const edits = computeEdits(document);
             if (!edits) return [];
 
@@ -81,9 +79,9 @@ const fixAllProvider = vscode.languages.registerCodeActionsProvider(
 
 // ── Opt-in format on save ─────────────────────────────────────────────────────
 
-function registerFormatOnSave(context) {
+function registerFormatOnSave(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-        vscode.workspace.onWillSaveTextDocument(event => {
+        vscode.workspace.onWillSaveTextDocument((event: vscode.TextDocumentWillSaveEvent) => {
             const cfg = vscode.workspace.getConfiguration('jrxml');
             if (!cfg.get('formatOnSave', false)) return;
 
@@ -95,9 +93,9 @@ function registerFormatOnSave(context) {
 
 // ── "Fix all format and text issues" command ──────────────────────────────────
 
-function registerFixAllCommand(context) {
+function registerFixAllCommand(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.fixAllFormat', async () => {
+        vscode.commands.registerCommand('jrxml.fixAllFormat', async (): Promise<void> => {
             const editor = vscode.window.activeTextEditor;
             if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
                 vscode.window.showWarningMessage('Open a .jrxml file first.');
@@ -119,7 +117,7 @@ function registerFixAllCommand(context) {
     );
 }
 
-module.exports = {
+export {
     provider,
     fixAllProvider,
     registerFormatOnSave,

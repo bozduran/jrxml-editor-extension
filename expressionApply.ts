@@ -1,20 +1,36 @@
-// expressionApply.js
+// expressionApply.ts
 // Applies a new expression to the expression tag a panel was opened from.
 //
 // Both the expression editor panel and the If/Else builder panel use this, so
 // the target is always re-located from the live document text (never a stale
 // range) and the edit is a single undoable operation.
 
-const vscode = require('vscode');
-const { findTagReplacement } = require('./expressionUtils');
+import * as vscode from 'vscode';
+import { findTagReplacement } from './expressionUtils';
 
-/**
- * @param {import('vscode').TextEditor|undefined} editor
- * @param {{tagName:string,range:import('vscode').Range}} expressionResult
- * @param {string} newExpression
- * @returns {Promise<{ok:boolean, expressionResult?:object, reason?:string, severity?:'warning'|'error'}>}
- */
-async function applyExpressionToEditor(editor, expressionResult, newExpression) {
+/** The expression target a panel carries; only `tagName` is required. */
+export interface ExpressionTarget {
+    tagName: string;
+    range?: vscode.Range;
+    expression?: string;
+    fullMatch?: string;
+    innerStart?: number;
+    innerEnd?: number;
+}
+
+/** The outcome of applying an expression, with the refreshed target. */
+export interface ApplyExpressionResult {
+    ok: boolean;
+    expressionResult?: ExpressionTarget;
+    reason?: string;
+    severity?: 'warning' | 'error';
+}
+
+async function applyExpressionToEditor(
+    editor: vscode.TextEditor | undefined,
+    expressionResult: ExpressionTarget | null | undefined,
+    newExpression: string
+): Promise<ApplyExpressionResult> {
     if (!editor || !editor.document || editor.document.isClosed) {
         return { ok: false, severity: 'warning', reason: 'Source editor is no longer open.' };
     }
@@ -57,7 +73,7 @@ async function applyExpressionToEditor(editor, expressionResult, newExpression) 
         return { ok: false, severity: 'error', reason: 'Failed to apply expression.' };
     }
 
-    const updated = {
+    const updated: ExpressionTarget = {
         ...expressionResult,
         expression: newExpression,
         fullMatch: replacement.newTag,
@@ -70,4 +86,4 @@ async function applyExpressionToEditor(editor, expressionResult, newExpression) 
     return { ok: true, expressionResult: updated };
 }
 
-module.exports = { applyExpressionToEditor };
+export { applyExpressionToEditor };

@@ -1,22 +1,25 @@
-// tutorialPanel.js
+// tutorialPanel.ts
 // Host side of the built-in JRXML tutorial.
 //
 // The document is static HTML built by the vscode-free tutorialHtml module and
 // needs no scripts. Command links are enabled only for the commands the
 // tutorial actually uses, so a link can never reach an unrelated command.
 
-const vscode = require('vscode');
-const { buildTutorialHtml, TUTORIAL_COMMAND_URIS } = require('./tutorialHtml');
-const { getNonce } = require('./expressionPanelHtml');
+import * as vscode from 'vscode';
+import { buildTutorialHtml, TUTORIAL_COMMAND_URIS } from './tutorialHtml';
+import { getNonce } from './expressionPanelHtml';
 
 const VIEW_TYPE = 'jrxmlTutorial';
 const TITLE = 'JRXML Tutorial';
 
 class TutorialPanel {
-    static currentPanel = undefined;
+    static currentPanel: TutorialPanel | undefined = undefined;
     static viewType     = VIEW_TYPE;
 
-    constructor(panel) {
+    private readonly _panel: vscode.WebviewPanel;
+    private _disposables: vscode.Disposable[];
+
+    constructor(panel: vscode.WebviewPanel) {
         this._panel       = panel;
         this._disposables = [];
 
@@ -24,9 +27,10 @@ class TutorialPanel {
         this._render();
     }
 
-    static createOrShow() {
-        if (TutorialPanel.currentPanel) {
-            TutorialPanel.currentPanel._panel.reveal(vscode.ViewColumn.Active);
+    static createOrShow(): void {
+        const current = TutorialPanel.currentPanel;
+        if (current) {
+            current._panel.reveal(vscode.ViewColumn.Active);
             return;
         }
 
@@ -45,11 +49,11 @@ class TutorialPanel {
         TutorialPanel.currentPanel = new TutorialPanel(panel);
     }
 
-    _render() {
+    _render(): void {
         this._panel.webview.html = buildTutorialHtml({ nonce: getNonce() });
     }
 
-    dispose() {
+    dispose(): void {
         TutorialPanel.currentPanel = undefined;
         this._panel.dispose();
         this._disposables.forEach(disposable => disposable.dispose());
@@ -57,10 +61,10 @@ class TutorialPanel {
     }
 }
 
-function register(context) {
+function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.commands.registerCommand('jrxml.openTutorial', () => TutorialPanel.createOrShow())
     );
 }
 
-module.exports = { register, TutorialPanel };
+export { register, TutorialPanel };

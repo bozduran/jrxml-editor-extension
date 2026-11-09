@@ -1,4 +1,4 @@
-// evaluationOrder.js
+// evaluationOrder.ts
 // Reports variables that reference another variable declared *later* in the
 // same scope. JasperReports evaluates variables in declaration order, so a
 // forward reference yields a null/undefined value (or fails) at runtime.
@@ -11,14 +11,15 @@
 // Pure and vscode-free: takes document text, returns plain findings with
 // character offsets.
 
-const { scanXml } = require('./xmlspan');
-const { contentOf, decodeXml } = require('./xmlRules');
-const { BUILTIN_VARIABLE_NAMES } = require('./jasperBuiltins');
+import { scanXml } from './xmlspan';
+import type { XmlNode, XmlScanResult } from './xmlspan';
+import { contentOf, decodeXml } from './xmlRules';
+import { BUILTIN_VARIABLE_NAMES } from './jasperBuiltins';
 
 const CODE = 'jrxml.lint.variableOrder';
 
 /** Child elements that hold a variable's expression. */
-const EXPRESSION_CHILD_TAGS = new Set([
+const EXPRESSION_CHILD_TAGS: ReadonlySet<string> = new Set([
     'expression',
     'variableExpression',
     'initialValueExpression',
@@ -26,43 +27,48 @@ const EXPRESSION_CHILD_TAGS = new Set([
 
 const REFERENCE_RE = /\$V\{([^}]*)\}/g;
 
-/**
- * @typedef {{ code:string, message:string, offset:number, length:number,
- *             variable:string, referenced:string }} OrderFinding
- */
+/** A forward reference from one variable to a later one. */
+export interface OrderFinding {
+    code: string;
+    message: string;
+    offset: number;
+    length: number;
+    variable: string;
+    referenced: string;
+}
 
 /** Scope key for a variable node: 'report' or 'dataset:<startTag>'. */
-function scopeKeyOf(node, root) {
+function scopeKeyOf(node: XmlNode, root: XmlNode): string | null {
     const dataset = node.ancestors().find(a => a.tag === 'dataset' || a.tag === 'subDataset');
     if (dataset) return 'dataset:' + dataset.startTag;
     if (node.parent === root) return 'report';
     return null; // nested in a subreport etc. — not a declaration here
 }
 
-/**
- * @param {string} text
- * @returns {OrderFinding[]}
- */
-function checkVariableOrder(text, providedScan = null) {
+function checkVariableOrder(
+    text: string,
+    providedScan: XmlScanResult | null = null
+): OrderFinding[] {
     const scan = providedScan || scanXml(text);
-    if (scan.error) return [];
+    if (scan.error || !scan.doc) return [];
 
     const root = scan.doc.root;
-    const scopes = new Map(); // scopeKey -> variable nodes, document order
+    const scopes = new Map<string, XmlNode[]>(); // scopeKey -> variable nodes, document order
 
     for (const node of scan.doc.walk()) {
         if (node.tag !== 'variable') continue;
         const key = scopeKeyOf(node, root);
         if (!key) continue;
-        if (!scopes.has(key)) scopes.set(key, []);
-        scopes.get(key).push(node);
+        const list = scopes.get(key);
+        if (list) list.push(node);
+        else scopes.set(key, [node]);
     }
 
-    const findings = [];
+    const findings: OrderFinding[] = [];
 
     for (const variables of scopes.values()) {
         // First declaration wins for duplicate names.
-        const indexByName = new Map();
+        const indexByName = new Map<string, number>();
         variables.forEach((node, index) => {
             const name = decodeXml(node.attrValue('name') || '').trim();
             if (name && !indexByName.has(name)) indexByName.set(name, index);
@@ -78,7 +84,7 @@ function checkVariableOrder(text, providedScan = null) {
                 if (!content) continue;
 
                 REFERENCE_RE.lastIndex = 0;
-                let match;
+                let match: RegExpExecArray | null;
                 while ((match = REFERENCE_RE.exec(content.content)) !== null) {
                     const referenced = decodeXml(match[1]).trim();
                     if (!referenced || referenced === variableName) continue;
@@ -104,4 +110,4 @@ function checkVariableOrder(text, providedScan = null) {
     return findings;
 }
 
-module.exports = { checkVariableOrder, CODE };
+export { checkVariableOrder, CODE };

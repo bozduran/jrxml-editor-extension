@@ -1,4 +1,4 @@
-// xmlRules.js
+// xmlRules.ts
 // The hook's `format` and `textcheck` fix discovery, ported to the extension.
 //
 // format groups (in the hook's order):
@@ -13,25 +13,36 @@
 // Everything here is vscode-free and returns plain { start, end, replacement }
 // edits plus the hook's exact fix descriptions.
 
-const { scanXml } = require('./xmlspan');
-const { formatExpression } = require('./javaExpr');
-const { transformText, transformExpression } = require('./textRules');
+import { scanXml } from './xmlspan';
+import type { XmlNode } from './xmlspan';
+import { formatExpression } from './javaExpr';
+import { transformText, transformExpression } from './textRules';
+import type { Edit } from './edits';
 
 const CDATA_OPEN  = '<![CDATA[';
 const CDATA_CLOSE = ']]>';
 
 // The hook's expression-element set (§11).
-const EXPRESSION_ELEMENTS = new Set([
+const EXPRESSION_ELEMENTS: ReadonlySet<string> = new Set([
     'expression', 'defaultValueExpression', 'connectionExpression',
     'textFieldExpression', 'textExpression', 'patternExpression',
     'printWhenExpression', 'initialValueExpression', 'variableExpression',
     'groupExpression',
 ]);
 
-const POSITION_TYPE_KINDS = new Set(['textField', 'subreport']);
+const POSITION_TYPE_KINDS: ReadonlySet<string> = new Set(['textField', 'subreport']);
+
+/** The enabled steps; absent keys fall back to the hook's defaults. */
+export interface EnabledSteps {
+    reportName?: boolean;
+    positionType?: boolean;
+    textAdjust?: boolean;
+    expression?: boolean;
+    textcheck?: boolean;
+}
 
 /** Defaults mirror the hook's enabled steps. */
-const DEFAULTS = {
+const DEFAULTS: Required<EnabledSteps> = {
     reportName: true,
     positionType: true,
     textAdjust: true,
@@ -39,7 +50,26 @@ const DEFAULTS = {
     textcheck: true,
 };
 
-function withDefaults(enabled) {
+/** One discovered fix with its offset-based edit. */
+export interface RuleFix {
+    description: string;
+    edit: Edit;
+}
+
+/** A labelled group of fixes, in the hook's group order. */
+export interface RuleFixGroup {
+    label: string;
+    fixes: RuleFix[];
+}
+
+/** An element body span, CDATA markers excluded when present. */
+export interface ContentSpan {
+    start: number;
+    end: number;
+    content: string;
+}
+
+function withDefaults(enabled: EnabledSteps | null | undefined): Required<EnabledSteps> {
     return { ...DEFAULTS, ...(enabled || {}) };
 }
 
@@ -47,7 +77,7 @@ function withDefaults(enabled) {
 
 // Single-pass entity decoding: the five named entities plus numeric references.
 // Unknown or malformed references are left verbatim, matching the hook.
-function decodeXml(value) {
+function decodeXml(value: string): string {
     const text = String(value);
     if (!text.includes('&')) return text;
 
@@ -60,7 +90,7 @@ function decodeXml(value) {
         if (semi < 0 || semi - i > 12) { out += text[i]; i++; continue; }
 
         const name = text.slice(i + 1, semi);
-        let decoded = null;
+        let decoded: string | null = null;
         switch (name) {
             case 'amp':  decoded = '&';  break;
             case 'lt':   decoded = '<';  break;
@@ -85,7 +115,7 @@ function decodeXml(value) {
 }
 
 /** XML text encoding: the five entities. */
-function encodeXml(value) {
+function encodeXml(value: string): string {
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -95,7 +125,7 @@ function encodeXml(value) {
 }
 
 /** Encoding for a double-quoted XML attribute, including whitespace controls. */
-function encodeAttribute(value) {
+function encodeAttribute(value: string): string {
     return encodeXml(value)
         .replace(/\n/g, '&#10;')
         .replace(/\r/g, '&#13;')
@@ -103,7 +133,7 @@ function encodeAttribute(value) {
 }
 
 /** CDATA body of an element, or null when the element has none. */
-function cdataOf(node, text) {
+function cdataOf(node: XmlNode, text: string): ContentSpan | null {
     const from = node.startTagEnd;
     const to = node.endTag >= 0 ? node.endTag : node.end;
 
@@ -118,7 +148,7 @@ function cdataOf(node, text) {
 }
 
 /** CDATA body if present, otherwise the raw element text; null when empty. */
-function contentOf(node, text) {
+function contentOf(node: XmlNode, text: string): ContentSpan | null {
     const cdata = cdataOf(node, text);
     if (cdata) return cdata;
 
@@ -128,7 +158,7 @@ function contentOf(node, text) {
 }
 
 /** Nearest enclosing <element> markup value (raw), or ''. */
-function markupOf(node) {
+function markupOf(node: XmlNode): string {
     for (const ancestor of node.ancestors()) {
         if (ancestor.tag === 'element') {
             const attr = ancestor.attr('markup');
@@ -139,7 +169,7 @@ function markupOf(node) {
 }
 
 /** The hook's isRenderedTextContext plus its two unconditional elements. */
-function isTextContext(node) {
+function isTextContext(node: XmlNode): boolean {
     for (const ancestor of node.ancestors()) {
         if (ancestor.kind === 'textField' || ancestor.kind === 'staticText') return true;
     }
@@ -147,7 +177,7 @@ function isTextContext(node) {
 }
 
 /** Insert just after the first usable anchor attribute, else after the tag name. */
-function afterAttr(node, text, names) {
+function afterAttr(node: XmlNode, text: string, names: readonly string[]): number {
     for (const name of names) {
         const attr = node.attr(name);
         if (!attr) continue;
@@ -158,7 +188,7 @@ function afterAttr(node, text, names) {
 }
 
 /** Insert just before the tag close (`>` or `/>`). */
-function beforeClose(node, text) {
+function beforeClose(node: XmlNode, text: string): number {
     let pos = node.startTagEnd - 1;
     if (pos > node.startTag && text[pos - 1] === '/') pos--;
     return pos;
@@ -166,18 +196,19 @@ function beforeClose(node, text) {
 
 // ── format step ───────────────────────────────────────────────────────────────
 
-/**
- * @returns {{ label:string, fixes:{description:string, edit:{start:number,end:number,replacement:string}}[] }[]}
- */
-function discoverFormatFixes(text, baseName, enabledInput) {
+function discoverFormatFixes(
+    text: string,
+    baseName: string,
+    enabledInput?: EnabledSteps | null
+): RuleFixGroup[] {
     const enabled = withDefaults(enabledInput);
     const scan = scanXml(text);
-    if (scan.error) return [];
+    if (scan.error || !scan.doc) return [];
 
-    const names = [];
-    const positionTypes = [];
-    const textAdjusts = [];
-    const expressions = [];
+    const names: RuleFix[] = [];
+    const positionTypes: RuleFix[] = [];
+    const textAdjusts: RuleFix[] = [];
+    const expressions: RuleFix[] = [];
 
     const report = scan.doc.root;
 
@@ -251,7 +282,7 @@ function discoverFormatFixes(text, baseName, enabledInput) {
         }
     }
 
-    const groups = [];
+    const groups: RuleFixGroup[] = [];
     if (names.length)         groups.push({ label: 'report name', fixes: names });
     if (positionTypes.length) groups.push({ label: 'positionType', fixes: positionTypes });
     if (textAdjusts.length)   groups.push({ label: 'textAdjust', fixes: textAdjusts });
@@ -261,20 +292,22 @@ function discoverFormatFixes(text, baseName, enabledInput) {
 
 // ── textcheck step ────────────────────────────────────────────────────────────
 
-/** @returns {{ label:string, fixes:{description:string, edit:object}[] }[]} */
-function discoverTextcheckFixes(text, enabledInput) {
+function discoverTextcheckFixes(
+    text: string,
+    enabledInput?: EnabledSteps | null
+): RuleFixGroup[] {
     const enabled = withDefaults(enabledInput);
     const scan = scanXml(text);
-    if (scan.error || !enabled.textcheck) return [];
+    if (scan.error || !scan.doc || !enabled.textcheck) return [];
 
-    const fixes = [];
+    const fixes: RuleFix[] = [];
 
     for (const node of scan.doc.walk()) {
         const cdata = cdataOf(node, text);
         if (!cdata) continue;
 
-        const findings = [];
-        let transformed = null;
+        const findings: string[] = [];
+        let transformed: string;
 
         if (node.tag === 'text') {
             transformed = transformText(cdata.content, markupOf(node), findings);
@@ -302,14 +335,18 @@ function discoverTextcheckFixes(text, enabledInput) {
  * An expression body is formatted and then text-checked in a single edit so the
  * two steps never produce overlapping ranges.
  *
- * @returns {{start:number,end:number,replacement:string}[]} ascending, non-overlapping
+ * @returns ascending, non-overlapping edits
  */
-function combinedFormatterEdits(text, baseName, enabledInput) {
+function combinedFormatterEdits(
+    text: string,
+    baseName: string,
+    enabledInput?: EnabledSteps | null
+): Edit[] {
     const enabled = withDefaults(enabledInput);
     const scan = scanXml(text);
-    if (scan.error) return [];
+    if (scan.error || !scan.doc) return [];
 
-    const edits = [];
+    const edits: Edit[] = [];
     const report = scan.doc.root;
 
     if (enabled.reportName && report.tag === 'jasperReport') {
@@ -371,7 +408,7 @@ function combinedFormatterEdits(text, baseName, enabledInput) {
         .filter((edit, index, all) => index === 0 || edit.start >= all[index - 1].end);
 }
 
-module.exports = {
+export {
     discoverFormatFixes,
     discoverTextcheckFixes,
     combinedFormatterEdits,
