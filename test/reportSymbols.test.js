@@ -6,8 +6,8 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { parseDeclarations } = require('../jrxmlParser');
-const { resolveSymbol, occurrences, visibleDeclarations, declaredNames, declarationInAnyScope } = require('../reportSymbols');
+const { parseDeclarations } = require('../out/jrxmlParser');
+const { resolveSymbol, occurrences, visibleDeclarations, declaredNames, declarationInAnyScope } = require('../out/reportSymbols');
 
 let seq = 0;
 function parse(text) {

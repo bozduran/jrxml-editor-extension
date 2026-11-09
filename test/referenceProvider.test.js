@@ -34,7 +34,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-require('../referenceProvider');
+require('../out/referenceProvider');
 const provider = registered;
 
 function makeDocument(text) {

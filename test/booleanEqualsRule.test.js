@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { CODE, MESSAGE, checkBooleanEquals } = require('../booleanEqualsRule');
+const { CODE, MESSAGE, checkBooleanEquals } = require('../out/booleanEqualsRule');
 
 function declarations(overrides = {}) {
     return {

@@ -40,7 +40,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { nodesToSymbols } = require('../outlineProvider');
+const { nodesToSymbols } = require('../out/outlineProvider');
 
 function fakeDocument(text) {
     return {

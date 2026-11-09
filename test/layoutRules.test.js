@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const { checkLayout } = require('../layoutRules');
+const { checkLayout } = require('../out/layoutRules');
 
 function report(body, attrs = '') {
     return `<jasperReport name="R" pageWidth="595" pageHeight="842" columnWidth="555" `

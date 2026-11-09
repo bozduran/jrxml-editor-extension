@@ -5,7 +5,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { findInsertionPoint } = require('../declarationInsertion');
+const { findInsertionPoint } = require('../out/declarationInsertion');
 
 test('inserts after the last report-level declaration', () => {
     const text = `<jasperReport name="R">

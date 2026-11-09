@@ -10,7 +10,7 @@ const {
     parse,
     sortedChildren,
     overlaps,
-} = require('../xmlSort');
+} = require('../out/xmlSort');
 
 function fixture() {
     return fs.readFileSync(path.join(__dirname, 'fixtures', 'SortEdgeReport.jrxml'), 'utf8');

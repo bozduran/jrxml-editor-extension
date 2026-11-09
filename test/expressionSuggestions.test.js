@@ -9,7 +9,7 @@ const {
     buildExpressionSuggestions,
     suggestionOptions,
     plainFromSnippet,
-} = require('../expressionSuggestions');
+} = require('../out/expressionSuggestions');
 
 const DECLARATIONS = {
     allFields: [

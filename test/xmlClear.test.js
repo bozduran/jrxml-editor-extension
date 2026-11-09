@@ -11,8 +11,8 @@ const {
     collectUsedNames,
     removalSpan,
     BUILTIN_PARAMETERS,
-} = require('../xmlClear');
-const { applyEdits } = require('../edits');
+} = require('../out/xmlClear');
+const { applyEdits } = require('../out/edits');
 
 function fixture() {
     return fs.readFileSync(path.join(__dirname, 'fixtures', 'ClearEdgeReport.jrxml'), 'utf8');

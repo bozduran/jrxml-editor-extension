@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { formatExpression, literalEnd, maskLiteralsAndRefs } = require('../javaExpr');
+const { formatExpression, literalEnd, maskLiteralsAndRefs } = require('../out/javaExpr');
 
 test('spaces binary, ternary and comma exactly like the hook', () => {
     // Recorded from `java -jar bin/myhooks.jar format` on a sample report.

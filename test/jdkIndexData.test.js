@@ -15,7 +15,7 @@ const {
     sinceFor,
     ancestorSet,
     typeKey,
-} = require('../tools/gen-jdk-index');
+} = require('../out/tools/gen-jdk-index');
 
 const TYPES = index.types;
 

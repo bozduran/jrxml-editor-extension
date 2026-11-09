@@ -13,7 +13,7 @@ const {
     ambiguityOf,
     stats,
     clearCache,
-} = require('../jdkMemberIndex');
+} = require('../out/jdkMemberIndex');
 
 function names(result) {
     return result.methods.map(m => m.name);
@@ -172,7 +172,7 @@ test('JasperReports engine types complete, including their supertypes', () => {
 });
 
 test('built-in parameter types from jasperBuiltins all resolve or fail cleanly', () => {
-    const { BUILTIN_PARAMETERS } = require('../jasperBuiltins');
+    const { BUILTIN_PARAMETERS } = require('../out/jasperBuiltins');
     for (const parameter of BUILTIN_PARAMETERS) {
         const result = getMembers(parameter.type);
         if (result.resolved) {

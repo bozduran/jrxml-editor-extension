@@ -6,9 +6,9 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const { lintXml }        = require('../xmlLint');
-const { fixForFinding }  = require('../xmlLintFixes');
-const { applyEdits }     = require('../edits');
+const { lintXml }        = require('../out/xmlLint');
+const { fixForFinding }  = require('../out/xmlLintFixes');
+const { applyEdits }     = require('../out/edits');
 
 function findingFor(text, code) {
     const { findings, error } = lintXml(text);

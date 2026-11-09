@@ -5,8 +5,8 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { scanXml }           = require('../xmlspan');
-const { regions, regionAt, forEachRegion } = require('../expressionRegions');
+const { scanXml }           = require('../out/xmlspan');
+const { regions, regionAt, forEachRegion } = require('../out/expressionRegions');
 
 test('derives an expression region with its content span from the XML tree', () => {
     const text = `<jasperReport name="R">

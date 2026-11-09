@@ -8,7 +8,7 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const { insertVersionHeading } = require('../tools/update-changelog');
+const { insertVersionHeading } = require('../out/tools/update-changelog');
 
 const SAMPLE = [
     '# Change Log',

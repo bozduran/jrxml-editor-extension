@@ -51,7 +51,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-require('../definitionProvider');
+require('../out/definitionProvider');
 const provider = registered;
 
 let seq = 0;

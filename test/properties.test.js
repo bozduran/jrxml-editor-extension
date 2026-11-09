@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { parseProperties } = require('../properties');
+const { parseProperties } = require('../out/properties');
 
 const SAMPLE = [
     '# a comment',

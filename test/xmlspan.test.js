@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { scanXml, nodeAt, firstChild } = require('../xmlspan');
+const { scanXml, nodeAt, firstChild } = require('../out/xmlspan');
 
 test('captures element spans for open/close tags', () => {
     const text = '<r><child>hi</child></r>';

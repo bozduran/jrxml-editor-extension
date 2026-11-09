@@ -68,7 +68,7 @@ const {
     configuredCommand,
     DEFAULT_COMMAND,
     PROBLEM_MATCHERS,
-} = require('../buildBridge');
+} = require('../out/buildBridge');
 
 function reset() {
     settings = {};

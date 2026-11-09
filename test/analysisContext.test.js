@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const xmlspan = require('../xmlspan');
+const xmlspan = require('../out/xmlspan');
 const originalScanXml = xmlspan.scanXml;
 let scans = 0;
 xmlspan.scanXml = function (text) {
@@ -15,7 +15,7 @@ xmlspan.scanXml = function (text) {
     return originalScanXml(text);
 };
 
-const { collectFindings } = require('../diagnostics');
+const { collectFindings } = require('../out/diagnostics');
 
 test('a diagnostics pass scans the document exactly once', () => {
     const fileName = path.resolve('test/fixtures/TextReport.jrxml');

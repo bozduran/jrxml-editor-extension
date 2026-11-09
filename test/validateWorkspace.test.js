@@ -12,7 +12,7 @@ const {
     validateFiles,
     summarise,
     formatJson,
-} = require('../tools/validate-workspace');
+} = require('../out/tools/validate-workspace');
 
 const VALID = '<jasperReport name="V"><expression><![CDATA["ok"]]></expression></jasperReport>';
 const INVALID = '<jasperReport name="B"><expression><![CDATA[$F{missing}]]></expression></jasperReport>';

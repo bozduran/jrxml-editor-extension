@@ -43,7 +43,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { updateDiagnostics } = require('../diagnosticsProvider');
+const { updateDiagnostics } = require('../out/diagnosticsProvider');
 
 let docSeq = 0;
 

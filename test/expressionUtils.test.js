@@ -29,7 +29,7 @@ const {
     wrapExpression,
     hasCdata,
     EXPRESSION_TAGS,
-} = require('../expressionUtils');
+} = require('../out/expressionUtils');
 
 function fakeDocument(text) {
     return {

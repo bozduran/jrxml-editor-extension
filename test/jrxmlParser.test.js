@@ -10,7 +10,7 @@ const {
     findDuplicateNames,
     clearCache,
     clearAllCaches,
-} = require('../jrxmlParser');
+} = require('../out/jrxmlParser');
 
 let seq = 0;
 /** Build a minimal fake TextDocument with a unique URI each call. */

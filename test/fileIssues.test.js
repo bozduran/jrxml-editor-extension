@@ -3,7 +3,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { collectFileIssues } = require('../fileIssues');
+const { collectFileIssues } = require('../out/fileIssues');
 
 function report(body) {
     return `<jasperReport name="R">\n${body}\n</jasperReport>`;

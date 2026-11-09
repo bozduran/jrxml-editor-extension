@@ -69,7 +69,7 @@ Module._load = function (request, ...rest) {
 
 // The module exports the registration disposable; the provider object itself is
 // what the stub captured.
-require('../completionProvider');
+require('../out/completionProvider');
 const provider = registered;
 
 let seq = 0;

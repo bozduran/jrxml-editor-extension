@@ -8,14 +8,14 @@ const test   = require('node:test');
 const assert = require('node:assert');
 
 const pkg = require('../package.json');
-const { SETTINGS_GROUPS } = require('../settingsSchema');
-const { escapeHtmlText } = require('../expressionPanelHtml');
+const { SETTINGS_GROUPS } = require('../out/settingsSchema');
+const { escapeHtmlText } = require('../out/expressionPanelHtml');
 const {
     buildTutorialHtml,
     DOCUMENTED_COMMANDS,
     DOCUMENTED_SETTING_GROUPS,
     TUTORIAL_COMMAND_URIS,
-} = require('../tutorialHtml');
+} = require('../out/tutorialHtml');
 
 const NONCE = '0123456789abcdef0123456789abcdef';
 

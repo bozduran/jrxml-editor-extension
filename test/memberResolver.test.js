@@ -11,7 +11,7 @@ const {
     countArguments,
     matchingOpenParen,
     literalType,
-} = require('../memberResolver');
+} = require('../out/memberResolver');
 
 // A tiny stand-in for jdkMemberIndex.getMembers.
 const TYPES = {

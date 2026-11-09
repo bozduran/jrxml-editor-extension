@@ -11,7 +11,7 @@ const {
     applyPeriodSpace,
     applyDoubleSpace,
     applyNewline,
-} = require('../textRules');
+} = require('../out/textRules');
 
 test('unrenderable characters are replaced and reported once each', () => {
     const findings = [];

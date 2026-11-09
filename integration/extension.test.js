@@ -265,7 +265,7 @@ suite('JRXML extension smoke', () => {
 
         const original = document.getText();
         const offset = original.indexOf('<element');
-        const { applyDesignPatch } = require('../designViewPanel');
+        const { applyDesignPatch } = require('../out/designViewPanel');
 
         const applied = await applyDesignPatch(document, {
             elementOffset: offset,
@@ -303,7 +303,7 @@ suite('JRXML extension smoke', () => {
 
     test('provides the editor completion engine to the design inspector', async () => {
         const document = await openDocument(fixtureCopy('Blank_A4_1.jrxml'));
-        const { buildCompletionsForDocument } = require('../designViewPanel');
+        const { buildCompletionsForDocument } = require('../out/designViewPanel');
 
         const fields = buildCompletionsForDocument(document, '$F{', 3);
         assert.strictEqual(fields.mode, 'field');
@@ -325,7 +325,7 @@ suite('JRXML extension smoke', () => {
         const uri = vscode.Uri.file(path.join(__dirname, 'workspace', 'DetailReport.jrxml'));
         await openDocument(uri);
 
-        const { computeTree } = require('../includeChainView');
+        const { computeTree } = require('../out/includeChainView');
         const tree = await computeTree(uri);
 
         assert.ok(tree.length >= 1, 'expected at least one top template');
@@ -356,7 +356,7 @@ suite('JRXML extension smoke', () => {
         const document = await openDocument(uri);
 
         // The builder reads names straight from the open report (no upload).
-        const { readSchema } = require('../ifElsePanel');
+        const { readSchema } = require('../out/ifElsePanel');
         const { schema } = readSchema(document);
         assert.ok(schema, 'expected a schema');
         assert.ok(schema.F.some(item => item.name === 'status' && item.cls === 'String'));
@@ -396,7 +396,7 @@ suite('JRXML extension smoke', () => {
         assert.ok(editor, 'expected an active editor');
         const text = document.getText();
         const offset = text.indexOf('$F{status}');
-        const { findExpressionAtCursor } = require('../expressionUtils');
+        const { findExpressionAtCursor } = require('../out/expressionUtils');
         const target = findExpressionAtCursor(
             document,
             document.positionAt(offset + '$F{status}'.length)
@@ -404,7 +404,7 @@ suite('JRXML extension smoke', () => {
         assert.ok(target, 'expected the expression tag under the cursor');
 
         const expression = 'IF($F{status}.equals("PAID"), "Paid", "Unknown")';
-        const applied = await require('../expressionApply').applyExpressionToEditor(
+        const applied = await require('../out/expressionApply').applyExpressionToEditor(
             editor,
             target,
             expression
@@ -428,7 +428,7 @@ suite('JRXML extension smoke', () => {
         const uri = vscode.Uri.file(path.join(__dirname, 'workspace', 'OrphanReport.jrxml'));
         await openDocument(uri);
 
-        const { computeTree } = require('../includeChainView');
+        const { computeTree } = require('../out/includeChainView');
         const tree = await computeTree(uri);
 
         assert.strictEqual(tree.length, 1);
@@ -475,7 +475,7 @@ suite('JRXML extension smoke', () => {
         const text = document.getText();
         const first = text.indexOf('$F{status}');
         const second = text.lastIndexOf('$F{status}');
-        const { findExpressionAtCursor } = require('../expressionUtils');
+        const { findExpressionAtCursor } = require('../out/expressionUtils');
         const targetOne = findExpressionAtCursor(document, document.positionAt(first + 2));
         const targetTwo = findExpressionAtCursor(document, document.positionAt(second + 2));
         assert.ok(targetOne && targetTwo, 'expected two expression targets');
@@ -484,7 +484,7 @@ suite('JRXML extension smoke', () => {
             document.offsetAt(targetTwo.range.start)
         );
 
-        const ExpressionEditorPanel = require('../expressionEditorPanel');
+        const ExpressionEditorPanel = require('../out/expressionEditorPanel');
 
         await setConfig('expressionEditor.autoFormat', true);
         try {
@@ -545,14 +545,14 @@ suite('JRXML extension smoke', () => {
         const issue = { uri, line: position.line, character: position.character };
 
         await vscode.commands.executeCommand('jrxml.issues.editInExpressionEditor', issue);
-        const ExpressionEditorPanel = require('../expressionEditorPanel');
+        const ExpressionEditorPanel = require('../out/expressionEditorPanel');
         const editorPanel = ExpressionEditorPanel.currentPanel;
         assert.ok(editorPanel, 'the expression editor did not open');
         assert.strictEqual(editorPanel._expressionResult.tagName, 'textFieldExpression');
         editorPanel.dispose();
 
         await vscode.commands.executeCommand('jrxml.issues.editInIfElseBuilder', issue);
-        const { IfElsePanel } = require('../ifElsePanel');
+        const { IfElsePanel } = require('../out/ifElsePanel');
         assert.ok(IfElsePanel.currentPanel, 'the If / Else builder did not open');
         IfElsePanel.currentPanel.dispose();
     });

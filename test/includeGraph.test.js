@@ -10,7 +10,7 @@ const {
     topsFor,
     baseName,
     quotedTokens,
-} = require('../includeGraph');
+} = require('../out/includeGraph');
 
 function index(entries) {
     return buildIndex(Object.entries(entries).map(([path, text]) => ({ path, text })));

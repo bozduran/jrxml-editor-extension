@@ -5,8 +5,8 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { parseReport } = require('../jrxmlParser');
-const { textSource, documentSource } = require('../reportSource');
+const { parseReport } = require('../out/jrxmlParser');
+const { textSource, documentSource } = require('../out/reportSource');
 
 test('parses a plain report source without a TextDocument', () => {
     const text = `<jasperReport name="R"><field name="amount" class="java.math.BigDecimal"/></jasperReport>`;

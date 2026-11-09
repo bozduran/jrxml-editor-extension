@@ -8,9 +8,9 @@ const assert = require('node:assert');
 const path   = require('path');
 const fs     = require('fs');
 
-const builder = require('../ifElseBuilder');
-const { parseDeclarations } = require('../jrxmlParser');
-const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('../jasperBuiltins');
+const builder = require('../out/ifElseBuilder');
+const { parseDeclarations } = require('../out/jrxmlParser');
+const { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } = require('../out/jasperBuiltins');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

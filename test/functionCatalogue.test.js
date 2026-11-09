@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { JASPER_FUNCTIONS } = require('../expressionSuggestions');
+const { JASPER_FUNCTIONS } = require('../out/expressionSuggestions');
 const reference = require('./fixtures/jasper-functions.json');
 
 const labels = new Set(JASPER_FUNCTIONS.map(fn => fn.label));

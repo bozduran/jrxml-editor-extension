@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { collectFindings } = require('../diagnostics');
+const { collectFindings } = require('../out/diagnostics');
 
 function codes(findings) {
     return findings.map(finding => finding.code);

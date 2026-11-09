@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { reportLanguage, isJavaLanguage } = require('../reportLanguage');
+const { reportLanguage, isJavaLanguage } = require('../out/reportLanguage');
 
 test('reads the language attribute and its value span', () => {
     const text = '<jasperReport name="R" language="groovy"/>';

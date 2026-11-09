@@ -10,7 +10,7 @@ const {
     SETTINGS_GROUPS,
     allSettings,
     defaults,
-} = require('../settingsSchema');
+} = require('../out/settingsSchema');
 
 test('every panel setting is declared in package.json with the same type and default', () => {
     const properties = pkg.contributes.configuration.properties;

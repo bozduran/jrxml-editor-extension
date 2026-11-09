@@ -3,8 +3,8 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { collectTextCheckIssues, fixForTextCheck, CODE } = require('../textCheck');
-const { applyEdits } = require('../edits');
+const { collectTextCheckIssues, fixForTextCheck, CODE } = require('../out/textCheck');
+const { applyEdits } = require('../out/edits');
 
 function doc(body) {
     return `<jasperReport name="R">\n${body}\n</jasperReport>`;

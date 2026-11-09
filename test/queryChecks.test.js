@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { checkQueries } = require('../queryChecks');
+const { checkQueries } = require('../out/queryChecks');
 
 function sqlQuery(body, language = 'sql') {
     return `<jasperReport name="R"><query language="${language}"><![CDATA[${body}]]></query></jasperReport>`;
