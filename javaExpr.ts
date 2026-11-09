@@ -1,4 +1,4 @@
-// javaExpr.js
+// javaExpr.ts
 // Java-expression spacing formatter, ported from the hook's JavaExpr/AST rules.
 //
 // The hook masks string/char/text-block literals and JasperReports
@@ -16,7 +16,33 @@
 // well-formed Java (unbalanced brackets, unterminated literal) the whole
 // expression is returned unchanged, matching the hook's "never guess" policy.
 
-const MASK_PREFIX = '__jrxml_';
+export const MASK_PREFIX = '__jrxml_';
+
+export type TokenType = 'ws' | 'comment' | 'ident' | 'number' | 'op' | 'punct';
+
+export interface Token {
+    type: TokenType;
+    value: string;
+    start: number;
+    end: number;
+}
+
+export interface MaskResult {
+    text: string;
+    replacements: string[];
+    terminated: boolean;
+}
+
+export interface TernaryIndices {
+    questions: Set<number>;
+    colons: Set<number>;
+}
+
+interface FormatEdit {
+    start: number;
+    end: number;
+    replacement: string;
+}
 
 // ── Masking ───────────────────────────────────────────────────────────────────
 
@@ -24,9 +50,9 @@ const MASK_PREFIX = '__jrxml_';
  * Replace literals and JasperReports references with identifier-shaped
  * placeholders so the remaining text can be tokenised as plain Java.
  */
-function maskLiteralsAndRefs(code) {
+export function maskLiteralsAndRefs(code: string): MaskResult {
     let out = '';
-    const replacements = [];
+    const replacements: string[] = [];
     let terminated = true;
     let i = 0;
     const n = code.length;
@@ -63,7 +89,7 @@ function maskLiteralsAndRefs(code) {
     return { text: out, replacements, terminated };
 }
 
-function unmask(text, replacements) {
+export function unmask(text: string, replacements: readonly string[]): string {
     let result = text;
     for (let k = replacements.length - 1; k >= 0; k--) {
         result = result.split(MASK_PREFIX + k + '__').join(replacements[k]);
@@ -76,7 +102,7 @@ function unmask(text, replacements) {
  * opening `"""` of a text block), or -1 when no literal starts there.
  * Unterminated literals extend to the end of the input.
  */
-function literalEnd(code, start) {
+export function literalEnd(code: string, start: number): number {
     if (start < 0 || start >= code.length) return -1;
     if (code.startsWith('"""', start)) return scanTextBlock(code, start + 3);
     const c = code[start];
@@ -84,7 +110,7 @@ function literalEnd(code, start) {
     return -1;
 }
 
-function scanQuoted(s, start, quote) {
+function scanQuoted(s: string, start: number, quote: string): number {
     let i = start + 1;
     while (i < s.length) {
         const c = s[i];
@@ -95,7 +121,7 @@ function scanQuoted(s, start, quote) {
     return s.length;
 }
 
-function scanTextBlock(s, start) {
+function scanTextBlock(s: string, start: number): number {
     let i = start;
     while (i + 2 < s.length) {
         const c = s[i];
@@ -106,7 +132,7 @@ function scanTextBlock(s, start) {
     return s.length;
 }
 
-function scanJrReference(s, start) {
+function scanJrReference(s: string, start: number): number {
     let i = start + 1;
     if (i < s.length && /[A-Za-z]/.test(s[i])) i++;
     if (i < s.length && s[i] === '!') i++;
@@ -128,8 +154,8 @@ const OPERATORS = [
 
 const NUMBER_RE = /^(?:0[xX][0-9a-fA-F_]+[lL]?|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[fFdDlL]?|\.\d[\d_]*(?:[eE][+-]?\d+)?[fFdDlL]?)/;
 
-function tokenize(code) {
-    const tokens = [];
+export function tokenize(code: string): Token[] {
+    const tokens: Token[] = [];
     let i = 0;
     const n = code.length;
 
@@ -189,10 +215,10 @@ function tokenize(code) {
 
 // Null-prototype map: a token named `valueOf`/`constructor` must not resolve to
 // Object.prototype members when used as a key.
-const OPENERS = Object.assign(Object.create(null), { '(': ')', '[': ']', '{': '}' });
+const OPENERS: Record<string, string> = Object.assign(Object.create(null), { '(': ')', '[': ']', '{': '}' });
 
-function bracketsBalanced(sig) {
-    const stack = [];
+export function bracketsBalanced(sig: readonly Token[]): boolean {
+    const stack: string[] = [];
     for (const t of sig) {
         if (OPENERS[t.value]) stack.push(OPENERS[t.value]);
         else if (t.value === ')' || t.value === ']' || t.value === '}') {
@@ -202,10 +228,16 @@ function bracketsBalanced(sig) {
     return stack.length === 0;
 }
 
+interface DetectToken {
+    type: TokenType;
+    value: string;
+    orig: number;
+}
+
 /** Tokens (by index) that belong to a generic type-argument list. */
-function findGenericTokenIndices(sig) {
+export function findGenericTokenIndices(sig: readonly Token[]): ReadonlySet<number> {
     const detect = buildDetectTokens(sig);
-    const inside = new Set();
+    const inside = new Set<number>();
 
     for (let i = 0; i < detect.length; i++) {
         if (detect[i].value !== '<' || i === 0) continue;
@@ -237,8 +269,8 @@ function findGenericTokenIndices(sig) {
  * closers are matched. Each entry keeps the index of the real token so the
  * result can be mapped back for spacing decisions.
  */
-function buildDetectTokens(sig) {
-    const detect = [];
+function buildDetectTokens(sig: readonly Token[]): DetectToken[] {
+    const detect: DetectToken[] = [];
     sig.forEach((t, orig) => {
         const leading = /^>+/.exec(t.value);
         if (leading && (t.value === '>>' || t.value === '>>>' || t.value === '>=' || t.value === '>>=' || t.value === '>>>=')) {
@@ -253,7 +285,7 @@ function buildDetectTokens(sig) {
 }
 
 /** Index of the `>` closing the type-argument list opening at `lt`, or -1. */
-function matchTypeArgs(sig, lt) {
+function matchTypeArgs(sig: readonly DetectToken[], lt: number): number {
     // Empty diamond: `new HashMap<>()`
     if (sig[lt + 1] && sig[lt + 1].value === '>') return lt + 1;
 
@@ -268,7 +300,7 @@ function matchTypeArgs(sig, lt) {
     }
 }
 
-function matchTypeArg(sig, k) {
+function matchTypeArg(sig: readonly DetectToken[], k: number): number {
     if (sig[k] && sig[k].value === '?') {
         k++;
         if (sig[k] && (sig[k].value === 'extends' || sig[k].value === 'super')) return matchType(sig, k + 1);
@@ -277,7 +309,7 @@ function matchTypeArg(sig, k) {
     return matchType(sig, k);
 }
 
-function matchType(sig, k) {
+function matchType(sig: readonly DetectToken[], k: number): number {
     if (!sig[k] || sig[k].type !== 'ident') return -1;
     k++;
     for (;;) {
@@ -298,9 +330,12 @@ function matchType(sig, k) {
 }
 
 /** Indices of `?` and `:` tokens that form a conditional expression. */
-function findTernaryIndices(sig, generics) {
-    const questions = new Set();
-    const colons = new Set();
+export function findTernaryIndices(
+    sig: readonly Token[],
+    generics: ReadonlySet<number>
+): TernaryIndices {
+    const questions = new Set<number>();
+    const colons = new Set<number>();
 
     for (let i = 0; i < sig.length; i++) {
         if (sig[i].value !== '?' || generics.has(i)) continue;
@@ -327,8 +362,8 @@ function findTernaryIndices(sig, generics) {
     return { questions, colons };
 }
 
-const SPACED_BINARY = new Set(['==', '!=', '<=', '>=', '&&', '||']);
-const CAST_FOLLOW = new Set([
+const SPACED_BINARY: ReadonlySet<string> = new Set(['==', '!=', '<=', '>=', '&&', '||']);
+const CAST_FOLLOW: ReadonlySet<string> = new Set([
     '(', '!', '~', '++', '--', 'new', 'this', 'super', 'true', 'false', 'null',
 ]);
 
@@ -338,7 +373,9 @@ const CAST_FOLLOW = new Set([
  * Format the spacing of a Java expression. Returns the input unchanged when it
  * is not confidently parseable.
  */
-function formatExpression(code) {
+export function formatExpression(code: string): string;
+export function formatExpression(code: string | null | undefined): string | null | undefined;
+export function formatExpression(code: string | null | undefined): string | null | undefined {
     if (code === null || code === undefined || code.trim() === '') return code;
 
     const mask = maskLiteralsAndRefs(code);
@@ -350,9 +387,9 @@ function formatExpression(code) {
 
     const generics = findGenericTokenIndices(sig);
     const { questions, colons } = findTernaryIndices(sig, generics);
-    const edits = [];
+    const edits: FormatEdit[] = [];
 
-    const spaceAround = (index) => {
+    const spaceAround = (index: number): void => {
         const prev = sig[index - 1];
         const next = sig[index + 1];
         if (!prev || !next) return;
@@ -387,7 +424,7 @@ function formatExpression(code) {
         if (sig[i].value !== '(') continue;
 
         let k = i + 1;
-        let typeText = '';
+        let typeText: string | null = '';
         while (sig[k] && sig[k].value !== ')') {
             if (sig[k].type === 'ident' || sig[k].value === '.') typeText += sig[k].value;
             else { typeText = null; break; }
@@ -417,7 +454,7 @@ function formatExpression(code) {
 }
 
 /** Apply highest-offset first, skipping any that overlap an already-applied one. */
-function applyEdits(text, edits) {
+function applyEdits(text: string, edits: readonly FormatEdit[]): string {
     const sorted = [...edits].sort((a, b) => b.start - a.start || b.end - a.end);
     let out = text;
     let lastStart = Infinity;
@@ -428,15 +465,3 @@ function applyEdits(text, edits) {
     }
     return out;
 }
-
-module.exports = {
-    formatExpression,
-    maskLiteralsAndRefs,
-    unmask,
-    tokenize,
-    literalEnd,
-    bracketsBalanced,
-    findGenericTokenIndices,
-    findTernaryIndices,
-    MASK_PREFIX,
-};

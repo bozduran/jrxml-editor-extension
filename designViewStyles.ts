@@ -1,7 +1,7 @@
-// designViewStyles.js
+// designViewStyles.ts
 // CSS for the JRXML design-view webview, kept as a plain string asset.
 
-module.exports = `  :root {
+const DESIGN_VIEW_STYLES = `  :root {
     --bg:      var(--vscode-editor-background, #1e1e1e);
     --fg:      var(--vscode-editor-foreground, #d4d4d4);
     --border:  var(--vscode-panel-border, #444);
@@ -469,3 +469,5 @@ module.exports = `  :root {
   }
   #status-left { flex-shrink: 0; }
   #status-hint { overflow: hidden; text-overflow: ellipsis; }`;
+
+export = DESIGN_VIEW_STYLES;

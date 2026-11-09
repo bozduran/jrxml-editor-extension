@@ -1,4 +1,4 @@
-// typeCompletion.js
+// typeCompletion.ts
 // Turns a member list (jdkMemberIndex.getMembers) into completion candidates.
 //
 // Kept free of `vscode` on purpose: this is where the sorting rules, the
@@ -6,8 +6,13 @@
 // tested without an Extension Host. The provider only wraps the descriptors in
 // CompletionItems.
 
+import type { MemberLookup } from './jdkMemberIndex';
+import type { Resolution } from './memberResolver';
+
+export type PopularityTable = Readonly<Record<string, readonly string[]>>;
+
 /** Members worth ranking above the alphabetical default, per declaring type. */
-const POPULAR = {
+export const POPULAR: PopularityTable = {
     'java.lang.String': ['length', 'substring', 'toUpperCase', 'toLowerCase', 'trim', 'indexOf', 'replace', 'startsWith', 'endsWith', 'contains', 'equals', 'equalsIgnoreCase', 'charAt', 'split', 'isEmpty', 'lastIndexOf', 'concat'],
     'java.lang.Integer': ['intValue', 'longValue', 'doubleValue', 'toString', 'compareTo', 'equals'],
     'java.lang.Long': ['longValue', 'intValue', 'doubleValue', 'toString', 'compareTo', 'equals'],
@@ -43,7 +48,7 @@ const POPULAR = {
 const DEFAULT_RANK = 500;
 
 /** Placeholder names for the snippet arguments, by parameter type. */
-const PARAMETER_NAMES = {
+const PARAMETER_NAMES: Readonly<Record<string, string>> = {
     'int': 'n',
     'long': 'n',
     'short': 'n',
@@ -68,21 +73,67 @@ const PARAMETER_NAMES = {
     'java.util.function.Predicate': 'filter',
 };
 
+export interface MemberLike {
+    readonly name: string;
+    readonly params?: readonly string[];
+    readonly returns?: string;
+    readonly type?: string;
+    readonly isField?: boolean;
+}
+
+export interface CompletionCandidate {
+    name: string;
+    label: string;
+    labelDetail: string;
+    labelDescription: string;
+    filterText: string;
+    kind: 'method' | 'field';
+    arity: number;
+    insertText: string;
+    signature: string;
+    detail: string;
+    declaringType: string;
+    returns: string | undefined;
+    deprecated: boolean;
+    tier: number;
+    rank: number;
+}
+
+export interface CandidateOptions {
+    popularity?: PopularityTable;
+    limit?: number;
+}
+
+export interface DocumentedCandidate {
+    readonly signature: string;
+    readonly declaringType: string;
+    readonly deprecated: boolean;
+}
+
+export interface TypeHint {
+    kind: 'info';
+    insertText: string;
+    filterText: string | null;
+    label?: string;
+    detail?: string;
+    documentation?: string;
+}
+
 /**
  * Inline code text for file-derived values: a crafted field name or class
  * attribute must not be able to close a code span or start a new markdown block.
  */
-function mdCode(text) {
+export function mdCode(text: unknown): string {
     return String(text ?? '').replace(/[`\r\n]/g, ' ').trim();
 }
 
 /** Plain-text display value for labels: no control characters. */
-function mdText(text) {
+export function mdText(text: unknown): string {
     return String(text ?? '').replace(/[\r\n\t]/g, ' ').trim();
 }
 
 /** `java.lang.String` → `String`, `java.util.Map$Entry` → `Map.Entry`. */
-function shortType(type) {
+export function shortType(type: string | null | undefined): string {
     const text = String(type ?? '').trim();
     if (!text) return '';
     if (text.endsWith('[]')) return `${shortType(text.slice(0, -2))}[]`;
@@ -95,7 +146,7 @@ function shortType(type) {
 }
 
 /** A readable, identifier-safe placeholder for the nth parameter. */
-function parameterName(type, index, used) {
+export function parameterName(type: string, index: number, used: Set<string>): string {
     const short = shortType(type);
     const base = PARAMETER_NAMES[type]
         || (short.endsWith('[]') ? `${shortType(short.slice(0, -2)).toLowerCase()}s` : null)
@@ -110,40 +161,40 @@ function parameterName(type, index, used) {
 }
 
 /** Snippet body: `substring(${1:n}, ${2:n2})`. */
-function snippetFor(member) {
-    const used = new Set();
-    const args = (member.params || []).map((type, index) => `\${${index + 1}:${parameterName(type, index, used)}}`);
+export function snippetFor(member: MemberLike): string {
+    const used = new Set<string>();
+    const args = (member.params || []).map(
+        (type, index) => `\${${index + 1}:${parameterName(type, index, used)}}`
+    );
     return `${member.name}(${args.join(', ')})`;
 }
 
 /** Human-readable signature: `substring(int, int)`. */
-function signatureOf(member) {
+export function signatureOf(member: MemberLike): string {
     if (member.isField) return `${member.name} : ${shortType(member.type)}`;
     return `${member.name}(${(member.params || []).map(shortType).join(', ')})`;
 }
 
-function rankOf(typeKey, name, table) {
+function rankOf(typeKey: string, name: string, table: PopularityTable): number {
     const popular = table[typeKey];
     if (!popular) return DEFAULT_RANK;
     const index = popular.indexOf(name);
     return index === -1 ? DEFAULT_RANK : index;
 }
 
-/**
- * Build the completion candidates for a resolved type.
- *
- * @param {{ typeKey: string, kind?: string, methods: object[], fields: object[] }} members
- * @param {{ popularity?: object, limit?: number }} [options]
- * @returns {object[]} candidates, already ordered
- */
-function buildMemberCandidates(members, options = {}) {
+/** Build the completion candidates for a resolved type. */
+export function buildMemberCandidates(
+    members: MemberLookup | null | undefined,
+    options: CandidateOptions = {}
+): CompletionCandidate[] {
     if (!members || !members.resolved) return [];
 
     const popularity = options.popularity || POPULAR;
     const limit = options.limit || 300;
-    const typeKey = members.typeKey;
+    // A resolved lookup always carries the key it resolved to.
+    const typeKey = members.typeKey as string;
 
-    const candidates = [];
+    const candidates: CompletionCandidate[] = [];
 
     for (const method of members.methods || []) {
         const tier = tierOf(method, typeKey);
@@ -189,7 +240,7 @@ function buildMemberCandidates(members, options = {}) {
 
     // Explicit comparison rather than locale collation: overloads must come out
     // in arity order, and `(int)`/`(int, int)` only differ by punctuation.
-    const compareText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+    const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
     candidates.sort((a, b) =>
         a.tier - b.tier
         || a.rank - b.rank
@@ -201,7 +252,7 @@ function buildMemberCandidates(members, options = {}) {
 }
 
 /** Sort tier: own members first, then inherited, then Object. */
-function tierOf(member, typeKey) {
+function tierOf(member: { declaringType?: string }, typeKey: string): number {
     const declaring = member.declaringType || typeKey;
     if (declaring === typeKey) return 0;
     if (declaring === 'java.lang.Object') return 2;
@@ -209,7 +260,7 @@ function tierOf(member, typeKey) {
 }
 
 /** Markdown documentation for one candidate. */
-function documentationFor(candidate, typeLabel) {
+export function documentationFor(candidate: DocumentedCandidate, typeLabel: string): string {
     const lines = [`\`\`\`java`, `${candidate.signature}`, '```'];
     lines.push(`Declared by \`${candidate.declaringType}\``);
     if (candidate.declaringType !== typeLabel && typeLabel) {
@@ -226,12 +277,16 @@ function documentationFor(candidate, typeLabel) {
  * The explanation shown when a receiver cannot be typed, or null when the
  * reason should stay silent (the caller then keeps its normal completion).
  */
-function buildTypeHint(resolution) {
+export function buildTypeHint(
+    resolution: Resolution | null | undefined
+): TypeHint | null {
     if (!resolution || resolution.resolved) return null;
 
-    const reference = mdCode(resolution.reference || (resolution.sigil ? `$${resolution.sigil}{${resolution.name}}` : ''));
+    const reference = mdCode(
+        resolution.reference || (resolution.sigil ? `$${resolution.sigil}{${resolution.name}}` : '')
+    );
     const fieldName = mdCode(resolution.name);
-    const hint = {
+    const hint: TypeHint = {
         kind: 'info',
         insertText: '$0', // accepting the item inserts nothing
         filterText: null,
@@ -280,16 +335,3 @@ function buildTypeHint(resolution) {
 
     return null;
 }
-
-module.exports = {
-    mdCode,
-    mdText,
-    buildMemberCandidates,
-    buildTypeHint,
-    documentationFor,
-    signatureOf,
-    snippetFor,
-    parameterName,
-    shortType,
-    POPULAR,
-};

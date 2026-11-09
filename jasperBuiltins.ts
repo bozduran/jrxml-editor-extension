@@ -1,10 +1,16 @@
-// jasperBuiltins.js
+// jasperBuiltins.ts
 // Single source of truth for JasperReports built-in system variables and
 // parameters. Previously these tables were duplicated (and had drifted) across
 // the completion, hover and diagnostics providers.
 
+export interface Builtin {
+    readonly name: string;
+    readonly type: string;
+    readonly description: string;
+}
+
 /** Built-in system variables ($V{...}). */
-const BUILTIN_VARIABLES = [
+export const BUILTIN_VARIABLES: readonly Builtin[] = [
     { name: 'PAGE_NUMBER',         type: 'Integer', description: 'Current page number' },
     { name: 'PAGE_COUNT',          type: 'Integer', description: 'Total number of pages' },
     { name: 'REPORT_COUNT',        type: 'Integer', description: 'Total records processed' },
@@ -16,7 +22,7 @@ const BUILTIN_VARIABLES = [
 ];
 
 /** Built-in system parameters ($P{...}). */
-const BUILTIN_PARAMETERS = [
+export const BUILTIN_PARAMETERS: readonly Builtin[] = [
     { name: 'REPORT_CONNECTION',          type: 'java.sql.Connection',              description: 'JDBC database connection' },
     { name: 'REPORT_DATA_SOURCE',         type: 'JRDataSource',                     description: 'The JRDataSource object' },
     { name: 'REPORT_PARAMETERS_MAP',      type: 'java.util.Map',                    description: 'Map of all report parameters' },
@@ -31,12 +37,7 @@ const BUILTIN_PARAMETERS = [
     { name: 'REPORT_TEMPLATES',           type: 'java.util.Collection',             description: 'Additional report templates' },
 ];
 
-const BUILTIN_VARIABLE_NAMES = new Set(BUILTIN_VARIABLES.map(v => v.name));
-const BUILTIN_PARAMETER_NAMES = new Set(BUILTIN_PARAMETERS.map(p => p.name));
-
-module.exports = {
-    BUILTIN_VARIABLES,
-    BUILTIN_PARAMETERS,
-    BUILTIN_VARIABLE_NAMES,
-    BUILTIN_PARAMETER_NAMES,
-};
+export const BUILTIN_VARIABLE_NAMES: ReadonlySet<string> =
+    new Set(BUILTIN_VARIABLES.map(v => v.name));
+export const BUILTIN_PARAMETER_NAMES: ReadonlySet<string> =
+    new Set(BUILTIN_PARAMETERS.map(p => p.name));

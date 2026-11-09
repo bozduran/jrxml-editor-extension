@@ -1,4 +1,4 @@
-// staleGuard.js
+// staleGuard.ts
 // The destructive commands (sort, clear, SQL migration) discover their edits,
 // then open a diff preview and wait for the user to confirm before applying.
 //
@@ -7,12 +7,10 @@
 // overwrite anything typed (or saved by another tool) in the meantime. This is
 // the single, testable definition of that check.
 
-const STALE_MESSAGE =
+export const STALE_MESSAGE =
     'The file changed while this was being prepared, so nothing was applied. Run the command again.';
 
 /** True when the document has moved on from the version the edits were built for. */
-function isStale(discoveredVersion, currentVersion) {
+export function isStale(discoveredVersion: number, currentVersion: number): boolean {
     return discoveredVersion !== currentVersion;
 }
-
-module.exports = { isStale, STALE_MESSAGE };

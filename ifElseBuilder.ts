@@ -1,4 +1,4 @@
-// ifElseBuilder.js
+// ifElseBuilder.ts
 // Pure model, generator and reverse parser for the If / Else expression builder.
 //
 // This module deliberately has no `vscode` and no DOM dependency, and it makes
@@ -6,11 +6,18 @@
 // ifElsePanelHtml.js) so the browser and the tests share one implementation.
 // Keep it self-contained — test/ifElsePanelHtml.test.js enforces that.
 
-'use strict';
-
 // ── Operators ────────────────────────────────────────────────────────────────
 
-const OPS = {
+export type BuilderType = 'String' | 'Number' | 'Boolean';
+export type BuilderStyle = 'ternary' | 'functions';
+export type ReferenceSigil = 'F' | 'P' | 'V';
+export type Join = '&&' | '||';
+export type ConditionType = BuilderType | 'Custom';
+export type ResultKind = 'text' | 'number' | 'expr' | 'null';
+
+export type OperatorPair = readonly [value: string, label: string];
+
+export const OPS: Readonly<Record<BuilderType, readonly OperatorPair[]>> = {
     String: [
         ['equals', 'equals'],
         ['notEquals', 'does not equal'],
@@ -34,35 +41,96 @@ const OPS = {
     ],
 };
 
-const NULLOPS = [
+export const NULLOPS: readonly OperatorPair[] = [
     ['isNull', 'is null'],
     ['notNull', 'is not null'],
 ];
 
-const NOVAL = ['isEmpty', 'isTrue', 'isFalse', 'isNull', 'notNull'];
+export const NOVAL: readonly string[] = ['isEmpty', 'isTrue', 'isFalse', 'isNull', 'notNull'];
 
-const KINDS = [
+export const KINDS: readonly OperatorPair[] = [
     ['text', 'Text'],
     ['number', 'Number'],
     ['expr', 'Expression'],
     ['null', 'null'],
 ];
 
-const REF_KINDS = [
+export const REF_KINDS: readonly OperatorPair[] = [
     ['F', '$F field'],
     ['P', '$P parameter'],
     ['V', '$V variable'],
 ];
 
-const STYLE_TERNARY = 'ternary';
-const STYLE_FUNCTIONS = 'functions';
+export const STYLE_TERNARY = 'ternary';
+export const STYLE_FUNCTIONS = 'functions';
 
 const NUMBER_TYPES = /^(Integer|Long|Short|Byte|Double|Float|BigDecimal|BigInteger|Number)$/;
 
 // ── Model helpers ────────────────────────────────────────────────────────────
 
+export interface Condition {
+    ref: ReferenceSigil;
+    name: string;
+    type: ConditionType;
+    op: string;
+    val: string;
+}
+
+export interface BranchResult {
+    kind: ResultKind;
+    val: string;
+}
+
+export interface Branch {
+    join: Join;
+    conds: Condition[];
+    res: BranchResult;
+}
+
+export interface BuilderState {
+    branches: Branch[];
+    els: BranchResult;
+}
+
+export interface BuilderOptions {
+    nullSafe?: boolean;
+    multiline?: boolean;
+    style?: BuilderStyle;
+}
+
+export interface NormalizedOptions {
+    nullSafe: boolean;
+    multiline: boolean;
+    style: BuilderStyle;
+}
+
+export interface SchemaInputEntry {
+    readonly name?: string | null;
+    readonly type?: string | null;
+    readonly cls?: string | null;
+}
+
+export interface SchemaEntry {
+    name: string;
+    cls: string;
+}
+
+export interface BuilderSchema {
+    F: SchemaEntry[];
+    P: SchemaEntry[];
+    V: SchemaEntry[];
+}
+
+export interface MakeSchemaInput {
+    fields?: readonly SchemaInputEntry[];
+    parameters?: readonly SchemaInputEntry[];
+    variables?: readonly SchemaInputEntry[];
+    builtinVariables?: readonly SchemaInputEntry[];
+    builtinParameters?: readonly SchemaInputEntry[];
+}
+
 /** A new empty condition (String equals). */
-function createCondition(overrides = {}) {
+export function createCondition(overrides: Partial<Condition> = {}): Condition {
     return {
         ref: 'F',
         name: '',
@@ -74,7 +142,7 @@ function createCondition(overrides = {}) {
 }
 
 /** A new branch with one empty condition and an empty text result. */
-function createBranch(overrides = {}) {
+export function createBranch(overrides: Partial<Branch> = {}): Branch {
     return {
         join: '&&',
         conds: [createCondition()],
@@ -84,14 +152,14 @@ function createBranch(overrides = {}) {
 }
 
 /** The state the extension starts with: one empty branch and a text else. */
-function emptyState() {
+export function emptyState(): BuilderState {
     return {
         branches: [createBranch()],
         els: { kind: 'text', val: '' },
     };
 }
 
-function normalizeOptions(options = {}) {
+function normalizeOptions(options: BuilderOptions = {}): NormalizedOptions {
     return {
         nullSafe: options.nullSafe !== false,
         multiline: options.multiline !== false,
@@ -100,7 +168,7 @@ function normalizeOptions(options = {}) {
 }
 
 /** Strip a Java package name; `java.lang.String` -> `String`. */
-function shortClass(value) {
+export function shortClass(value: string | null | undefined): string {
     const text = String(value == null ? '' : value).trim();
     if (!text) return 'Object';
     const last = text.split('.').pop();
@@ -108,7 +176,7 @@ function shortClass(value) {
 }
 
 /** Map a declaration class to the builder's value type. */
-function typeOfClass(cls) {
+export function typeOfClass(cls: string | null | undefined): BuilderType {
     const simple = shortClass(cls);
     if (NUMBER_TYPES.test(simple)) return 'Number';
     if (simple === 'Boolean') return 'Boolean';
@@ -118,20 +186,20 @@ function typeOfClass(cls) {
 /**
  * Build the webview schema from parsed declarations plus the JasperReports
  * built-ins. Declared names win over built-ins; order is preserved.
- *
- * @param {{fields?:Array,parameters?:Array,variables?:Array,builtinVariables?:Array,builtinParameters?:Array}} input
- * @returns {{F:Array<{name:string,cls:string}>,P:Array,V:Array}}
  */
-function makeSchema({
+export function makeSchema({
     fields = [],
     parameters = [],
     variables = [],
     builtinVariables = [],
     builtinParameters = [],
-} = {}) {
-    const merge = (primary, extra) => {
-        const seen = new Set();
-        const out = [];
+}: MakeSchemaInput = {}): BuilderSchema {
+    const merge = (
+        primary: readonly SchemaInputEntry[],
+        extra: readonly SchemaInputEntry[]
+    ): SchemaEntry[] => {
+        const seen = new Set<string>();
+        const out: SchemaEntry[] = [];
         for (const item of [...(primary || []), ...(extra || [])]) {
             if (!item || !item.name) continue;
             const name = String(item.name);
@@ -152,7 +220,7 @@ function makeSchema({
 // ── Generation: state -> expression ──────────────────────────────────────────
 
 /** Escape a Java string literal (quotes, backslashes, newlines). */
-function escapeJavaString(value) {
+export function escapeJavaString(value: string | null | undefined): string {
     return '"' + String(value == null ? '' : value)
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
@@ -162,30 +230,24 @@ function escapeJavaString(value) {
 }
 
 /** True for `$F{x}` / `$P{x}` / `$V{x}`. */
-function isReference(value) {
+export function isReference(value: string | null | undefined): boolean {
     return /^\$[FPV]\{[^}]+\}$/.test(String(value == null ? '' : value).trim());
 }
 
-function referenceText(condition) {
+function referenceText(condition: Condition): string {
     return '$' + condition.ref + '{' + (condition.name.trim() || 'name') + '}';
 }
 
 /** The right-hand side of a comparison: reference, Java string or number. */
-function rhs(condition) {
+function rhs(condition: Condition): string {
     const value = String(condition.val == null ? '' : condition.val);
     if (isReference(value)) return value.trim();
     if (condition.type === 'String') return escapeJavaString(value);
     return value.trim() || '0';
 }
 
-/**
- * Build the text of one condition.
- *
- * @param {object} condition
- * @param {object} options normalised options ({nullSafe})
- * @returns {string}
- */
-function conditionText(condition, options = {}) {
+/** Build the text of one condition. */
+export function conditionText(condition: Condition, options: BuilderOptions = {}): string {
     const opts = normalizeOptions(options);
     if (condition.type === 'Custom') {
         return String(condition.val == null ? '' : condition.val).trim() || 'true';
@@ -199,10 +261,10 @@ function conditionText(condition, options = {}) {
     // In function style the arguments are all evaluated, so null guards are
     // written as inline ternaries instead of relying on && / || short circuit.
     const functionsStyle = opts.style === STYLE_FUNCTIONS;
-    const andGuard = (guard, expression) => functionsStyle
+    const andGuard = (guard: string, expression: string): string => functionsStyle
         ? '(' + guard + ' ? ' + expression + ' : false)'
         : guard + ' && ' + expression;
-    const orGuard = (guard, expression) => functionsStyle
+    const orGuard = (guard: string, expression: string): string => functionsStyle
         ? '(' + guard + ' ? true : ' + expression + ')'
         : '(' + guard + ' || ' + expression + ')';
 
@@ -243,7 +305,7 @@ function conditionText(condition, options = {}) {
 }
 
 /** The text of one branch's result. */
-function resultText(result) {
+function resultText(result: BranchResult | null | undefined): string {
     const value = result && result.val != null ? String(result.val) : '';
     if (!result || result.kind === 'null') return 'null';
     if (result.kind === 'text') return escapeJavaString(value);
@@ -252,12 +314,12 @@ function resultText(result) {
 }
 
 /** Parenthesise an already-joined condition when precedence needs it. */
-function wrapJoin(text) {
+function wrapJoin(text: string): string {
     return / (&&|\|\|) /.test(text) && !/^\(.*\)$/.test(text) ? '(' + text + ')' : text;
 }
 
 /** The text of a branch condition (conditions joined by AND/OR as chosen). */
-function branchCondition(branch, options = {}) {
+export function branchCondition(branch: Branch, options: BuilderOptions = {}): string {
     const opts = normalizeOptions(options);
     const parts = (branch.conds || []).map(condition => conditionText(condition, opts));
     if (parts.length === 1) return parts[0];
@@ -269,7 +331,13 @@ function branchCondition(branch, options = {}) {
     return '(' + parts.map(wrapJoin).join(isOr ? ' || ' : ' && ') + ')';
 }
 
-function buildBranch(branches, els, index, indent, options) {
+function buildBranch(
+    branches: readonly Branch[],
+    els: BranchResult,
+    index: number,
+    indent: string,
+    options: NormalizedOptions
+): string {
     if (index >= branches.length) return resultText(els);
 
     const branch = branches[index];
@@ -289,31 +357,31 @@ function buildBranch(branches, els, index, indent, options) {
         : '(' + condition + ' ? ' + result + ' : ' + rest + ')';
 }
 
-/**
- * Generate the JasperReports expression for a builder state.
- *
- * @param {{branches:Array,els:object}} state
- * @param {{nullSafe?:boolean,multiline?:boolean,style?:'ternary'|'functions'}} [options]
- * @returns {string}
- */
-function buildExpression(state, options = {}) {
+/** Generate the JasperReports expression for a builder state. */
+export function buildExpression(
+    state: BuilderState | null | undefined,
+    options: BuilderOptions = {}
+): string {
     const opts = normalizeOptions(options);
-    const branches = Array.isArray(state && state.branches) ? state.branches : [];
-    const els = state && state.els ? state.els : { kind: 'text', val: '' };
+    const branches: readonly Branch[] = state && Array.isArray(state.branches) ? state.branches : [];
+    const els: BranchResult = state && state.els ? state.els : { kind: 'text', val: '' };
     if (branches.length === 0) return resultText(els);
     return buildBranch(branches, els, 0, '', opts);
 }
 
 // ── Reverse conversion: expression -> state ──────────────────────────────────
 
-/**
- * Tokenise an expression.
- * @param {string} text
- * @returns {Array<{k:number,v:string,s:number,e:number}>}
- */
-function tokenize(text) {
+export interface ExpressionToken {
+    k: number;
+    v: string;
+    s: number;
+    e: number;
+}
+
+/** Tokenise an expression. */
+export function tokenize(text: string): ExpressionToken[] {
     const re = /\s*(?:("(?:[^"\\]|\\.)*")|(\$[FPV]\{[^}]*\})|(-?\d+(?:\.\d+)?[LlDdFf]?)|([A-Za-z_]\w*)|(&&|\|\||==|!=|>=|<=|[()?:,.!<>]))/y;
-    const tokens = [];
+    const tokens: ExpressionToken[] = [];
     let index = 0;
 
     while (index < text.length) {
@@ -322,7 +390,8 @@ function tokenize(text) {
         const match = re.exec(text);
         if (!match) throw new Error('Cannot read near: ' + text.slice(index, index + 14).trim());
 
-        const kind = [1, 2, 3, 4, 5].find(slot => match[slot] !== undefined);
+        // The regex has one alternation per slot, so exactly one group is set.
+        const kind = [1, 2, 3, 4, 5].find(slot => match[slot] !== undefined) as number;
         const value = match[kind];
         tokens.push({
             k: kind,
@@ -336,31 +405,127 @@ function tokenize(text) {
     return tokens;
 }
 
+// ── AST ──────────────────────────────────────────────────────────────────────
+
+interface AstNodeBase {
+    src: string;
+}
+
+export interface TernaryNode extends AstNodeBase {
+    t: 'tern';
+    c: AstNode;
+    a: AstNode;
+    b: AstNode;
+    fn?: number;
+}
+
+export interface AndNode extends AstNodeBase {
+    t: 'and';
+    l: AstNode[];
+}
+
+export interface OrNode extends AstNodeBase {
+    t: 'or';
+    l: AstNode[];
+}
+
+export interface ComparisonNode extends AstNodeBase {
+    t: 'cmp';
+    op: string;
+    l: AstNode;
+    r: AstNode;
+}
+
+export interface NotNode extends AstNodeBase {
+    t: 'not';
+    x: AstNode;
+}
+
+export interface CallNode extends AstNodeBase {
+    t: 'call';
+    o: AstNode | null;
+    n: string;
+    args: AstNode[];
+}
+
+export interface DotNode extends AstNodeBase {
+    t: 'dot';
+    o: AstNode;
+    n: string;
+}
+
+export interface StringNode extends AstNodeBase {
+    t: 'str';
+    v: string;
+}
+
+export interface ReferenceNode extends AstNodeBase {
+    t: 'ref';
+    r: ReferenceSigil;
+    n: string;
+}
+
+export interface NumberNode extends AstNodeBase {
+    t: 'num';
+}
+
+export interface NullNode extends AstNodeBase {
+    t: 'null';
+}
+
+export interface BooleanNode extends AstNodeBase {
+    t: 'bool';
+    v: boolean;
+}
+
+export interface IdentifierNode extends AstNodeBase {
+    t: 'id';
+}
+
+export type AstNode =
+    | TernaryNode
+    | AndNode
+    | OrNode
+    | ComparisonNode
+    | NotNode
+    | CallNode
+    | DotNode
+    | StringNode
+    | ReferenceNode
+    | NumberNode
+    | NullNode
+    | BooleanNode
+    | IdentifierNode;
+
+/** A node literal as written in the parser, before `mark` records its source. */
+type WithoutSource<T> = T extends AstNode ? Omit<T, 'src'> & { src?: string } : never;
+type AstNodeInit = WithoutSource<AstNode>;
+
 /**
  * Parse an expression into an AST. Every node keeps `src`, the exact source
  * substring it was parsed from (without enclosing parentheses).
- *
- * @param {string} text
- * @returns {object} AST root
  */
-function parseExpression(text) {
+export function parseExpression(text: string): AstNode {
     const source = String(text == null ? '' : text).trim();
     if (!source) throw new Error('Paste an expression first.');
 
     const tokens = tokenize(source);
     let index = 0;
 
-    const is = value => tokens[index] && tokens[index].k >= 4 && tokens[index].v === value;
-    const need = value => {
+    const is = (value: string): boolean =>
+        tokens[index] && tokens[index].k >= 4 && tokens[index].v === value;
+
+    const need = (value: string): void => {
         if (!is(value)) throw new Error('Expected ' + value);
         index++;
     };
-    const mark = (node, startIndex) => {
+
+    const mark = (node: AstNodeInit, startIndex: number): AstNode => {
         node.src = source.slice(tokens[startIndex].s, tokens[index - 1].e);
-        return node;
+        return node as AstNode; // every parser path records src before returning
     };
 
-    const expression = () => {
+    const expression = (): AstNode => {
         const start = index;
         const condition = or();
         if (is('?')) {
@@ -373,7 +538,11 @@ function parseExpression(text) {
         return condition;
     };
 
-    const list = (parseItem, operator, type) => () => {
+    const list = (
+        parseItem: () => AstNode,
+        operator: string,
+        type: 'and' | 'or'
+    ): (() => AstNode) => () => {
         const start = index;
         const items = [parseItem()];
         while (is(operator)) {
@@ -383,7 +552,7 @@ function parseExpression(text) {
         return items.length > 1 ? mark({ t: type, l: items }, start) : items[0];
     };
 
-    const comparison = () => {
+    const comparison = (): AstNode => {
         const start = index;
         const left = unary();
         for (const operator of ['==', '!=', '>=', '<=', '>', '<']) {
@@ -395,7 +564,7 @@ function parseExpression(text) {
         return left;
     };
 
-    const unary = () => {
+    const unary = (): AstNode => {
         const start = index;
         if (is('!')) {
             index++;
@@ -404,8 +573,8 @@ function parseExpression(text) {
         return postfix();
     };
 
-    const argumentsList = () => {
-        const items = [];
+    const argumentsList = (): AstNode[] => {
+        const items: AstNode[] = [];
         if (is(')')) {
             index++;
             return items;
@@ -417,7 +586,7 @@ function parseExpression(text) {
         return items;
     };
 
-    const postfix = () => {
+    const postfix = (): AstNode => {
         const start = index;
         let node = primary();
         while (is('.')) {
@@ -433,22 +602,24 @@ function parseExpression(text) {
         return node;
     };
 
-    const primary = () => {
+    const primary = (): AstNode => {
         const start = index;
         const token = tokens[index];
         if (!token) throw new Error('Unexpected end of expression');
         index++;
 
         if (token.k === 1) {
-            let value;
+            let value: string;
             try {
-                value = JSON.parse(token.v);
-            } catch (_err) {
+                value = JSON.parse(token.v) as string;
+            } catch {
                 value = token.v.slice(1, -1);
             }
             return mark({ t: 'str', v: value }, start);
         }
-        if (token.k === 2) return mark({ t: 'ref', r: token.v[1], n: token.v.slice(3, -1) }, start);
+        if (token.k === 2) {
+            return mark({ t: 'ref', r: token.v[1] as ReferenceSigil, n: token.v.slice(3, -1) }, start);
+        }
         if (token.k === 3) return mark({ t: 'num' }, start);
         if (token.v === '(') {
             const inner = expression();
@@ -485,31 +656,41 @@ function parseExpression(text) {
 }
 
 /** `ref == null` / `ref != null` -> the reference source, else null. */
-function nullComparison(node, operator) {
+function nullComparison(node: AstNode, operator: string): string | null {
     return node.t === 'cmp' && node.op === operator && node.r.t === 'null' && node.l.t === 'ref'
         ? node.l.src
         : null;
 }
 
+interface ConversionContext {
+    nullSafe: boolean;
+}
+
+interface ConditionGroup {
+    join: Join;
+    conds: Condition[];
+}
+
 /**
  * Convert an AST node into a builder condition. Unmapped parts become Custom
  * conditions whose value is the node source, so nothing is dropped silently.
- *
- * @param {object} node
- * @param {{nullSafe:boolean}} context
- * @returns {object}
  */
-function toCondition(node, context) {
-    const fromRef = (ref, type, op, value) => ({
+function toCondition(node: AstNode, context: ConversionContext): Condition {
+    const fromRef = (
+        ref: ReferenceNode,
+        type: ConditionType,
+        op: string,
+        value?: string | null
+    ): Condition => ({
         ref: ref.r,
         name: ref.n,
         type,
         op,
         val: value == null ? '' : value,
     });
-    const custom = () => ({ ref: 'F', name: '', type: 'Custom', op: '', val: node.src });
+    const custom = (): Condition => ({ ref: 'F', name: '', type: 'Custom', op: '', val: node.src });
 
-    const guarded = (candidate, allowed) => {
+    const guarded = (candidate: AstNode, allowed: readonly string[]): Condition | null => {
         const condition = toCondition(candidate, context);
         if (condition.type !== 'Custom' && allowed.includes(condition.op)) {
             context.nullSafe = true;
@@ -522,7 +703,7 @@ function toCondition(node, context) {
     const orOps = ['isEmpty', '!='];
 
     // 1. Null guards.
-    let guardedResult;
+    let guardedResult: Condition | null = null;
     if (node.t === 'and' && node.l.length === 2) {
         const reference = nullComparison(node.l[0], '!=');
         if (reference && node.l[1].src.includes(reference) &&
@@ -555,7 +736,7 @@ function toCondition(node, context) {
     // 3. Comparisons.
     if (node.t === 'cmp') {
         const { l, r, op } = node;
-        const flip = { '>': '<', '<': '>', '>=': '<=', '<=': '>=' };
+        const flip: Readonly<Record<string, string>> = { '>': '<', '<': '>', '>=': '<=', '<=': '>=' };
         if (r.t === 'null' && l.t === 'ref' && (op === '==' || op === '!=')) {
             // A null check only says the type is nullable; keep String as the
             // reference UI does and let the user pick a type if they need to.
@@ -573,7 +754,8 @@ function toCondition(node, context) {
     if (node.t === 'call') {
         const args = node.args || [];
         const argument = args[0];
-        const valueOf = valueNode => (valueNode.t === 'str' ? valueNode.v : valueNode.src);
+        const valueOf = (valueNode: AstNode): string =>
+            (valueNode.t === 'str' ? valueNode.v : valueNode.src);
 
         if (!node.o && node.n === 'EQUALS' && args.length === 2) {
             const [left, right] = args;
@@ -638,12 +820,8 @@ function toCondition(node, context) {
     return custom();
 }
 
-/**
- * Convert a branch-condition AST node into `{ join, conds }`.
- * @param {object} node
- * @param {{nullSafe:boolean}} context
- */
-function toConditionGroup(node, context) {
+/** Convert a branch-condition AST node into `{ join, conds }`. */
+function toConditionGroup(node: AstNode, context: ConversionContext): ConditionGroup {
     const condition = toCondition(node, context);
     if (condition.type !== 'Custom' || (node.t !== 'and' && node.t !== 'or')) {
         return { join: '&&', conds: [condition] };
@@ -663,10 +841,10 @@ function toConditionGroup(node, context) {
 // condition it cannot read becomes a Custom condition and is written back as-is.
 
 const OPEN_BRACKETS = '([{';
-const CLOSE_FOR = { '(': ')', '[': ']', '{': '}' };
+const CLOSE_FOR: Readonly<Record<string, string>> = { '(': ')', '[': ']', '{': '}' };
 
 /** Index just past the quoted literal starting at `index`. */
-function skipLiteral(text, index) {
+function skipLiteral(text: string, index: number): number {
     const quote = text[index];
     let i = index + 1;
     while (i < text.length) {
@@ -678,7 +856,7 @@ function skipLiteral(text, index) {
 }
 
 /** Index just past a comment starting at `index`, or -1 when there is none. */
-function skipComment(text, index) {
+function skipComment(text: string, index: number): number {
     if (text[index] !== '/') return -1;
     if (text[index + 1] === '/') {
         const end = text.indexOf('\n', index + 2);
@@ -693,7 +871,7 @@ function skipComment(text, index) {
 }
 
 /** Index of the bracket that closes the one at `openIndex`. */
-function matchBracket(text, openIndex) {
+function matchBracket(text: string, openIndex: number): number {
     const open = text[openIndex];
     const close = CLOSE_FOR[open];
     let depth = 0;
@@ -720,7 +898,7 @@ function matchBracket(text, openIndex) {
  * sits in an operator position (`a < b ? c > d`) or starts something that is
  * not `>`, `,`, `extends` or `super`.
  */
-function isGenericWildcard(text, start, index) {
+function isGenericWildcard(text: string, start: number, index: number): boolean {
     let before = index - 1;
     while (before >= start && /\s/.test(text[before])) before -= 1;
     if (before >= start && text[before] !== '<' && text[before] !== ',') return false;
@@ -736,7 +914,7 @@ function isGenericWildcard(text, start, index) {
  * ordinary comparison. Inside type arguments a `,` separates parameters and a
  * `?` is a wildcard — neither may split or open a conditional.
  */
-function genericEnd(text, index) {
+function genericEnd(text: string, index: number): number {
     if (text[index] !== '<') return -1;
 
     let depth = 0;
@@ -756,8 +934,8 @@ function genericEnd(text, index) {
 }
 
 /** Split on `separator` occurrences outside strings, comments and brackets. */
-function splitTopLevel(text, separator) {
-    const parts = [];
+function splitTopLevel(text: string, separator: string): string[] {
+    const parts: string[] = [];
     let start = 0;
 
     for (let i = 0; i < text.length;) {
@@ -780,7 +958,7 @@ function splitTopLevel(text, separator) {
 }
 
 /** Remove parentheses that enclose the whole value (`(a ? b : c)`). */
-function stripOuterParens(value) {
+function stripOuterParens(value: string | null | undefined): string {
     let text = String(value == null ? '' : value).trim();
     while (text[0] === '(') {
         const close = matchBracket(text, 0);
@@ -791,7 +969,7 @@ function stripOuterParens(value) {
 }
 
 /** Index of the first `?` outside strings, comments and brackets, or -1. */
-function findTopLevelQuestion(text) {
+function findTopLevelQuestion(text: string): number {
     for (let i = 0; i < text.length;) {
         const ch = text[i];
         if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
@@ -811,7 +989,7 @@ function findTopLevelQuestion(text) {
 }
 
 /** The `:` matching the `?` before `start`, honouring nested ternaries. */
-function findTernaryColon(text, start) {
+function findTernaryColon(text: string, start: number): number {
     let nested = 0;
 
     for (let i = start; i < text.length;) {
@@ -837,13 +1015,18 @@ function findTernaryColon(text, start) {
     throw new Error('Expected :');
 }
 
+export interface ParsedConditional {
+    style: BuilderStyle;
+    cond: string;
+    then: string;
+    els: string;
+}
+
 /**
  * Read one conditional level: either `IF(cond, then, else)` or
  * `cond ? then : else`. Returns null when the text is a plain result.
- *
- * @returns {{style:string,cond:string,then:string,els:string}|null}
  */
-function parseConditional(value) {
+function parseConditional(value: string | null | undefined): ParsedConditional | null {
     const text = stripOuterParens(value);
     if (!text) return null;
 
@@ -877,7 +1060,7 @@ function parseConditional(value) {
 }
 
 /** Decode a Java string literal (the inverse of escapeJavaString). */
-function parseStringLiteral(raw) {
+function parseStringLiteral(raw: string): string {
     const body = raw.slice(1, -1);
     let out = '';
 
@@ -914,7 +1097,7 @@ function parseStringLiteral(raw) {
  * Classify a result as a text/number/null literal or an opaque expression.
  * The raw source is kept for expressions so nothing is normalised away.
  */
-function resultFromText(text) {
+function resultFromText(text: string | null | undefined): BranchResult {
     const raw = String(text == null ? '' : text).trim();
     const literal = stripOuterParens(raw);
 
@@ -929,16 +1112,25 @@ function resultFromText(text) {
 }
 
 /** Conditions keep their structured form when possible; otherwise stay raw. */
-function conditionGroupFromText(text, context) {
+function conditionGroupFromText(
+    text: string | null | undefined,
+    context: ConversionContext
+): ConditionGroup {
     const value = String(text == null ? '' : text).trim();
     try {
         return toConditionGroup(parseExpression(value), context);
-    } catch (_err) {
+    } catch {
         return {
             join: '&&',
             conds: [{ ref: 'F', name: '', type: 'Custom', op: '', val: value }],
         };
     }
+}
+
+export interface FromExpressionResult {
+    state: BuilderState;
+    nullSafe: boolean;
+    style: BuilderStyle;
 }
 
 /**
@@ -949,17 +1141,15 @@ function conditionGroupFromText(text, context) {
  * so mixed expressions such as `$F{a} + " " + $F{b}` or `new Date()` survive a
  * load.
  *
- * @param {string} text
- * @returns {{state:{branches:Array,els:object},nullSafe:boolean,style:'ternary'|'functions'}}
  * @throws {Error} with a readable message when the expression cannot be parsed
  */
-function fromExpression(text) {
+export function fromExpression(text: string | null | undefined): FromExpressionResult {
     const source = String(text == null ? '' : text).trim();
     if (!source) throw new Error('Paste an expression first.');
 
-    const context = { nullSafe: false };
-    const branches = [];
-    let detectedStyle = null;
+    const context: ConversionContext = { nullSafe: false };
+    const branches: Branch[] = [];
+    let detectedStyle: BuilderStyle | null = null;
     let rest = source;
 
     while (true) {
@@ -985,27 +1175,3 @@ function fromExpression(text) {
         style: detectedStyle || STYLE_TERNARY,
     };
 }
-
-module.exports = {
-    OPS,
-    NULLOPS,
-    NOVAL,
-    KINDS,
-    REF_KINDS,
-    STYLE_TERNARY,
-    STYLE_FUNCTIONS,
-    createCondition,
-    createBranch,
-    emptyState,
-    shortClass,
-    typeOfClass,
-    makeSchema,
-    escapeJavaString,
-    isReference,
-    conditionText,
-    branchCondition,
-    buildExpression,
-    tokenize,
-    parseExpression,
-    fromExpression,
-};

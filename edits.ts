@@ -1,16 +1,23 @@
-// edits.js
+// edits.ts
 // Offset-based edit application for .jrxml documents.
 //
 // An edit is { start, end, replacement } in CHARACTER offsets. Edits are applied
 // highest-offset first and overlapping edits are rejected rather than silently
 // mangling the document.
 
-/**
- * @typedef {{ start:number, end:number, replacement:string }} Edit
- */
+export interface Edit {
+    start: number;
+    end: number;
+    replacement: string;
+}
+
+export interface Span {
+    start: number;
+    end: number;
+}
 
 /** Return the first overlapping pair of edits, or null. */
-function findOverlap(edits) {
+export function findOverlap(edits: readonly Edit[]): [Edit, Edit] | null {
     const sorted = [...edits].sort((a, b) => a.start - b.start || a.end - b.end);
     for (let i = 1; i < sorted.length; i++) {
         if (sorted[i].start < sorted[i - 1].end) {
@@ -22,12 +29,10 @@ function findOverlap(edits) {
 
 /**
  * Apply edits to `text`.
- * @param {string} text
- * @param {Edit[]} edits
- * @returns {string}
+ *
  * @throws {Error} when two edits overlap
  */
-function applyEdits(text, edits) {
+export function applyEdits(text: string, edits: readonly Edit[]): string {
     if (!edits || edits.length === 0) return text;
 
     const overlap = findOverlap(edits);
@@ -51,10 +56,8 @@ function applyEdits(text, edits) {
  * terminator so deleting a declaration does not leave a blank line behind.
  * Returns the original span otherwise, so neighbouring elements and
  * same-line comments are never touched.
- *
- * @returns {{ start:number, end:number }}
  */
-function lineAwareSpan(text, start, end) {
+export function lineAwareSpan(text: string, start: number, end: number): Span {
     const lineStart = text.lastIndexOf('\n', start - 1) + 1;
     if (text.slice(lineStart, start).trim() !== '') return { start, end };
 
@@ -64,5 +67,3 @@ function lineAwareSpan(text, start, end) {
 
     return { start: lineStart, end: nl === -1 ? text.length : nl + 1 };
 }
-
-module.exports = { applyEdits, findOverlap, lineAwareSpan };

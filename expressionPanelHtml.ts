@@ -1,14 +1,14 @@
-// expressionPanelHtml.js
+// expressionPanelHtml.ts
 // Pure HTML/CSS/client-JS builder for the expression editor webview.
 //
 // This module deliberately does NOT require('vscode') so it can be unit-tested
 // with plain Node. The host-side panel passes in the CSP source and a fresh
 // nonce for every render.
 
-const crypto = require('crypto');
+import * as crypto from 'crypto';
 
 /** Escape a string for HTML text or quoted-attribute context. */
-function escapeHtmlText(value) {
+export function escapeHtmlText(value: unknown): string {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -24,8 +24,9 @@ function escapeHtmlText(value) {
  * containing `</script>` would terminate the script element early and allow
  * markup/script injection from file content. Emit unicode escapes instead.
  */
-function jsonForInlineScript(value) {
-    return JSON.stringify(value === undefined ? null : value)
+export function jsonForInlineScript(value: unknown): string {
+    const serialized = JSON.stringify(value === undefined ? null : value) ?? 'null';
+    return serialized
         .replace(/</g, '\\u003c')
         .replace(/>/g, '\\u003e')
         .replace(/&/g, '\\u0026')
@@ -34,30 +35,34 @@ function jsonForInlineScript(value) {
 }
 
 /** Fresh CSP nonce (hex — safe unquoted in both the attribute and the policy). */
-function getNonce() {
+export function getNonce(): string {
     return crypto.randomBytes(16).toString('hex');
 }
 
-/**
- * Build the complete webview document.
- *
- * @param {object} opts
- * @param {string} opts.tagName             JRXML expression tag name
- * @param {string} opts.rawExpression       original expression (Reset target)
- * @param {string} opts.formattedExpression expression shown in the edit pane
- * @param {boolean} [opts.autoFormat]       Auto-format-on-change default
- * @param {string} opts.nonce               CSP nonce for the style/script tags
- * @param {string} [opts.cspSource]         webview.cspSource (unused today, reserved)
- * @returns {string} full HTML document
- */
-function buildPanelHtml({
+export interface ExpressionPanelOptions {
+    /** JRXML expression tag name. */
+    readonly tagName: string;
+    /** Original expression (Reset target). */
+    readonly rawExpression: string;
+    /** Expression shown in the edit pane. */
+    readonly formattedExpression: string;
+    /** Auto-format-on-change default. */
+    readonly autoFormat?: boolean;
+    /** CSP nonce for the style/script tags. */
+    readonly nonce: string;
+    /** webview.cspSource (unused today, reserved). */
+    readonly cspSource?: string;
+}
+
+/** Build the complete webview document. */
+export function buildPanelHtml({
     tagName,
     rawExpression,
     formattedExpression,
     nonce,
     cspSource,
     autoFormat = false,
-}) {
+}: ExpressionPanelOptions): string {
     const safeTag   = escapeHtmlText(tagName);
     const safeExpr  = escapeHtmlText(formattedExpression);
     const rawJson   = jsonForInlineScript(rawExpression);
@@ -635,5 +640,3 @@ updateStats();
 </body>
 </html>`;
 }
-
-module.exports = { buildPanelHtml, escapeHtmlText, jsonForInlineScript, getNonce };

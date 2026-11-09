@@ -1,14 +1,18 @@
-// designSpec.js
+// designSpec.ts
 // Shared design-view vocabulary and XML helpers.
 //
 // The model decides what the webview may expose and the editor enforces it.
 // Keeping the content limits, kind/tag mapping and property specs in one place
 // means an inspector field cannot drift from what designEdit accepts.
 
-const MAX_CONTENT = 8000;
+import type { XmlNode } from './xmlspan';
+
+export const MAX_CONTENT = 8000;
+
+export type ContentKind = 'statictext' | 'textfield' | 'image' | 'subreport' | 'chart';
 
 // Studio 7 element kind -> the tag that holds its editable content.
-const CONTENT_TAG_BY_KIND = Object.freeze({
+export const CONTENT_TAG_BY_KIND: Readonly<Record<ContentKind, string>> = Object.freeze({
     statictext: 'text',
     textfield:  'expression',
     image:      'expression',
@@ -16,14 +20,59 @@ const CONTENT_TAG_BY_KIND = Object.freeze({
     chart:      'expression',
 });
 
-const CONTENT_KINDS = new Set(Object.keys(CONTENT_TAG_BY_KIND));
+export const CONTENT_KINDS: ReadonlySet<string> = new Set(Object.keys(CONTENT_TAG_BY_KIND));
 
 // Expression content tags, including the classic JasperReports 6 spellings.
-const EXPRESSION_CONTENT_TAGS = Object.freeze([
+export const EXPRESSION_CONTENT_TAGS: readonly string[] = Object.freeze([
     'expression', 'textfieldexpression', 'imageexpression', 'subreportexpression', 'chartexpression',
 ]);
 
-const PROPERTY_SPECS = {
+export interface FontNameSpec {
+    readonly type: 'fontName';
+}
+
+export interface FontSizeSpec {
+    readonly type: 'fontSize';
+}
+
+export interface BooleanSpec {
+    readonly type: 'boolean';
+}
+
+export interface ColorSpec {
+    readonly type: 'color';
+}
+
+export interface TextSpec {
+    readonly type: 'text';
+}
+
+export interface RawStringSpec {
+    readonly type: 'rawString';
+}
+
+export interface IntegerSpec {
+    readonly type: 'integer';
+    readonly min: number;
+    readonly max: number;
+}
+
+export interface EnumSpec {
+    readonly type: 'enum';
+    readonly values: readonly string[];
+}
+
+export type PropertySpec =
+    | FontNameSpec
+    | FontSizeSpec
+    | BooleanSpec
+    | ColorSpec
+    | TextSpec
+    | RawStringSpec
+    | IntegerSpec
+    | EnumSpec;
+
+export const PROPERTY_SPECS = {
     fontName:       { type: 'fontName' },
     fontSize:       { type: 'fontSize' },
     bold:           { type: 'boolean' },
@@ -78,21 +127,23 @@ const PROPERTY_SPECS = {
     direction:   { type: 'enum', values: ['TopDown', 'BottomUp'] },
     radius:      { type: 'integer', min: 0, max: 100000 },
     type:        { type: 'enum', values: ['Page', 'Column'] },
-};
+} as const satisfies Record<string, PropertySpec>;
+
+export type DesignPropertyName = keyof typeof PROPERTY_SPECS;
 
 /** Local XML name: strip a namespace prefix and lower-case it. */
-function localName(tag) {
+export function localName(tag: string): string {
     const text = String(tag ?? '');
     const colon = text.indexOf(':');
     return (colon === -1 ? text : text.slice(colon + 1)).toLowerCase();
 }
 
-function attrValue(node, name) {
+export function attrValue(node: XmlNode, name: string): string | undefined {
     const attr = node.attr(name);
     return attr ? attr.value : undefined;
 }
 
-function directChild(node, tag) {
+export function directChild(node: XmlNode, tag: string): XmlNode | null {
     const wanted = String(tag).toLowerCase();
     for (const child of node.children) {
         if (localName(child.tag) === wanted) return child;
@@ -100,14 +151,14 @@ function directChild(node, tag) {
     return null;
 }
 
-function numericAttr(node, name, fallback) {
+export function numericAttr(node: XmlNode, name: string, fallback: number): number {
     const raw = attrValue(node, name);
     if (raw === undefined) return fallback;
     const value = Number.parseFloat(raw);
     return Number.isFinite(value) ? value : fallback;
 }
 
-function escapeXmlAttr(value) {
+export function escapeXmlAttr(value: unknown): string {
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -115,23 +166,9 @@ function escapeXmlAttr(value) {
         .replace(/"/g, '&quot;');
 }
 
-function escapeXmlText(value) {
+export function escapeXmlText(value: unknown): string {
     return String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 }
-
-module.exports = {
-    MAX_CONTENT,
-    CONTENT_TAG_BY_KIND,
-    CONTENT_KINDS,
-    EXPRESSION_CONTENT_TAGS,
-    PROPERTY_SPECS,
-    localName,
-    attrValue,
-    directChild,
-    numericAttr,
-    escapeXmlAttr,
-    escapeXmlText,
-};

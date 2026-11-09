@@ -1,4 +1,4 @@
-// memberResolver.js
+// memberResolver.ts
 // Answers one question: what type is the expression immediately before a `.`?
 //
 // `$F{CustomerName}.` → java.lang.String, `$V{total}.` → java.math.BigDecimal,
@@ -9,11 +9,73 @@
 // — which is all a single Java expression can contain, and the return types come
 // from an injected `lookup` so this module stays vscode-free and testable.
 
-const MAX_DEPTH = 8;
+import type { Ambiguity, MemberLookup } from './jdkMemberIndex';
+
+export const MAX_DEPTH = 8;
+
+export type ReferenceSigil = 'F' | 'P' | 'V';
+
+export type ResolutionReason =
+    | 'ok'
+    | 'unknown-ref'
+    | 'no-class'
+    | 'unknown-type'
+    | 'ambiguous'
+    | 'unknown-method'
+    | 'no-return-type'
+    | 'type-variable'
+    | 'unknown-return-type'
+    | 'not-a-receiver'
+    | 'too-deep';
+
+export interface Resolution {
+    resolved: boolean;
+    reason: ResolutionReason;
+    typeKey: string | null;
+    declaredType: string | null;
+    sigil?: ReferenceSigil;
+    name?: string;
+    reference?: string;
+    methodName?: string;
+    ambiguity?: Ambiguity | null;
+    chain?: string[];
+}
+
+export interface TrailingReference {
+    sigil: ReferenceSigil;
+    name: string;
+    start: number;
+    reference: string;
+}
+
+export interface Declaration {
+    readonly name: string;
+    readonly type?: string;
+    readonly fullType?: string;
+    readonly typeSource?: string;
+}
+
+export interface Declarations {
+    readonly fields?: readonly Declaration[];
+    readonly parameters?: readonly Declaration[];
+    readonly variables?: readonly Declaration[];
+}
+
+export interface MethodSignature {
+    readonly name: string;
+    readonly params?: readonly string[];
+    readonly returns?: string;
+    readonly varargs?: boolean;
+}
+
+export interface ResolverContext {
+    readonly declarations?: Declarations;
+    readonly lookup: (typeKey: string | null) => MemberLookup | null | undefined;
+}
 
 const REFERENCE_RE = /\$(F|P|V)\{([^{}]*)\}$/;
 const IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/;
-const NUMBER_LITERALS = [
+const NUMBER_LITERALS: readonly { re: RegExp; type: string }[] = [
     { re: /0[xX][0-9a-fA-F_]+[lL]?$/, type: 'int' },
     { re: /\d[\d_]*[lL]$/, type: 'long' },
     { re: /\d[\d_]*\.\d[\d_]*[fF]$|\.\d[\d_]*[fF]$|\d[\d_]*[fF]$/, type: 'float' },
@@ -21,21 +83,26 @@ const NUMBER_LITERALS = [
     { re: /\d[\d_]*$/, type: 'int' },
 ];
 
-function outcome(reason, extra = {}) {
+function outcome(reason: ResolutionReason, extra: Partial<Resolution> = {}): Resolution {
     // `extra` often carries a resolved receiver for context; the failure must
     // win, so `resolved`/`reason` are set after the spread.
     return { typeKey: null, declaredType: null, ...extra, resolved: false, reason };
 }
 
 /** A `$F{Name}` / `$P{Name}` / `$V{Name}` reference directly before the dot. */
-function matchTrailingReference(text) {
+export function matchTrailingReference(text: string): TrailingReference | null {
     const match = REFERENCE_RE.exec(text);
     if (!match) return null;
-    return { sigil: match[1], name: match[2].trim(), start: match.index, reference: match[0] };
+    return {
+        sigil: match[1] as ReferenceSigil,
+        name: match[2].trim(),
+        start: match.index,
+        reference: match[0],
+    };
 }
 
 /** Index of the `(` matching the `)` at the end of `text`, or -1. */
-function matchingOpenParen(text) {
+export function matchingOpenParen(text: string): number {
     let depth = 0;
     for (let i = text.length - 1; i >= 0; i--) {
         const ch = text[i];
@@ -57,7 +124,7 @@ function matchingOpenParen(text) {
 }
 
 /** Index of the opening quote of the literal ending at `end`, or -1. */
-function findLiteralStart(text, end, quote) {
+function findLiteralStart(text: string, end: number, quote: string): number {
     for (let i = end - 1; i >= 0; i--) {
         if (text[i] === '\\') { i--; continue; }
         if (text[i] === quote) return i;
@@ -66,7 +133,7 @@ function findLiteralStart(text, end, quote) {
 }
 
 /** Top-level argument count of `(a, b(c), "d,e")`. */
-function countArguments(inner) {
+export function countArguments(inner: string): number {
     const text = inner.trim();
     if (!text) return 0;
 
@@ -91,7 +158,7 @@ function countArguments(inner) {
 }
 
 /** Can this member be selected for a call with `argCount` arguments? */
-function arityMatches(member, argCount) {
+export function arityMatches(member: MethodSignature, argCount: number): boolean {
     const params = member.params || [];
     if (argCount === params.length) return true;
     return !!member.varargs && argCount >= params.length - 1;
@@ -102,7 +169,7 @@ function arityMatches(member, argCount) {
  * `context.declarations` holds the parsed report declarations; the first match
  * wins (fields, then parameters, then variables).
  */
-function resolveReference(ref, context) {
+function resolveReference(ref: TrailingReference, context: ResolverContext): Resolution {
     const declarations = context.declarations || {};
     const decl = (declarations.fields || []).find(d => d.name === ref.name)
         || (declarations.parameters || []).find(d => d.name === ref.name)
@@ -119,10 +186,19 @@ function resolveReference(ref, context) {
 
     const members = context.lookup(declaredType);
     if (!members || !members.resolved) {
-        return outcome('unknown-type', { ...root, declaredType, typeKey: members ? members.typeKey : declaredType });
+        return outcome('unknown-type', {
+            ...root,
+            declaredType,
+            typeKey: members ? members.typeKey : declaredType,
+        });
     }
     if (members.ambiguous) {
-        return outcome('ambiguous', { ...root, declaredType, typeKey: members.typeKey, ambiguity: members.ambiguity });
+        return outcome('ambiguous', {
+            ...root,
+            declaredType,
+            typeKey: members.typeKey,
+            ambiguity: members.ambiguity,
+        });
     }
 
     return {
@@ -135,7 +211,12 @@ function resolveReference(ref, context) {
 }
 
 /** Type of the value a called method returns, or an unresolved reason. */
-function resolveReturnType(receiver, methodName, argCount, context) {
+function resolveReturnType(
+    receiver: Resolution,
+    methodName: string,
+    argCount: number,
+    context: ResolverContext
+): Resolution {
     const members = context.lookup(receiver.typeKey);
     if (!members || !members.resolved) {
         return outcome('unknown-type', {
@@ -144,7 +225,9 @@ function resolveReturnType(receiver, methodName, argCount, context) {
         });
     }
 
-    const candidates = members.methods.filter(m => m.name === methodName && arityMatches(m, argCount));
+    const candidates = members.methods.filter(
+        (m: MethodSignature) => m.name === methodName && arityMatches(m, argCount)
+    );
     if (candidates.length === 0) {
         return outcome('unknown-method', { ...receiver, methodName });
     }
@@ -175,12 +258,12 @@ function resolveReturnType(receiver, methodName, argCount, context) {
     };
 }
 
-function isTypeVariable(type) {
+export function isTypeVariable(type: string | null | undefined): boolean {
     return /^[A-Z](\[\])*$/.test(String(type || '').trim());
 }
 
 /** Type of a trailing literal (string, char, number, boolean) or null. */
-function literalType(text) {
+export function literalType(text: string): string | null {
     if (/"(?:[^"\\]|\\.)*"$/.test(text)) return 'java.lang.String';
     if (/'((?:[^'\\]|\\.)*)'$/.test(text)) return 'java.lang.Character';
     if (/\btrue$|\bfalse$/.test(text)) return 'java.lang.Boolean';
@@ -192,20 +275,21 @@ function literalType(text) {
 
 /**
  * Walk the expression to the left of a dot and report the type it evaluates to.
- *
- * @param {string} textBeforeDot
- * @param {{ mapDeclarations?: object, declarations?: object, lookup: (type: string) => object }} context
- * @returns {{ resolved: boolean, reason: string, typeKey: string|null,
- *             declaredType: string|null, sigil?: string, name?: string,
- *             reference?: string, chain?: string[] }}
  */
-function resolveReceiver(textBeforeDot, context) {
+export function resolveReceiver(
+    textBeforeDot: string | null | undefined,
+    context: ResolverContext
+): Resolution {
     const text = String(textBeforeDot ?? '').replace(/\s+$/, '');
     if (!text) return outcome('not-a-receiver');
     return resolveExpression(text, context, 0);
 }
 
-function resolveExpression(rawText, context, depth) {
+export function resolveExpression(
+    rawText: string,
+    context: ResolverContext,
+    depth: number
+): Resolution {
     if (depth > MAX_DEPTH) return outcome('too-deep');
 
     const text = rawText.replace(/\s+$/, '');
@@ -228,7 +312,12 @@ function resolveExpression(rawText, context, depth) {
 
         const constructorMatch = /(?:^|[^\w$.])new\s+([\w.$]+)$/.exec(beforeArgs);
         if (constructorMatch) {
-            return { resolved: true, reason: 'ok', typeKey: constructorMatch[1], declaredType: constructorMatch[1] };
+            return {
+                resolved: true,
+                reason: 'ok',
+                typeKey: constructorMatch[1],
+                declaredType: constructorMatch[1],
+            };
         }
 
         const nameMatch = /([A-Za-z_$][\w$]*)$/.exec(beforeArgs);
@@ -250,15 +339,3 @@ function resolveExpression(rawText, context, depth) {
 
     return outcome('not-a-receiver');
 }
-
-module.exports = {
-    resolveReceiver,
-    resolveExpression,
-    arityMatches,
-    countArguments,
-    matchingOpenParen,
-    matchTrailingReference,
-    literalType,
-    isTypeVariable,
-    MAX_DEPTH,
-};

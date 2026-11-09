@@ -1,4 +1,4 @@
-// jdkMemberIndex.js
+// jdkMemberIndex.ts
 // The member table behind typed completion: what can be called on a value of a
 // given declared class.
 //
@@ -9,11 +9,108 @@
 // This module deliberately does not require('vscode'): the receiver resolver,
 // the completion builder and the tests all work on plain objects.
 
-const fs   = require('fs');
-const path = require('path');
+import * as fs from 'fs';
+import * as path from 'path';
 
-const INDEX_PATH = path.join(__dirname, 'data', 'jdk-members.json');
-const EXTRA_PATH = path.join(__dirname, 'data', 'extra-types.json');
+export const INDEX_PATH = path.join(__dirname, 'data', 'jdk-members.json');
+export const EXTRA_PATH = path.join(__dirname, 'data', 'extra-types.json');
+
+export interface JdkMethod {
+    name: string;
+    params: string[];
+    returns?: string;
+    static?: boolean;
+    varargs?: boolean;
+    since: number;
+    deprecated?: boolean;
+}
+
+export interface JdkField {
+    name: string;
+    type: string;
+    static?: boolean;
+    since: number;
+    deprecated?: boolean;
+}
+
+export interface JdkType {
+    kind?: string;
+    methods?: JdkMethod[];
+    fields?: JdkField[];
+    super?: string[];
+}
+
+/** The generated JDK table, before the extra types are merged in. */
+export interface JdkIndexFile {
+    schemaVersion?: number;
+    generator?: string;
+    generatedWith?: string | null;
+    baseline?: number;
+    note?: string;
+    edges?: Record<string, string[]>;
+    types?: Record<string, JdkType>;
+}
+
+/** data/extra-types.json: hand-curated JasperReports engine types. */
+export interface ExtraTypesFile {
+    schemaVersion?: number;
+    source?: string;
+    note?: string;
+    types?: Record<string, JdkType>;
+}
+
+export interface FlattenedMethod extends JdkMethod {
+    declaringType: string;
+}
+
+export interface FlattenedField extends JdkField {
+    declaringType: string;
+}
+
+export interface MemberTable {
+    methods: FlattenedMethod[];
+    fields: FlattenedField[];
+}
+
+export interface Ambiguity {
+    name: string;
+    candidates: string[];
+}
+
+export interface MemberLookup {
+    typeKey: string | null;
+    resolved: boolean;
+    reason?: string;
+    kind?: string;
+    methods: FlattenedMethod[];
+    fields: FlattenedField[];
+    ambiguous: boolean;
+    ambiguity?: Ambiguity | null;
+}
+
+export interface MemberOptions {
+    baseline?: number;
+    includeStatics?: boolean;
+}
+
+export interface MemberIndex {
+    types: Record<string, JdkType>;
+    edges: Record<string, string[]>;
+    baseline: number;
+    /** Absent on the minimal fallback table, exactly as the legacy object was. */
+    generatedWith?: string | null;
+    usingFallback: boolean;
+    ambiguous: Map<string, string[]>;
+    bySimpleName: Map<string, string[]>;
+}
+
+export interface MemberStats {
+    types: number;
+    members: number;
+    baseline: number;
+    generatedWith?: string | null;
+    usingFallback: boolean;
+}
 
 const PRIMITIVES = new Set(['boolean', 'byte', 'char', 'short', 'int', 'long', 'float', 'double', 'void']);
 
@@ -34,7 +131,7 @@ const PACKAGE_PRIORITY = [
  * Used only when the generated data is missing or unreadable, so a broken
  * install still completes the most common calls instead of failing.
  */
-const MINIMAL_TYPES = {
+const MINIMAL_TYPES: Record<string, JdkType> = {
     'java.lang.Object': {
         kind: 'class',
         methods: [
@@ -78,22 +175,27 @@ const MINIMAL_TYPES = {
     },
 };
 
-let cachedIndex = null;
-const flatCache = new Map();
+let cachedIndex: MemberIndex | null = null;
+const flatCache = new Map<string, MemberTable>();
 
 // ── Loading ───────────────────────────────────────────────────────────────────
 
-function readJson(file) {
+/**
+ * Read a JSON data file. The shapes are exercised by test/jdkIndexData.test.js;
+ * this is the one untyped file boundary, and a bad file yields the fallback.
+ */
+function readJson<T>(file: string): T | null {
     try {
-        return JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch (_) {
+        const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
+        return parsed as T | null;
+    } catch {
         return null; // missing/corrupt data must never break completion
     }
 }
 
 /** Preference order for short-name collisions, most specific package first. */
-function compareFqn(a, b) {
-    const rank = (fqn) => {
+function compareFqn(a: string, b: string): number {
+    const rank = (fqn: string): number => {
         const i = PACKAGE_PRIORITY.findIndex(prefix => fqn.startsWith(prefix));
         return i === -1 ? PACKAGE_PRIORITY.length : i;
     };
@@ -105,9 +207,19 @@ function compareFqn(a, b) {
  * short names. Exported so tests can exercise the fallback without touching the
  * filesystem.
  */
-function buildIndex(jdk, extra) {
+export function buildIndex(
+    jdk: JdkIndexFile | null | undefined,
+    extra: ExtraTypesFile | null | undefined
+): MemberIndex {
     if (!jdk || !jdk.types) {
-        return { types: MINIMAL_TYPES, edges: {}, baseline: 8, usingFallback: true, ambiguous: new Map(), bySimpleName: new Map() };
+        return {
+            types: MINIMAL_TYPES,
+            edges: {},
+            baseline: 8,
+            usingFallback: true,
+            ambiguous: new Map(),
+            bySimpleName: new Map(),
+        };
     }
 
     const types = { ...jdk.types };
@@ -126,12 +238,13 @@ function buildIndex(jdk, extra) {
         }
     }
 
-    const ambiguous = new Map();
-    const bySimpleName = new Map();
+    const ambiguous = new Map<string, string[]>();
+    const bySimpleName = new Map<string, string[]>();
     for (const fqn of Object.keys(types)) {
-        const simple = fqn.split('.').pop();
-        if (!bySimpleName.has(simple)) bySimpleName.set(simple, []);
-        bySimpleName.get(simple).push(fqn);
+        const simple = fqn.split('.').pop() ?? '';
+        const sameName = bySimpleName.get(simple);
+        if (sameName) sameName.push(fqn);
+        else bySimpleName.set(simple, [fqn]);
     }
     for (const [simple, list] of bySimpleName) {
         list.sort(compareFqn);
@@ -150,13 +263,18 @@ function buildIndex(jdk, extra) {
 }
 
 /** The merged index, loaded once per process. */
-function loadIndex() {
-    if (!cachedIndex) cachedIndex = buildIndex(readJson(INDEX_PATH), readJson(EXTRA_PATH));
+function loadIndex(): MemberIndex {
+    if (!cachedIndex) {
+        cachedIndex = buildIndex(
+            readJson<JdkIndexFile>(INDEX_PATH),
+            readJson<ExtraTypesFile>(EXTRA_PATH)
+        );
+    }
     return cachedIndex;
 }
 
 /** Drop every cache (tests, and any future index reload). */
-function clearCache() {
+export function clearCache(): void {
     cachedIndex = null;
     flatCache.clear();
 }
@@ -164,7 +282,7 @@ function clearCache() {
 // ── Type keys ─────────────────────────────────────────────────────────────────
 
 /** Remove generic arguments: `java.util.List<java.lang.String>` → `java.util.List`. */
-function stripGenerics(text) {
+function stripGenerics(text: string): string {
     let out = '';
     let depth = 0;
     for (const ch of text) {
@@ -180,10 +298,10 @@ function stripGenerics(text) {
  * Accepts full names, short names (`String`, `JRDataSource`), arrays and
  * primitives. Returns null only for input that names no type at all.
  */
-function normalizeTypeKey(raw) {
+export function normalizeTypeKey(raw: string | null | undefined): string | null {
     if (raw === null || raw === undefined) return null;
 
-    let key = stripGenerics(String(raw).trim()).replace(/\.\.\.$/, '[]');
+    const key = stripGenerics(String(raw).trim()).replace(/\.\.\.$/, '[]');
     if (!key) return null;
     if (PRIMITIVES.has(key) || key.endsWith('[]')) return key;
 
@@ -197,7 +315,7 @@ function normalizeTypeKey(raw) {
 }
 
 /** True when the key names a type this index can list members for. */
-function isIndexed(rawTypeKey) {
+export function isIndexed(rawTypeKey: string | null | undefined): boolean {
     const key = normalizeTypeKey(rawTypeKey);
     if (!key) return false;
     if (key.endsWith('[]')) return true;
@@ -205,7 +323,7 @@ function isIndexed(rawTypeKey) {
 }
 
 /** `{ candidates: [...] }` when a short name is ambiguous, else null. */
-function ambiguityOf(rawTypeKey) {
+export function ambiguityOf(rawTypeKey: string | null | undefined): Ambiguity | null {
     const key = stripGenerics(String(rawTypeKey ?? '').trim());
     const index = loadIndex();
     if (!key || key.includes('.') || index.types[key]) return null;
@@ -219,31 +337,33 @@ function ambiguityOf(rawTypeKey) {
  * Own and inherited members of one type, most-derived first, deduplicated by
  * signature. Cached: the completion provider calls this on every keystroke.
  */
-function flattened(typeKey) {
+function flattened(typeKey: string): MemberTable {
     const index = loadIndex();
-    if (flatCache.has(typeKey)) return flatCache.get(typeKey);
+    const cached = flatCache.get(typeKey);
+    if (cached) return cached;
 
-    const methods = [];
-    const fields = [];
-    const seenMethods = new Set();
-    const seenFields = new Set();
-    const visited = new Set();
+    const methods: FlattenedMethod[] = [];
+    const fields: FlattenedField[] = [];
+    const seenMethods = new Set<string>();
+    const seenFields = new Set<string>();
+    const visited = new Set<string>();
 
     const queue = [typeKey];
     while (queue.length) {
         const fqn = queue.shift();
+        if (fqn === undefined) break;
         if (visited.has(fqn)) continue;
         visited.add(fqn);
 
         const type = index.types[fqn];
         if (type) {
-            for (const method of type.methods) {
+            for (const method of type.methods || []) {
                 const signature = `${method.name}(${method.params.join(',')})`;
                 if (seenMethods.has(signature)) continue;
                 seenMethods.add(signature);
                 methods.push({ ...method, declaringType: fqn });
             }
-            for (const field of type.fields) {
+            for (const field of type.fields || []) {
                 if (seenFields.has(field.name)) continue;
                 seenFields.add(field.name);
                 fields.push({ ...field, declaringType: fqn });
@@ -255,13 +375,13 @@ function flattened(typeKey) {
         }
     }
 
-    const result = { methods, fields };
+    const result: MemberTable = { methods, fields };
     flatCache.set(typeKey, result);
     return result;
 }
 
 /** Members of an array type: `length` plus the Object methods it still has. */
-function arrayMembers(typeKey, baseline) {
+function arrayMembers(typeKey: string, baseline: number): MemberLookup {
     const object = flattened('java.lang.Object');
     return {
         typeKey,
@@ -276,19 +396,18 @@ function arrayMembers(typeKey, baseline) {
     };
 }
 
-function unresolved(typeKey, reason) {
+function unresolved(typeKey: string | null, reason: string): MemberLookup {
     return { typeKey, resolved: false, reason, methods: [], fields: [], ambiguous: false };
 }
 
 /**
  * Members a value of `rawTypeKey` offers.
- *
- * @param {string} rawTypeKey  declared class or a short name
- * @param {{ baseline?: number, includeStatics?: boolean }} [options]
- * @returns {{ typeKey: string|null, resolved: boolean, reason?: string,
- *             kind?: string, methods: object[], fields: object[], ambiguous: boolean }}
+ * `rawTypeKey` is a declared class or a short name.
  */
-function getMembers(rawTypeKey, options = {}) {
+export function getMembers(
+    rawTypeKey: string | null | undefined,
+    options: MemberOptions = {}
+): MemberLookup {
     const baseline = options.baseline === undefined ? loadIndex().baseline : options.baseline;
     const includeStatics = !!options.includeStatics;
     const ambiguity = ambiguityOf(rawTypeKey);
@@ -296,16 +415,21 @@ function getMembers(rawTypeKey, options = {}) {
     const key = normalizeTypeKey(rawTypeKey);
     if (!key) return unresolved(null, 'no-type');
 
-    if (key.endsWith('[]')) return { ...arrayMembers(key, baseline), ambiguous: !!ambiguity, ambiguity };
+    if (key.endsWith('[]')) {
+        return { ...arrayMembers(key, baseline), ambiguous: !!ambiguity, ambiguity };
+    }
 
     const index = loadIndex();
-    if (!index.types[key]) return { ...unresolved(key, 'unknown-type'), ambiguous: !!ambiguity, ambiguity };
+    if (!index.types[key]) {
+        return { ...unresolved(key, 'unknown-type'), ambiguous: !!ambiguity, ambiguity };
+    }
 
     const flat = flattened(key);
     // Copy on the way out: the flattened table is shared, callers must not be
     // able to mutate it (and completion items do get decorated by callers).
-    const keep = (member) => member.since <= baseline && (includeStatics || !member.static);
-    const copy = (member) => ({ ...member });
+    const keep = (member: FlattenedMethod | FlattenedField): boolean =>
+        member.since <= baseline && (includeStatics || !member.static);
+    const copy = <T extends object>(member: T): T => ({ ...member });
 
     return {
         typeKey: key,
@@ -319,7 +443,7 @@ function getMembers(rawTypeKey, options = {}) {
 }
 
 /** Diagnostics for the Output channel and for tests. */
-function stats() {
+export function stats(): MemberStats {
     const index = loadIndex();
     const typeCount = Object.keys(index.types).length;
     let memberCount = 0;
@@ -334,15 +458,3 @@ function stats() {
         usingFallback: index.usingFallback,
     };
 }
-
-module.exports = {
-    buildIndex,
-    getMembers,
-    normalizeTypeKey,
-    isIndexed,
-    ambiguityOf,
-    stats,
-    clearCache,
-    INDEX_PATH,
-    EXTRA_PATH,
-};

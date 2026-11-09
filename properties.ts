@@ -1,4 +1,4 @@
-// properties.js
+// properties.ts
 // A small, dependency-free reader for Java .properties files.
 //
 // Resource bundles are plain properties files, so the extension only needs
@@ -7,14 +7,25 @@
 // Duplicate keys are returned in file order; the caller decides precedence
 // (java.util.Properties keeps the last value).
 
-/**
- * @param {string} text
- * @returns {{key:string, value:string, offset:number, line:number, character:number}[]}
- *   `offset` is the character offset of the key in `text`; `line` is 0-based.
- */
-function parseProperties(text) {
-    const entries = [];
-    const lines = [];
+export interface PropertyEntry {
+    key: string;
+    value: string;
+    /** Character offset of the key in the source text. */
+    offset: number;
+    /** 0-based line of the key. */
+    line: number;
+    /** 0-based column of the key. */
+    character: number;
+}
+
+interface SourceLine {
+    text: string;
+    offset: number;
+}
+
+export function parseProperties(text: string): PropertyEntry[] {
+    const entries: PropertyEntry[] = [];
+    const lines: SourceLine[] = [];
     let offset = 0;
 
     for (const raw of text.split('\n')) {
@@ -60,14 +71,19 @@ function parseProperties(text) {
 }
 
 /** Odd number of trailing backslashes means the value continues next line. */
-function hasContinuation(text) {
+function hasContinuation(text: string): boolean {
     let backslashes = 0;
     for (let i = text.length - 1; i >= 0 && text[i] === '\\'; i--) backslashes++;
     return backslashes % 2 === 1;
 }
 
+interface KeyValue {
+    rawKey: string;
+    rawValue: string;
+}
+
 /** Split `key = value` on the first unescaped separator. */
-function splitKeyValue(logical) {
+function splitKeyValue(logical: string): KeyValue {
     let escaped = false;
 
     for (let i = 0; i < logical.length; i++) {
@@ -95,14 +111,13 @@ function splitKeyValue(logical) {
 }
 
 /** Decode the escapes Java properties files use. */
-function decodeEscapes(raw) {
-    return raw.replace(/\\(u[0-9a-fA-F]{4}|[\s\S])/g, (_match, group) => {
+export function decodeEscapes(raw: string): string {
+    const simple: Record<string, string> = { t: '\t', n: '\n', r: '\r', f: '\f' };
+
+    return raw.replace(/\\(u[0-9a-fA-F]{4}|[\s\S])/g, (_match, group: string) => {
         if (group.length === 5 && group[0] === 'u') {
             return String.fromCharCode(parseInt(group.slice(1), 16));
         }
-        const simple = { t: '\t', n: '\n', r: '\r', f: '\f' };
         return simple[group] ?? group;
     });
 }
-
-module.exports = { parseProperties, decodeEscapes };

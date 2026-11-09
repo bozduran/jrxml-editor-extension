@@ -1,13 +1,17 @@
-// expressionFormatter.js
+// expressionFormatter.ts
 // Formats a Java/JasperReports expression into a readable multi-line form.
 
+export interface TernarySegments {
+    cond: string;
+    then: string;
+    els: string;
+}
+
 /**
- * Main entry point.
- * @param {string} expr      Raw expression string
- * @param {number} indentSize  Spaces per indent level
- * @returns {string} Formatted expression
+ * Main entry point: formats one Java/JasperReports expression.
+ * `indentSize` is the number of spaces per indent level.
  */
-function formatExpression(expr, indentSize = 4) {
+export function formatExpression(expr: string, indentSize: number = 4): string {
     if (!expr || !expr.trim()) return expr;
 
     const indent = ' '.repeat(indentSize);
@@ -41,7 +45,7 @@ function formatExpression(expr, indentSize = 4) {
 // Step 1 – Whitespace normalization
 // ─────────────────────────────────────────────────────────────────────────────
 
-function normalizeWhitespace(expr) {
+function normalizeWhitespace(expr: string): string {
     const parts = splitRespectingStrings(expr);
     return parts.map((p, i) => {
         if (i % 2 !== 0) return p;           // inside string — untouched
@@ -54,7 +58,7 @@ function normalizeWhitespace(expr) {
 // Step 2 – Ternary formatting
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatTernary(expr, indent) {
+function formatTernary(expr: string, indent: string): string {
     if (!hasTopLevelChar(expr, '?')) return expr;
 
     // Split into segments: [condition, thenBranch, elseBranch, ...]
@@ -71,7 +75,7 @@ function formatTernary(expr, indent) {
  * Split `condition ? then : else` at the top level.
  * Returns { cond, then, else } or null.
  */
-function splitTernary(expr) {
+function splitTernary(expr: string): TernarySegments | null {
     let depth = 0, inStr = false, strCh = '';
     let condEnd = -1, thenEnd = -1;
 
@@ -102,7 +106,7 @@ function splitTernary(expr) {
     };
 }
 
-function buildTernaryString(seg, indent, level) {
+function buildTernaryString(seg: TernarySegments, indent: string, level: number): string {
     const pad  = indent.repeat(level);
     const pad1 = indent.repeat(level + 1);
 
@@ -131,7 +135,7 @@ function buildTernaryString(seg, indent, level) {
  * `$F{x}.something` or `net.sf.jasper` package references.
  * Requires at least 3 chained CALLS before splitting.
  */
-function formatMethodChain(expr, indent) {
+function formatMethodChain(expr: string, indent: string): string {
     // Count top-level method calls (dot followed by identifier then open paren)
     const callCount = countTopLevelMethodCalls(expr);
     if (callCount < 3) return expr;
@@ -172,7 +176,7 @@ function formatMethodChain(expr, indent) {
     return result;
 }
 
-function countTopLevelMethodCalls(expr) {
+function countTopLevelMethodCalls(expr: string): number {
     let count = 0, depth = 0, inStr = false, strCh = '';
     for (let i = 0; i < expr.length; i++) {
         const ch = expr[i];
@@ -196,7 +200,7 @@ function countTopLevelMethodCalls(expr) {
 // Step 4 – Binary operator line-breaking
 // ─────────────────────────────────────────────────────────────────────────────
 
-function formatBinaryOperators(expr, indent) {
+function formatBinaryOperators(expr: string, indent: string): string {
     // Only break if the whole expression is longer than 100 chars
     if (expr.length < 100) return expr;
 
@@ -249,7 +253,7 @@ function formatBinaryOperators(expr, indent) {
  * then puts each argument on its own line.
  * Uses a character-level scanner so nested parens don't confuse it.
  */
-function formatLongArgumentLists(expr, indent, indentUnit = '    ') {
+function formatLongArgumentLists(expr: string, indent: string, indentUnit: string = '    '): string {
     let result = '';
     let i = 0;
 
@@ -303,7 +307,7 @@ function formatLongArgumentLists(expr, indent, indentUnit = '    ') {
  * Given the index of `(`, return the index of the matching `)`.
  * Returns -1 if not found.
  */
-function findMatchingParen(expr, openIdx) {
+function findMatchingParen(expr: string, openIdx: number): number {
     let depth = 0, inStr = false, strCh = '';
     for (let i = openIdx; i < expr.length; i++) {
         const ch = expr[i];
@@ -327,7 +331,7 @@ function findMatchingParen(expr, openIdx) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** True if `char` appears at depth=0 outside strings */
-function hasTopLevelChar(expr, char) {
+function hasTopLevelChar(expr: string, char: string): boolean {
     let depth = 0, inStr = false, strCh = '';
     for (let i = 0; i < expr.length; i++) {
         const ch = expr[i];
@@ -348,8 +352,8 @@ function hasTopLevelChar(expr, char) {
  * Split string into alternating outside/inside-string parts.
  * Even indices = outside strings, odd = inside string literals.
  */
-function splitRespectingStrings(expr) {
-    const parts = [];
+function splitRespectingStrings(expr: string): string[] {
+    const parts: string[] = [];
     let buf = '', i = 0;
 
     while (i < expr.length) {
@@ -372,8 +376,8 @@ function splitRespectingStrings(expr) {
     return parts;
 }
 
-function splitTopLevelCommas(str) {
-    const result = [];
+function splitTopLevelCommas(str: string): string[] {
+    const result: string[] = [];
     let depth = 0, inStr = false, strCh = '', buf = '';
 
     for (let i = 0; i < str.length; i++) {
@@ -393,5 +397,3 @@ function splitTopLevelCommas(str) {
     if (buf) result.push(buf);
     return result;
 }
-
-module.exports = { formatExpression };

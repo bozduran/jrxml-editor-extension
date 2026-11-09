@@ -1,4 +1,4 @@
-// settingsSchema.js
+// settingsSchema.ts
 // The settings shown in the JRXML settings panel, grouped for display.
 //
 // Defaults and types must match package.json's `contributes.configuration`;
@@ -7,9 +7,32 @@
 // Keys are relative to the `jrxml` section, so `format.expression` maps to
 // `jrxml.format.expression`.
 
-const SECTION = 'jrxml';
+export const SECTION = 'jrxml';
 
-const SETTINGS_GROUPS = [
+export type SettingType = 'boolean' | 'number' | 'string' | 'array';
+
+export type SettingValue = boolean | number | string | readonly unknown[];
+
+/** A `[value, label]` pair used by enum-like string settings. */
+export type SettingOption = readonly [string, string];
+
+export interface SettingDescriptor {
+    readonly key: string;
+    readonly type: SettingType;
+    readonly default: SettingValue;
+    readonly label: string;
+    readonly description: string;
+    readonly options?: readonly SettingOption[];
+}
+
+export interface SettingsGroup {
+    readonly id: string;
+    readonly title: string;
+    readonly description: string;
+    readonly settings: readonly SettingDescriptor[];
+}
+
+export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
     {
         id: 'editor',
         title: 'Editor',
@@ -217,15 +240,13 @@ const SETTINGS_GROUPS = [
 ];
 
 /** Flat list of every setting in panel order. */
-function allSettings() {
+export function allSettings(): SettingDescriptor[] {
     return SETTINGS_GROUPS.flatMap(group => group.settings);
 }
 
 /** `{ key: default }` for every setting. */
-function defaults() {
-    const out = {};
+export function defaults(): Record<string, SettingValue> {
+    const out: Record<string, SettingValue> = {};
     for (const setting of allSettings()) out[setting.key] = setting.default;
     return out;
 }
-
-module.exports = { SECTION, SETTINGS_GROUPS, allSettings, defaults };

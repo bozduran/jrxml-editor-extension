@@ -1,12 +1,12 @@
-// jrxmlSections.js
+// jrxmlSections.ts
 // The report's band-bearing top-level sections, shared by the outline builder
 // and the layout checker.
 
-const REPORT_SECTIONS = [
+export const REPORT_SECTIONS = [
     'background', 'title', 'pageHeader', 'columnHeader', 'detail',
     'columnFooter', 'pageFooter', 'lastPageFooter', 'summary', 'noData',
-];
+] as const;
 
-const BAND_TAGS = new Set(['band', ...REPORT_SECTIONS]);
+export type ReportSection = typeof REPORT_SECTIONS[number];
 
-module.exports = { REPORT_SECTIONS, BAND_TAGS };
+export const BAND_TAGS: ReadonlySet<string> = new Set(['band', ...REPORT_SECTIONS]);

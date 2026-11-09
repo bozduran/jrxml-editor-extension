@@ -23,8 +23,11 @@ const CORE_FILE = path.join(__dirname, 'ifElseBuilder.js');
 function buildCoreScript() {
     // Defensive: a string literal containing </script> would close the element.
     const source = fs.readFileSync(CORE_FILE, 'utf8').replace(/<\/script/gi, '<\\/script');
+    // The compiled module is CommonJS, so the wrapper provides the `exports`
+    // binding its emitted assignments expect (the webview has no module system).
     return [
         '(function (module) {',
+        '  const exports = module.exports;',
         source,
         '  window.__JRXML_IFELSE__ = module.exports;',
         '})({ exports: {} });',

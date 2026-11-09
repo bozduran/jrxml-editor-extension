@@ -1,4 +1,4 @@
-// includeGraph.js
+// includeGraph.ts
 // The include-chain graph for .jrxml files: which report calls which, by base
 // name, and the top-down chain that leads to a given report.
 //
@@ -10,39 +10,56 @@
 // several files share a base name every one of them is a target, so a report is
 // never silently invisible just because its name is duplicated.
 
+export interface ReportFile {
+    readonly path: string;
+    readonly text: string;
+}
+
+export interface IncludeIndex {
+    readonly paths: string[];
+    readonly base: Map<string, string>;
+    readonly tokens: Map<string, Set<string>>;
+    readonly byBase: Map<string, string[]>;
+    readonly callees: Map<string, Set<string>>;
+    readonly callers: Map<string, Set<string>>;
+}
+
+export interface IncludeTreeNode {
+    path: string;
+    current: boolean;
+    children: IncludeTreeNode[];
+}
+
 const QUOTED = /"([^"]*)"/g;
 
-function normalizePath(value) {
+export function normalizePath(value: string): string {
     return String(value).replace(/\\/g, '/');
 }
 
 /** File name without its extension. */
-function baseName(filePath) {
+export function baseName(filePath: string): string {
     const name = normalizePath(filePath).split('/').pop() || '';
     const dot = name.lastIndexOf('.');
     return dot > 0 ? name.slice(0, dot) : name;
 }
 
 /** Every double-quoted token in a document. */
-function quotedTokens(text) {
-    const tokens = new Set();
+export function quotedTokens(text: string): Set<string> {
+    const tokens = new Set<string>();
     QUOTED.lastIndex = 0;
 
-    let match;
+    let match: RegExpExecArray | null;
     while ((match = QUOTED.exec(text)) !== null) {
         if (match[1]) tokens.add(match[1]);
     }
     return tokens;
 }
 
-/**
- * Build the call graph.
- * @param {{path:string, text:string}[]} files
- */
-function buildIndex(files) {
-    const base   = new Map();
-    const tokens = new Map();
-    const byBase = new Map();
+/** Build the call graph. */
+export function buildIndex(files: readonly ReportFile[]): IncludeIndex {
+    const base   = new Map<string, string>();
+    const tokens = new Map<string, Set<string>>();
+    const byBase = new Map<string, string[]>();
 
     for (const file of files) {
         const path = normalizePath(file.path);
@@ -51,17 +68,20 @@ function buildIndex(files) {
         base.set(path, name);
         tokens.set(path, quotedTokens(file.text));
 
-        if (!byBase.has(name)) byBase.set(name, []);
-        byBase.get(name).push(path);
+        const sameName = byBase.get(name);
+        if (sameName) sameName.push(path);
+        else byBase.set(name, [path]);
     }
 
-    const callees = new Map();
-    const callers = new Map();
+    const callees = new Map<string, Set<string>>();
+    const callers = new Map<string, Set<string>>();
 
     for (const path of base.keys()) {
-        const targets = new Set();
+        const targets = new Set<string>();
+        const fileTokens = tokens.get(path);
+        if (!fileTokens) continue;
 
-        for (const token of tokens.get(path)) {
+        for (const token of fileTokens) {
             for (const candidate of (byBase.get(token) || [])) {
                 if (candidate !== path) targets.add(candidate); // self-references ignored
             }
@@ -69,8 +89,12 @@ function buildIndex(files) {
 
         callees.set(path, targets);
         for (const target of targets) {
-            if (!callers.has(target)) callers.set(target, new Set());
-            callers.get(target).add(path);
+            let targetCallers = callers.get(target);
+            if (!targetCallers) {
+                targetCallers = new Set();
+                callers.set(target, targetCallers);
+            }
+            targetCallers.add(path);
         }
     }
 
@@ -78,12 +102,13 @@ function buildIndex(files) {
 }
 
 /** Every file that calls `target`, directly or transitively. */
-function referencersOf(index, target) {
-    const seen  = new Set([target]);
+export function referencersOf(index: IncludeIndex, target: string): Set<string> {
+    const seen  = new Set<string>([target]);
     const queue = [target];
 
     while (queue.length > 0) {
         const current = queue.shift();
+        if (current === undefined) break;
         for (const caller of (index.callers.get(current) || [])) {
             if (!seen.has(caller)) {
                 seen.add(caller);
@@ -97,7 +122,7 @@ function referencersOf(index, target) {
 }
 
 /** `referencersOf(target)` plus the target itself. */
-function affectedFiles(index, target) {
+export function affectedFiles(index: IncludeIndex, target: string): Set<string> {
     const affected = referencersOf(index, target);
     affected.add(target);
     return affected;
@@ -107,7 +132,7 @@ function affectedFiles(index, target) {
  * Top templates for `target`: the affected files that nothing calls. When every
  * affected file has a caller (a cycle), the target is its own top.
  */
-function topsFor(index, target) {
+export function topsFor(index: IncludeIndex, target: string): string[] {
     const tops = [...affectedFiles(index, target)]
         .filter(path => (index.callers.get(path) || new Set()).size === 0)
         .sort();
@@ -118,18 +143,22 @@ function topsFor(index, target) {
 /**
  * Downward tree from every top, pruned to the branches that reach `target`.
  * Cycles are cut and children are sorted by path.
- *
- * @returns {{ path:string, current:boolean, children:object[] }[]}
  */
-function buildTree(index, target) {
+export function buildTree(index: IncludeIndex, target: string): IncludeTreeNode[] {
     if (!index.base.has(target)) return [];
 
     const above = affectedFiles(index, target);
     return topsFor(index, target).map(top => buildNode(index, top, target, above, new Set()));
 }
 
-function buildNode(index, path, target, above, ancestors) {
-    const node = { path, current: path === target, children: [] };
+function buildNode(
+    index: IncludeIndex,
+    path: string,
+    target: string,
+    above: ReadonlySet<string>,
+    ancestors: ReadonlySet<string>
+): IncludeTreeNode {
+    const node: IncludeTreeNode = { path, current: path === target, children: [] };
     if (path === target) return node;
 
     const next = new Set(ancestors);
@@ -142,14 +171,3 @@ function buildNode(index, path, target, above, ancestors) {
     node.children = children.map(child => buildNode(index, child, target, above, next));
     return node;
 }
-
-module.exports = {
-    buildIndex,
-    buildTree,
-    referencersOf,
-    affectedFiles,
-    topsFor,
-    baseName,
-    quotedTokens,
-    normalizePath,
-};
