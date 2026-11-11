@@ -8,6 +8,6 @@ declare function acquireVsCodeApi<TState = unknown>(): {
     setState(state: TState): void;
 };
 
-declare const INITIAL_MODEL: unknown;
+declare const INITIAL_MODEL: DesignModel;
 declare const INITIAL_FILE: string;
 declare const INITIAL_VERSION: number | null;

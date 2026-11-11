@@ -17,9 +17,8 @@
     "sourceMap": true,
     "noEmitOnError": true,
     "useDefineForClassFields": false,
-    "allowJs": true,
-    "checkJs": false
+    "allowJs": false
   },
-  "include": ["designViewClient.js", "designViewClient.ts", "webview/**/*.d.ts"],
+  "include": ["designViewClient.ts", "webview/**/*.d.ts"],
   "exclude": ["node_modules", "out"]
 }
