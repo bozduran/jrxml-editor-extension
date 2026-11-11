@@ -1,0 +1,3 @@
+# Require the repository owner to review workflow and security changes.
+/.github/ @bozduran
+/SECURITY.md @bozduran
