@@ -1,5 +1,5 @@
 // designViewHtml.ts
-// Pure HTML/CSS/client-JS builder for the JRXML design view webview.
+// Pure HTML/CSS/client-script builder for the JRXML design view webview.
 //
 // Like expressionPanelHtml, this module deliberately does NOT require('vscode')
 // so the generated document can be unit-tested with plain Node. The host panel

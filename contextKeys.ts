@@ -41,10 +41,10 @@ function register(context: vscode.ExtensionContext): void {
     const update = (): void => {
         const document = vscode.window.activeTextEditor?.document;
         if (!isJrxml(document)) {
-            applyKeys({ [KEYS.sort]: false, [KEYS.sql]: false, [KEYS.clear]: false });
+            void applyKeys({ [KEYS.sort]: false, [KEYS.sql]: false, [KEYS.clear]: false });
             return;
         }
-        applyKeys(computeContextKeys(document.getText()));
+        void applyKeys(computeContextKeys(document.getText()));
     };
 
     const schedule = (): void => { clearTimeout(timer); timer = setTimeout(update, DEBOUNCE_MS); };

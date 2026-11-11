@@ -381,7 +381,7 @@ error-severity finding exists, so a pipeline can gate on it. `--json` emits the
 same findings with a `summary` block. This is a static gate: keep the project's
 Maven/Ant compile + `verifyDesign` step as the authoritative build gate.
 
-When you add a command or a settings group, also update `tutorialHtml.js`;
+When you add a command or a settings group, also update `tutorialHtml.ts`;
 `test/tutorialHtml.test.js` fails until the tutorial documents it. The pull
 request template repeats the reminder.
 
@@ -425,7 +425,7 @@ The editor activates for cursor positions inside any of these tags:
 `categoryExpression`, `seriesExpression`, `labelExpression`, `crosstabExpression`,
 `bookmarkLevelExpression`, `chartTitleExpression`, `chartSubtitleExpression`,
 `timePeriodExpression`, and more. The canonical list lives in
-[expressionTags.js](expressionTags.js); `test/expressionUtils.test.js` fails if it
+[expressionTags.ts](expressionTags.ts); `test/expressionUtils.test.js` fails if it
 drifts from the TextMate grammar.
 
 ---

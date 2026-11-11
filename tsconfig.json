@@ -1,7 +1,7 @@
 {
-  // Host-side compiler for the extension. During the migration this project
-  // accepts JavaScript (allowJs) so tests can run against out/ before every
-  // module is converted; strict checking applies to .ts files immediately.
+  // Host-side compiler for the extension and the build tools. Every source is
+  // TypeScript now; the design-view browser client has its own DOM project
+  // (tsconfig.webview.json) and is excluded here.
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -19,11 +19,9 @@
     "noEmitOnError": true,
     "useDefineForClassFields": false,
     "noUncheckedIndexedAccess": false,
-    "exactOptionalPropertyTypes": false,
-    "allowJs": true,
-    "checkJs": false
+    "exactOptionalPropertyTypes": false
   },
-  "include": ["*.js", "*.ts", "tools/**/*.js", "tools/**/*.ts"],
+  "include": ["*.ts", "tools/**/*.ts"],
   "exclude": [
     "node_modules",
     "out",
@@ -32,7 +30,6 @@
     "integration",
     "scripts",
     "webview",
-    "designViewClient.js",
     "designViewClient.ts"
   ]
 }

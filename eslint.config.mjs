@@ -16,6 +16,22 @@ export default tseslint.config(
     },
     ...typescriptRecommended,
     {
+        // Rules that need the compiler's project graph. Both projects are
+        // listed so host sources and the DOM client each resolve to their own
+        // tsconfig.
+        files: ["**/*.ts"],
+        languageOptions: {
+            parserOptions: {
+                project: ["./tsconfig.json", "./tsconfig.webview.json"],
+                tsconfigRootDir: import.meta.dirname,
+            },
+        },
+        rules: {
+            "@typescript-eslint/no-floating-promises": "error",
+            "@typescript-eslint/await-thenable": "error",
+        },
+    },
+    {
         files: ["**/*.js"],
         languageOptions: {
             globals: {
@@ -60,7 +76,7 @@ export default tseslint.config(
     },
     {
         // The design-view client is an inlined browser script, not a Node module.
-        files: ["designViewClient.js", "designViewClient.ts"],
+        files: ["designViewClient.ts"],
         languageOptions: {
             globals: {
                 ...globals.browser,

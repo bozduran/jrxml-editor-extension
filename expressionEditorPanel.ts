@@ -112,13 +112,13 @@ class ExpressionEditorPanel {
         try {
             switch (message.command) {
                 case 'applyExpression':
-                    this._applyToSource(message.expression);
+                    void this._applyToSource(message.expression);
                     break;
                 case 'formatExpression':
                     this._sendFormatted(message.expression);
                     break;
                 case 'copyExpression':
-                    vscode.env.clipboard.writeText(message.expression);
+                    void vscode.env.clipboard.writeText(message.expression);
                     vscode.window.showInformationMessage('Expression copied to clipboard.');
                     break;
                 case 'openIfElseBuilder':
