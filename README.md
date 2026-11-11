@@ -304,28 +304,28 @@ request template repeats the reminder.
 
 ## Releasing
 
-The **Build VSIX** workflow can bump the version for you:
+Releases are PR-based. No workflow pushes to the default branch or creates a tag
+directly from a manual run.
 
-1. In GitHub, open **Actions → Build VSIX → Run workflow**.
-2. Pick the default branch (`master`) and a bump: `patch`, `minor`, `major`, or `none`.
-3. Run it.
+1. In GitHub, open **Actions → Start release → Run workflow** and enter the
+   version as strict `X.Y.Z` (no `v` prefix).
+2. The workflow creates `release/vX.Y.Z` from the default branch, bumps
+   `package.json`/`package-lock.json` and the `CHANGELOG.md` heading, commits
+   `chore(release): vX.Y.Z`, pushes only that branch, and opens a pull request.
+3. Review and **squash-merge** the release PR. Keep the commit subject
+   `chore(release): vX.Y.Z`; GitHub may append a `(#123)` suffix, which the
+   publish workflow accepts.
+4. The push to `master`/`main` triggers **Publish release**. It re-validates the
+   version and tag, runs the full verification, tags the merge commit, packages
+   the VSIX, writes `SHA256SUMS`, and creates the GitHub Release with both files.
 
-A bump run on the default branch:
-- updates `package.json`, `package-lock.json` and the `CHANGELOG.md` heading through `npm version`,
-- commits `chore(release): <version>` and tags `v<version>`,
-- packages the VSIX, uploads the artifact and creates the GitHub release with the VSIX attached.
+The release PR is opened with the default Actions token, so GitHub does not
+trigger CI on it. Close and reopen the PR, push another commit, or run CI
+manually before merging. The repository must allow GitHub Actions to create
+pull requests.
 
-`none` rebuilds the current version without a commit, tag, or release. Normal pushes
-to `master`/`main` and `v*` tags keep packaging only; a tag build also attaches the
-VSIX to the release and fails if the tag does not match `package.json`.
-
-The bump is pushed with the workflow's `GITHUB_TOKEN`, so it does not trigger a
-second run, and the repository must allow GitHub Actions to push to the default
-branch. If that push fails, no tag is created and the VSIX is still available as a
-workflow artifact.
-
-Locally, `npm version patch` performs the same version + changelog update, commit,
-and tag; push with `git push --follow-tags`.
+Normal merges to `master`/`main` do not tag or publish. Marketplace and Open VSX
+publishing remain manual; no PAT is stored in this repository.
 
 ---
 
