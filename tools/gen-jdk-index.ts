@@ -13,11 +13,96 @@
 //
 // Usage: npm run gen:jdk-index [-- --jdk <path to javap>]
 
-const { execFileSync } = require('child_process');
-const fs   = require('fs');
-const path = require('path');
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
-const { repositoryRoot } = require('./repo-root');
+import { repositoryRoot } from './repo-root';
+
+type TypeKind = 'class' | 'interface' | 'enum';
+
+interface MemberType {
+    key: string | null;
+    raw: string;
+    text: string;
+}
+
+interface ParsedField {
+    kind: 'field';
+    name: string;
+    type: MemberType;
+    modifiers: string[];
+}
+
+interface ParsedMethod {
+    kind: 'method';
+    name: string;
+    returns: MemberType;
+    params: MemberType[];
+    modifiers: string[];
+}
+
+type ParsedMember = ParsedField | ParsedMethod;
+
+interface Header {
+    fqn: string;
+    simpleClassName: string;
+    supertypes: string[];
+    kind: TypeKind;
+}
+
+interface RawField {
+    name: string;
+    type: string;
+    static: boolean;
+}
+
+interface RawMethod {
+    name: string;
+    params: string[];
+    returns: string;
+    static: boolean;
+    varargs: boolean;
+    bridge: boolean;
+}
+
+interface RawType {
+    kind: TypeKind;
+    methods: RawMethod[];
+    fields: RawField[];
+}
+
+interface SinceMember {
+    since?: number;
+    deprecated?: boolean;
+}
+
+interface FinalMethod extends SinceMember {
+    name: string;
+    params: string[];
+    returns: string;
+    static: boolean;
+    varargs: boolean;
+}
+
+interface FinalField extends RawField, SinceMember {}
+
+interface FinalType {
+    kind: TypeKind;
+    methods: FinalMethod[];
+    fields: FinalField[];
+}
+
+type SuperEdges = Record<string, string[]>;
+
+interface SuperEdgeResult {
+    edges: SuperEdges;
+    failures: string[];
+}
+
+interface SinceOptions {
+    sequenced?: boolean;
+}
 
 // ── Curated class list ────────────────────────────────────────────────────────
 // Deliberately limited to types that can actually be the type of a report
@@ -95,7 +180,7 @@ const CLASSES = [
 // `<fqn>#<member>|<param,param>` (one overload by parameter types) — the last
 // form is the only safe one when an old overload shares a name and arity with a
 // newer one, as `toArray(T[])` / `toArray(IntFunction)` does.
-const SINCE_OVERRIDES = Object.assign(Object.create(null), {
+const SINCE_OVERRIDES: Record<string, number> = Object.assign(Object.create(null), {
     // java.lang.String / CharSequence
     'java.lang.String#isBlank': 11,
     'java.lang.String#lines': 11,
@@ -183,14 +268,14 @@ const SINCE_OVERRIDES = Object.assign(Object.create(null), {
 // Members whose name alone dates them: the constant-descriptor pair only exists
 // on classes that implement Constable/ConstantDesc (Java 12+). Null-prototype so
 // a member named `toString` or `constructor` cannot resolve to Object.prototype.
-const SINCE_BY_NAME = Object.assign(Object.create(null), {
+const SINCE_BY_NAME: Record<string, number> = Object.assign(Object.create(null), {
     describeConstable: 12,
     resolveConstantDesc: 12,
 });
 
 // Overloads that share a name and arity with an older method, so only the exact
 // parameter types can identify them.
-const SINCE_BY_SIGNATURE = Object.assign(Object.create(null), {
+const SINCE_BY_SIGNATURE: Record<string, number> = Object.assign(Object.create(null), {
     'java.util.Collection#toArray|java.util.function.IntFunction': 11,
     'java.util.List#toArray|java.util.function.IntFunction': 11,
     'java.util.Set#toArray|java.util.function.IntFunction': 11,
@@ -239,7 +324,7 @@ const MODIFIERS = new Set([
 // ── javap output parsing ──────────────────────────────────────────────────────
 
 /** Split on `sep` at angle/paren/bracket depth 0 (generic arguments contain commas). */
-function splitTopLevel(text, sep) {
+function splitTopLevel(text: string, sep: string): string[] {
     const parts = [];
     let depth = 0;
     let current = '';
@@ -258,7 +343,7 @@ function splitTopLevel(text, sep) {
 }
 
 /** Remove every `<...>` group: `java.util.List<java.lang.String>` → `java.util.List`. */
-function stripGenerics(text) {
+function stripGenerics(text: string): string {
     let out = '';
     let depth = 0;
     for (const ch of text) {
@@ -270,7 +355,7 @@ function stripGenerics(text) {
 }
 
 /** Drop a leading generic method header: `<T> T requireNonNull(T)` → `T requireNonNull(T)`. */
-function stripMethodTypeParams(text) {
+function stripMethodTypeParams(text: string): string {
     if (!text.startsWith('<')) return text;
     let depth = 0;
     for (let i = 0; i < text.length; i++) {
@@ -284,7 +369,7 @@ function stripMethodTypeParams(text) {
 }
 
 /** Normalise a javap type into a lookup key, or null when it cannot be resolved. */
-function typeKey(raw) {
+function typeKey(raw: string | null | undefined): string | null {
     if (!raw) return null;
     let text = raw.trim().replace(/\.\.\.$/, '[]');
     text = stripGenerics(text);
@@ -293,13 +378,13 @@ function typeKey(raw) {
 }
 
 /** `java.util.List<java.lang.String>` → `java.util.List`, keeping the raw form for display. */
-function memberType(raw) {
+function memberType(raw: string): MemberType {
     const key = typeKey(raw);
     return { key, raw: raw.trim(), text: stripGenerics(raw).replace(/\.\.\.$/, '[]') };
 }
 
 /** Parse one javap body line into a method, a field, or null. */
-function parseMember(line, simpleClassName) {
+function parseMember(line: string, simpleClassName: string): ParsedMember | null {
     const text = line.trim().replace(/;$/, '');
     if (!text || text === '}' || text === '{') return null;
 
@@ -339,7 +424,7 @@ function parseMember(line, simpleClassName) {
 }
 
 /** Index of the first `(` outside generic arguments, or -1. */
-function firstTopLevelParen(text) {
+function firstTopLevelParen(text: string): number {
     let depth = 0;
     for (let i = 0; i < text.length; i++) {
         const ch = text[i];
@@ -351,7 +436,7 @@ function firstTopLevelParen(text) {
 }
 
 /** Index of the `)` matching the `(` at `open`, or -1. */
-function matchingParen(text, open) {
+function matchingParen(text: string, open: number): number {
     let depth = 0;
     for (let i = open; i < text.length; i++) {
         if (text[i] === '(') depth++;
@@ -364,7 +449,7 @@ function matchingParen(text, open) {
 }
 
 /** Parse the `public final class a.b.C<T> extends X implements Y, Z {` header. */
-function parseHeader(line) {
+function parseHeader(line: string): Header | null {
     // Flatten generic arguments first: a type-parameter bound
     // (`BaseStream<T, S extends BaseStream<T, S>>`) contains the word `extends`
     // and would otherwise be mistaken for the supertype clause.
@@ -373,7 +458,7 @@ function parseHeader(line) {
     const nameMatch = /\b(?:class|interface|enum)\s+([\w.$]+)/.exec(flat);
     if (!nameMatch) return null;
     const fqn = nameMatch[1];
-    const simpleClassName = fqn.split('.').pop();
+    const simpleClassName = fqn.split('.').pop() ?? fqn;
 
     const supertypes = [];
     for (const keyword of ['extends', 'implements']) {
@@ -385,37 +470,37 @@ function parseHeader(line) {
         }
     }
 
-    const kind = /\binterface\b/.test(flat) ? 'interface'
+    const kind: TypeKind = /\binterface\b/.test(flat) ? 'interface'
         : supertypes.includes('java.lang.Enum') ? 'enum'
         : 'class';
 
     return { fqn, simpleClassName, supertypes, kind };
 }
 
-const javapCache = new Map();
+const javapCache = new Map<string, string>();
 
 /** javap output for one class, memoised so edges and members share a call. */
-function javapOutput(fqn, javapBin) {
+function javapOutput(fqn: string, javapBin: string): string {
     if (!javapCache.has(fqn)) {
         javapCache.set(fqn, execFileSync(javapBin, ['-public', fqn], {
             encoding: 'utf8',
             maxBuffer: 64 * 1024 * 1024,
         }));
     }
-    return javapCache.get(fqn);
+    return javapCache.get(fqn) as string;
 }
 
-const javapVerboseCache = new Map();
+const javapVerboseCache = new Map<string, string>();
 
 /** `javap -v -public` output for one class, memoised (used for member flags). */
-function javapVerbose(fqn, javapBin) {
+function javapVerbose(fqn: string, javapBin: string): string {
     if (!javapVerboseCache.has(fqn)) {
         javapVerboseCache.set(fqn, execFileSync(javapBin, ['-v', '-public', fqn], {
             encoding: 'utf8',
             maxBuffer: 128 * 1024 * 1024,
         }));
     }
-    return javapVerboseCache.get(fqn);
+    return javapVerboseCache.get(fqn) as string;
 }
 
 /**
@@ -425,9 +510,9 @@ function javapVerbose(fqn, javapBin) {
  * signatures: `String.valueOf(Object)` looks like a bridge but is a method
  * users legitimately call.
  */
-function bridgeDeclarations(verboseOutput) {
-    const skipped = new Set();
-    let pending = null;
+function bridgeDeclarations(verboseOutput: string): Set<string> {
+    const skipped = new Set<string>();
+    let pending: string | null = null;
 
     for (const line of verboseOutput.split(/\r?\n/)) {
         const declaration = /^ {2}(\S.*;)$/.exec(line);
@@ -450,7 +535,7 @@ function bridgeDeclarations(verboseOutput) {
 }
 
 /** The `class … extends A implements B` header line of a javap report, or null. */
-function headerOf(fqn, javapBin) {
+function headerOf(fqn: string, javapBin: string): Header | null {
     const line = javapOutput(fqn, javapBin).split(/\r?\n/)
         .find(l => /\b(?:class|interface|enum)\s/.test(l) && l.includes('{'));
     return line ? parseHeader(line) : null;
@@ -462,13 +547,14 @@ function headerOf(fqn, javapBin) {
  * JDK 21 and `ArrayList` extends `AbstractList`; without these edges the
  * inherited-member walk would stop before reaching `Collection`.
  */
-function collectSuperEdges(rootClasses, javapBin) {
-    const edges = Object.create(null);
-    const failures = [];
+function collectSuperEdges(rootClasses: readonly string[], javapBin: string): SuperEdgeResult {
+    const edges: SuperEdges = Object.create(null);
+    const failures: string[] = [];
     const queue = [...rootClasses];
 
     while (queue.length) {
         const fqn = queue.shift();
+        if (fqn === undefined) break;
         if (edges[fqn]) continue;
         try {
             const header = headerOf(fqn, javapBin);
@@ -481,7 +567,7 @@ function collectSuperEdges(rootClasses, javapBin) {
                 : [...header.supertypes, 'java.lang.Object'];
         } catch (err) {
             edges[fqn] = [];
-            failures.push(`${fqn}: ${err.message.split('\n')[0]}`);
+            failures.push(`${fqn}: ${(err as Error).message.split('\n')[0]}`);
         }
         for (const parent of edges[fqn]) {
             if (!edges[parent]) queue.push(parent);
@@ -491,18 +577,19 @@ function collectSuperEdges(rootClasses, javapBin) {
 }
 
 /** Run javap and turn its output into a raw entry (bridges still included). */
-function extractType(fqn, javapBin) {
+function extractType(fqn: string, javapBin: string): RawType {
     const output = javapOutput(fqn, javapBin);
 
     const lines = output.split(/\r?\n/);
     const headerLine = lines.find(line => /\b(?:class|interface|enum)\s/.test(line) && line.includes('{'));
     if (!headerLine) throw new Error(`no type header in javap output for ${fqn}`);
     const header = parseHeader(headerLine);
+    if (!header) throw new Error(`no parseable type header in javap output for ${fqn}`);
 
     const synthetic = bridgeDeclarations(javapVerbose(fqn, javapBin));
 
-    const methods = [];
-    const fields = [];
+    const methods: RawMethod[] = [];
+    const fields: RawField[] = [];
 
     for (const line of lines) {
         if (!line.trim().endsWith(';')) continue;
@@ -542,7 +629,7 @@ function extractType(fqn, javapBin) {
 
 const PRIMITIVES = new Set(['boolean', 'byte', 'char', 'short', 'int', 'long', 'float', 'double', 'void']);
 
-function isReferenceType(type) {
+function isReferenceType(type: string | null | undefined): boolean {
     return !!type && !PRIMITIVES.has(type);
 }
 
@@ -552,7 +639,7 @@ function isReferenceType(type) {
  * ones (the erased form the compiler generates for generics and covariant
  * returns).
  */
-function isRedundantBridge(bridge, other) {
+function isRedundantBridge(bridge: RawMethod, other: RawMethod): boolean {
     if (!bridge.bridge || other.bridge) return false;
     if (bridge.name !== other.name) return false;
     if (bridge.params.length !== other.params.length) return false;
@@ -568,8 +655,8 @@ function isRedundantBridge(bridge, other) {
 }
 
 /** Collapse identical signatures, preferring the declared member over a bridge. */
-function normalizeMethods(methods) {
-    const bySignature = new Map();
+function normalizeMethods(methods: readonly RawMethod[]): RawMethod[] {
+    const bySignature = new Map<string, RawMethod>();
     for (const member of methods) {
         const key = `${member.name}(${member.params.join(',')})`;
         const existing = bySignature.get(key);
@@ -590,12 +677,12 @@ function normalizeMethods(methods) {
  * member reachable from the type itself or from an indexed supertype, then
  * attach `since`/`deprecated` and sort.
  */
-function finalizeTypes(raw, edges) {
-    const ancestors = new Map();
-    const types = {};
+function finalizeTypes(raw: Record<string, RawType>, edges: SuperEdges): Record<string, FinalType> {
+    const ancestors = new Map<string, Set<string>>();
+    const types: Record<string, FinalType> = {};
 
-    const inheritedMethods = (fqn) => {
-        const out = [];
+    const inheritedMethods = (fqn: string): RawMethod[] => {
+        const out: RawMethod[] = [];
         for (const ancestor of ancestorSet(fqn, edges, ancestors)) {
             if (!raw[ancestor]) continue;
             for (const m of raw[ancestor].methods) if (!m.bridge) out.push(m);
@@ -605,18 +692,25 @@ function finalizeTypes(raw, edges) {
 
     for (const [fqn, type] of Object.entries(raw)) {
         const reachable = [...type.methods.filter(m => !m.bridge), ...inheritedMethods(fqn)];
-        const keptMethods = normalizeMethods(
+        const keptMethods: FinalMethod[] = normalizeMethods(
             type.methods.filter(m => !reachable.some(other => isRedundantBridge(m, other)))
-        ).map(({ bridge: _bridge, ...member }) => member);
+        ).map(member => ({
+            name: member.name,
+            params: member.params,
+            returns: member.returns,
+            static: member.static,
+            varargs: member.varargs,
+        }));
 
         const supers = ancestorSet(fqn, edges, ancestors);
-        const options = { sequenced: SEQUENCED_OWNERS.some(owner => supers.has(owner)) };
+        const options: SinceOptions = { sequenced: SEQUENCED_OWNERS.some(owner => supers.has(owner)) };
 
         for (const member of keptMethods) {
             member.since = sinceFor(fqn, member, options);
             if (DEPRECATED.has(`${fqn}#${member.name}`)) member.deprecated = true;
         }
-        for (const field of type.fields) {
+        const fields: FinalField[] = type.fields.map(field => ({ ...field }));
+        for (const field of fields) {
             field.since = sinceFor(fqn, { name: field.name }, options);
             if (DEPRECATED.has(`${fqn}#${field.name}`)) field.deprecated = true;
         }
@@ -624,24 +718,25 @@ function finalizeTypes(raw, edges) {
         types[fqn] = {
             kind: type.kind,
             methods: keptMethods.sort(byNameThenArity),
-            fields: type.fields.sort((a, b) => a.name.localeCompare(b.name)),
+            fields: fields.sort((a, b) => a.name.localeCompare(b.name)),
         };
     }
     return types;
 }
 
-function byNameThenArity(a, b) {
+function byNameThenArity(a: { name: string; params: readonly string[] }, b: { name: string; params: readonly string[] }): number {
     return a.name.localeCompare(b.name)
         || a.params.length - b.params.length
         || a.params.join(',').localeCompare(b.params.join(','));
 }
 
-function sinceFor(fqn, member, options = {}) {
+function sinceFor(fqn: string, member: { name: string; params?: readonly string[] }, options: SinceOptions = {}): number {
     if (options.sequenced && SEQUENCED_MEMBERS.has(member.name)) return SEQUENCED_SINCE;
 
-    const arity = member.params ? member.params.length : undefined;
+    const params = member.params ?? [];
+    const arity = member.params ? params.length : undefined;
     if (arity !== undefined) {
-        const bySignature = SINCE_BY_SIGNATURE[`${fqn}#${member.name}|${member.params.join(',')}`];
+        const bySignature = SINCE_BY_SIGNATURE[`${fqn}#${member.name}|${params.join(',')}`];
         if (bySignature !== undefined) return bySignature;
 
         const byArity = SINCE_OVERRIDES[`${fqn}#${member.name}/${arity}`];
@@ -653,9 +748,10 @@ function sinceFor(fqn, member, options = {}) {
 }
 
 /** Every transitive supertype of `fqn`, from the generator's edge map. */
-function ancestorSet(fqn, edges, memo = new Map()) {
-    if (memo.has(fqn)) return memo.get(fqn);
-    const result = new Set();
+function ancestorSet(fqn: string, edges: SuperEdges, memo: Map<string, Set<string>> = new Map()): Set<string> {
+    const cached = memo.get(fqn);
+    if (cached) return cached;
+    const result = new Set<string>();
     memo.set(fqn, result); // cycle guard for `Enum<E extends Enum<E>>`-style graphs
     for (const parent of edges[fqn] || []) {
         result.add(parent);
@@ -666,7 +762,7 @@ function ancestorSet(fqn, edges, memo = new Map()) {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
-function main() {
+function main(): void {
     const argv = process.argv.slice(2);
     const jdkIndex = argv.indexOf('--jdk');
     const javapBin = jdkIndex === -1 ? 'javap' : argv[jdkIndex + 1];
@@ -678,12 +774,12 @@ function main() {
     const { edges, failures: edgeFailures } = collectSuperEdges(CLASSES, javapBin);
     const failures = [...edgeFailures];
 
-    const raw = {};
+    const raw: Record<string, RawType> = {};
     for (const fqn of CLASSES) {
         try {
             raw[fqn] = extractType(fqn, javapBin);
         } catch (err) {
-            failures.push(`${fqn}: ${err.message.split('\n')[0]}`);
+            failures.push(`${fqn}: ${(err as Error).message.split('\n')[0]}`);
         }
     }
 
@@ -694,9 +790,10 @@ function main() {
     const newerThanBaseline = [];
     for (const [fqn, type] of Object.entries(types)) {
         for (const member of [...type.methods, ...type.fields]) {
-            if (member.since <= BASELINE) continue;
-            const arity = member.params ? `/${member.params.length}` : '';
-            newerThanBaseline.push(`${fqn}#${member.name}${arity} → ${member.since}`);
+            const since = member.since ?? BASELINE;
+            if (since <= BASELINE) continue;
+            const arity = 'params' in member ? `/${member.params.length}` : '';
+            newerThanBaseline.push(`${fqn}#${member.name}${arity} → ${since}`);
         }
     }
 

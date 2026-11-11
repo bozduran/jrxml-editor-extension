@@ -1,4 +1,4 @@
-// tools/update-changelog.js
+// tools/update-changelog.ts
 // Inserts the released version's heading into CHANGELOG.md.
 //
 // The npm "version" lifecycle script calls this after npm has written the new
@@ -9,34 +9,34 @@
 //
 // Usage: node tools/update-changelog.js [version] [YYYY-MM-DD]
 
-const fs   = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
 
-const { repositoryRoot } = require('./repo-root');
+import { repositoryRoot } from './repo-root';
 
 const ROOT = repositoryRoot();
 const CHANGELOG = path.join(ROOT, 'CHANGELOG.md');
 const UNRELEASED = '## [Unreleased]';
 
-function assertVersion(version) {
+function assertVersion(version: string): void {
     if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
         throw new Error(`invalid version "${version}" (expected semver, e.g. 1.2.3)`);
     }
 }
 
-function assertDate(date) {
+function assertDate(date: string): void {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         throw new Error(`invalid date "${date}" (expected YYYY-MM-DD)`);
     }
 }
 
-function insertVersionHeading(text, version, date) {
+function insertVersionHeading(text: string, version: string, date: string): string {
     assertVersion(version);
     assertDate(date);
 
     const eol = text.includes('\r\n') ? '\r\n' : '\n';
     const lines = text.split(/\r?\n/);
-    const unreleased = [];
+    const unreleased: number[] = [];
 
     lines.forEach((line, index) => {
         if (line.trim() === UNRELEASED) unreleased.push(index);
@@ -54,9 +54,9 @@ function insertVersionHeading(text, version, date) {
     return lines.join(eol);
 }
 
-function main() {
-    const version = process.argv[2]
-        || JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+function main(): void {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { version: string };
+    const version = process.argv[2] || packageJson.version;
     const date = process.argv[3] || new Date().toISOString().slice(0, 10);
     const text = fs.readFileSync(CHANGELOG, 'utf8');
 
@@ -68,9 +68,9 @@ if (require.main === module) {
     try {
         main();
     } catch (err) {
-        console.error(`update-changelog: ${err.message}`);
+        console.error(`update-changelog: ${(err as Error).message}`);
         process.exitCode = 1;
     }
 }
 
-module.exports = { insertVersionHeading };
+export { insertVersionHeading };

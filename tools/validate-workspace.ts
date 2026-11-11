@@ -12,18 +12,31 @@
 // keep the project's Maven/Ant compile + verifyDesign step as the authoritative
 // build gate.
 
-const fs   = require('fs');
-const path = require('path');
-const { collectFindings } = require('../diagnostics');
+import fs from 'node:fs';
+import path from 'node:path';
 
-const { EXCLUDED_DIRS } = require('../workspaceFiles');
+import { collectFindings } from '../diagnostics';
+import type { Finding } from '../diagnostics';
+import { EXCLUDED_DIRS } from '../workspaceFiles';
+
+interface ValidationResult {
+    file: string;
+    text: string;
+    findings: Finding[];
+}
+
+interface Totals {
+    files: number;
+    errors: number;
+    warnings: number;
+}
 
 /** Recursively collect .jrxml files under a file or directory. */
-function collectFiles(target) {
-    let stat;
+function collectFiles(target: string): string[] {
+    let stat: fs.Stats;
     try {
         stat = fs.statSync(target);
-    } catch (_) {
+    } catch {
         return [];
     }
 
@@ -32,7 +45,7 @@ function collectFiles(target) {
     }
     if (!stat.isDirectory()) return [];
 
-    const files = [];
+    const files: string[] = [];
     for (const entry of fs.readdirSync(target, { withFileTypes: true })) {
         const full = path.join(target, entry.name);
         if (entry.isDirectory()) {
@@ -46,7 +59,7 @@ function collectFiles(target) {
 }
 
 /** Analyse every file, keeping the text for line/column reporting. */
-function validateFiles(files, workspaceRoots = []) {
+function validateFiles(files: readonly string[], workspaceRoots: readonly string[] = []): ValidationResult[] {
     return files.map(file => {
         const text = fs.readFileSync(file, 'utf8');
         return {
@@ -57,7 +70,7 @@ function validateFiles(files, workspaceRoots = []) {
     });
 }
 
-function summarise(results) {
+function summarise(results: readonly ValidationResult[]): Totals {
     let errors = 0;
     let warnings = 0;
 
@@ -71,13 +84,13 @@ function summarise(results) {
     return { files: results.length, errors, warnings };
 }
 
-function positionOf(text, offset) {
+function positionOf(text: string, offset: number): { line: number; column: number } {
     const before = text.slice(0, offset).split('\n');
     return { line: before.length, column: before[before.length - 1].length + 1 };
 }
 
-function formatText(results) {
-    const lines = [];
+function formatText(results: readonly ValidationResult[]): string {
+    const lines: string[] = [];
 
     for (const result of results) {
         for (const finding of result.findings) {
@@ -94,7 +107,7 @@ function formatText(results) {
     return lines.join('\n');
 }
 
-function formatJson(results) {
+function formatJson(results: readonly ValidationResult[]): string {
     return JSON.stringify({
         files: results.map(result => ({
             file: result.file,
@@ -108,7 +121,7 @@ function formatJson(results) {
 }
 
 /** Run the CLI; returns the process exit code. */
-function main(argv = process.argv.slice(2)) {
+function main(argv: string[] = process.argv.slice(2)): number {
     const json = argv.includes('--json');
     const paths = argv.filter(argument => !argument.startsWith('--'));
     const targets = paths.length > 0 ? paths : [process.cwd()];
@@ -125,4 +138,5 @@ if (require.main === module) {
     process.exitCode = main();
 }
 
-module.exports = { collectFiles, validateFiles, summarise, formatText, formatJson, main };
+export { collectFiles, validateFiles, summarise, formatText, formatJson, main };
+export type { ValidationResult };

@@ -1,13 +1,14 @@
+// tools/repo-root.ts
 // Locate the repository root from a tool script.
 //
 // Tools are compiled into out/tools, so a fixed `__dirname/..` would point at
 // out/ instead of the repository root. Walk up until the package manifest is
 // found: the same code works from tools/ (source) and out/tools/ (compiled).
 
-const fs = require('node:fs');
-const path = require('node:path');
+import fs from 'node:fs';
+import path from 'node:path';
 
-function repositoryRoot(start = __dirname) {
+function repositoryRoot(start: string = __dirname): string {
     let dir = path.resolve(start);
     for (;;) {
         if (fs.existsSync(path.join(dir, 'package.json'))) return dir;
@@ -19,4 +20,4 @@ function repositoryRoot(start = __dirname) {
     }
 }
 
-module.exports = { repositoryRoot };
+export { repositoryRoot };
