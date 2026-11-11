@@ -603,5 +603,25 @@
     "@vscode/vsce": "^3.3.2",
     "eslint": "^9.0.0",
     "globals": "^15.0.0"
+  },
+  "overrides": {
+    "@vscode/test-cli": {
+      "glob": "14.0.5",
+      "minimatch": "11.0.8"
+    },
+    "@vscode/vsce": {
+      "glob": "14.0.5",
+      "minimatch": "11.0.8"
+    },
+    "mocha": {
+      "glob": "14.0.5",
+      "minimatch": "11.0.8",
+      "serialize-javascript": "7.1.4",
+      "diff": "9.0.0"
+    },
+    "test-exclude": {
+      "glob": "14.0.5",
+      "minimatch": "11.0.8"
+    }
   }
 }
