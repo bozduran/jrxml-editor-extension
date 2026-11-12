@@ -69,7 +69,7 @@ Module._load = function (request, ...rest) {
 
 // The module exports the registration disposable; the provider object itself is
 // what the stub captured.
-require('../completionProvider');
+require('../out/completionProvider');
 const provider = registered;
 
 let seq = 0;
@@ -360,7 +360,7 @@ test('the legacy contexts still work', () => {
     assert.ok(labels(insideVariable).includes('Count'));
 
     const afterDollar = completeExpression('$');
-    assert.deepStrictEqual(labels(afterDollar), ['$F{', '$P{', '$V{', '$R{']);
+    assert.deepStrictEqual(labels(afterDollar), ['$F{', '$P{', '$V{', '$R{', '$X{']);
 });
 
 test('a single dot without a receiver falls back instead of erroring', () => {
@@ -404,4 +404,17 @@ test('$R{ completes keys from the report resource bundle', () => {
 
     assert.deepStrictEqual(labels(items).sort(), ['body', 'title']);
     assert.strictEqual(find(items, 'title').detail, 'Welcome');
+});
+
+test('$P!{ completes parameters inside a <query>', () => {
+    settings = {};
+    const text = `<jasperReport name="R">
+  <parameter name="Clause" class="java.lang.String"/>
+  <query language="sql"><![CDATA[SELECT * FROM t WHERE x = $P!{]]></query>
+</jasperReport>`;
+    const open = 'WHERE x = $P!{';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+
+    assert.ok(labels(items).includes('Clause'));
 });

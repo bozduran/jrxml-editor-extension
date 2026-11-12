@@ -29,7 +29,7 @@ const {
     wrapExpression,
     hasCdata,
     EXPRESSION_TAGS,
-} = require('../expressionUtils');
+} = require('../out/expressionUtils');
 
 function fakeDocument(text) {
     return {
@@ -114,6 +114,25 @@ test('the expression formatter can rewrite every registry tag', () => {
         assert.ok(replacement, `no replacement for <${tag}>`);
         assert.ok(replacement.newTag.includes('$F{b}'), tag);
     }
+});
+
+test('the grammar highlights <query> content as an embedded language', () => {
+    assert.ok(grammar.repository.query, 'missing #query rule');
+    assert.ok(grammar.patterns.some(rule => rule.include === '#query'));
+
+    const query = grammar.repository.query.patterns.find(pattern => pattern.begin);
+    assert.ok(query, 'missing query begin/end rule');
+    assert.doesNotThrow(() => new RegExp(query.begin));
+    assert.doesNotThrow(() => new RegExp(query.end));
+
+    const sql = grammar.repository.query.patterns.find(pattern => pattern.name === 'meta.query.sql.jrxml');
+    const jsonql = grammar.repository.query.patterns.find(pattern => pattern.name === 'meta.query.jsonql.jrxml');
+    assert.ok(sql && jsonql, 'missing language-specific query rules');
+    assert.ok(sql.patterns.some(rule => rule.include === '#query_keyword'));
+    assert.ok(sql.patterns.some(rule => rule.include === '#query_comment'));
+    assert.ok(!jsonql.patterns.some(rule => rule.include === '#query_keyword'));
+    assert.ok(!jsonql.patterns.some(rule => rule.include === '#query_comment'));
+    assert.ok(jsonql.patterns.some(rule => rule.include === '#query_string_json'));
 });
 
 test('the expression editor recognizes every registry tag at the cursor', () => {

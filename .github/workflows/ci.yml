@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, unit, integration and audit
+    name: Lint, typecheck, unit, integration and audit
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Typecheck
+        run: npm run typecheck
+
       - name: Unit tests
         run: npm test
 
@@ -45,6 +48,9 @@ jobs:
 
       - name: Package VSIX
         run: npm run package
+
+      - name: Static workspace validation
+        run: npm run validate:workspace -- integration/workspace
 
       # The extension ships no runtime dependencies, so this gate should stay
       # empty. High and critical findings block; lower severities are reported

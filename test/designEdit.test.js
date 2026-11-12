@@ -10,10 +10,10 @@ const {
     escapeXmlText,
     splitCdata,
     MAX_CONTENT,
-} = require('../designEdit');
-const { buildDesignModel } = require('../designModel');
-const { applyEdits } = require('../edits');
-const { scanXml } = require('../xmlspan');
+} = require('../out/designEdit');
+const { buildDesignModel } = require('../out/designModel');
+const { applyEdits } = require('../out/edits');
+const { scanXml } = require('../out/xmlspan');
 
 function report(inner) {
     return [

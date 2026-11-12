@@ -1,0 +1,54 @@
+// reportLanguage.ts
+// Which document expression language a report declares.
+//
+// JasperReports supports Java, Groovy and JavaScript. The extension's parser,
+// formatter and member index are Java-only, so every consumer that applies
+// Java semantics must first ask what the report actually declares.
+
+import { scanXml } from './xmlspan';
+import type { XmlScanResult } from './xmlspan';
+
+/** The only language the extension models with Java semantics. */
+export const JAVA = 'java';
+
+/** A report's declared expression language and the attribute's source span. */
+export interface ReportLanguage {
+    /** Normalized to lower case; `java` when the attribute is absent. */
+    language: string;
+    /** False when the attribute is absent/empty or the document cannot be scanned. */
+    declared: boolean;
+    /** Start of the attribute value, or -1 when it was not read. */
+    offset: number;
+    length: number;
+}
+
+export function reportLanguage(text: string): ReportLanguage {
+    return languageOfScan(scanXml(text));
+}
+
+/**
+ * The same result from an existing scan, so callers that already parsed the
+ * document do not scan it twice.
+ */
+export function languageOfScan(scan: XmlScanResult | null): ReportLanguage {
+    if (!scan || scan.error || !scan.doc || scan.doc.root.tag !== 'jasperReport') {
+        return { language: JAVA, declared: false, offset: -1, length: 0 };
+    }
+
+    const attr = scan.doc.root.attr('language');
+    if (!attr || !attr.value.trim()) {
+        return { language: JAVA, declared: false, offset: -1, length: 0 };
+    }
+
+    return {
+        language: attr.value.trim().toLowerCase(),
+        declared: true,
+        offset:   attr.valueStart,
+        length:   attr.value.length,
+    };
+}
+
+/** True when the report declares Java or leaves the language at its default. */
+export function isJavaLanguage(text: string): boolean {
+    return reportLanguage(text).language === JAVA;
+}

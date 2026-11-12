@@ -7,7 +7,7 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const { checkVariableOrder, CODE } = require('../evaluationOrder');
+const { checkVariableOrder, CODE } = require('../out/evaluationOrder');
 
 function report(body) {
     return `<jasperReport name="R">\n${body}\n</jasperReport>`;

@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const { lintXml, findStringLiterals, firstMarkupTag, RULE } = require('../xmlLint');
+const { lintXml, findStringLiterals, firstMarkupTag, RULE } = require('../out/xmlLint');
 
 function lineOf(text, offset) {
     return text.slice(0, offset).split('\n').length;

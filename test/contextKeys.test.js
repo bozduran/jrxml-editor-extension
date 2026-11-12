@@ -13,7 +13,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { computeContextKeys, KEYS } = require('../contextKeys');
+const { computeContextKeys, KEYS } = require('../out/contextKeys');
 
 function fixture(name) {
     return fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');

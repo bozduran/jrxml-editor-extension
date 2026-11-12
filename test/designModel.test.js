@@ -15,7 +15,7 @@ const {
     MAX_ELEMENTS,
     MAX_TEXT,
     MAX_CONTENT,
-} = require('../designModel');
+} = require('../out/designModel');
 
 function fixture(name) {
     return fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');

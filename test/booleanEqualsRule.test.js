@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { CODE, MESSAGE, checkBooleanEquals } = require('../booleanEqualsRule');
+const { CODE, MESSAGE, checkBooleanEquals } = require('../out/booleanEqualsRule');
 
 function declarations(overrides = {}) {
     return {
@@ -87,4 +87,45 @@ test('reports ranges that point at the matched comparison', () => {
 
     const [hit] = check(expression, decls);
     assert.strictEqual(expression.slice(hit.start, hit.end), '$F{active} != true');
+});
+
+test('sees dash names through the shared token grammar', () => {
+    const decls = declarations({
+        allFields: [{ name: 'my-flag', type: 'java.lang.Boolean' }],
+    });
+
+    assert.strictEqual(
+        check('$F{my-flag} == true', decls)[0].replacement,
+        'EQUALS($F{my-flag}, true)',
+    );
+});
+
+test('a dataset Boolean shadowing a report String is not rewritten', () => {
+    const report = declarations();
+    const datasetScope = {
+        fields: [{ name: 'active', type: 'java.lang.String' }],
+        parameters: [],
+        variables: [],
+    };
+
+    assert.deepStrictEqual(
+        checkBooleanEquals('$F{active} == true', report, datasetScope),
+        [],
+    );
+});
+
+test('a dataset Boolean shadows a report String inside its own scope', () => {
+    const report = declarations({
+        allFields: [{ name: 'active', type: 'java.lang.String' }],
+    });
+    const datasetScope = {
+        fields: [{ name: 'active', type: 'java.lang.Boolean' }],
+        parameters: [],
+        variables: [],
+    };
+
+    assert.strictEqual(
+        checkBooleanEquals('$F{active} == true', report, datasetScope)[0].replacement,
+        'EQUALS($F{active}, true)',
+    );
 });

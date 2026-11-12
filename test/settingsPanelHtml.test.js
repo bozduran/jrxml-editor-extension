@@ -4,8 +4,8 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { buildSettingsHtml } = require('../settingsPanelHtml');
-const { SETTINGS_GROUPS, defaults, allSettings } = require('../settingsSchema');
+const { buildSettingsHtml } = require('../out/settingsPanelHtml');
+const { SETTINGS_GROUPS, defaults, allSettings } = require('../out/settingsSchema');
 
 const NONCE = 'feedfacefeedfacefeedfacefeedface';
 

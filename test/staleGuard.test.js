@@ -5,7 +5,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { isStale, STALE_MESSAGE } = require('../staleGuard');
+const { isStale, STALE_MESSAGE } = require('../out/staleGuard');
 
 test('isStale is false only for an unchanged version', () => {
     assert.strictEqual(isStale(1, 1), false);

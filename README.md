@@ -2,13 +2,31 @@
 
 A VS Code extension for working with JasperReports `.jrxml` files — focused on making expressions readable, editable and safer.
 
+## Scope
+
+This is a **static authoring and analysis companion**, not a Jaspersoft Studio
+replacement: it edits and validates JRXML, and bridges compile/verify to the
+project's existing Maven/Ant build instead of embedding the report engine.
+
+- **Supported:** JRXML editing, expressions (editor, If / Else, formatting,
+  typed completion), static diagnostics (references, datasets, layouts,
+  duplicates, subreports, resource bundles, queries), the Studio 7 design view,
+  workspace validation and the build bridge.
+- **Not supported:** report filling/preview, parameter prompting, PDF/HTML/XLSX
+  export, data adapters, JDBC schema introspection, visual chart/table/crosstab
+  designers, classic JasperReports 6 rendering, and full Groovy/JavaScript
+  semantics. Post-1.0 work is planned outside this repository.
+
+From 1.0.0, the contributed command ids and every `jrxml.*` setting are a
+compatibility contract; changes to them follow semver.
+
 ---
 
 ## Features
 
 ### 1. Syntax highlighting
 `.jrxml` files get a dedicated language mode with:
-- **JasperReports built-in functions** (`TODAY`, `IF`, `SUM`, `MIN`, `MAX`, …)
+- **JasperReports built-in functions** (`TODAY`, `IF`, `SUM`, `MIN`, `MAX`, `DATEFORMAT`, `NETWORKDAYS`, …), the `msg()`/`str()` helpers and `$X{}` SQL clause completion
 - **Java keywords** (`if`, `else`, `new`, `null`, `true`, `false`, …)
 - **Java types** (`String`, `Integer`, `BigDecimal`, `Date`, …)
 - **Method calls** and static calls
@@ -74,6 +92,8 @@ Inside the expression preview, brackets are colored by depth (level 1 gold, leve
 - **Report language** — a `language="groovy"` or `"javascript"` report warns that only Java is modeled and loses Java typed member completion
 - **Resource bundles** — `$R{` completes keys from the report's `resourceBundle` (base and locale `.properties`), hover shows the default and localized values, go-to-definition opens the key in the properties file, and a missing key or unresolvable bundle is reported
 - **Subreports** — a literal `<subreportExpression>` (classic) or `<expression>` (Studio 7 subreport element) is resolved against the report directory and workspace; a missing target or a mapped parameter the target does not declare is reported, and go-to-definition opens the source `.jrxml` (a `.jasper` path maps back to its source)
+- **Layout** — columns wider than the page, band heights that exceed the space between the margins, and elements that extend below their band are compile-time errors surfaced before build (`jrxml.lint.layout`)
+- **Queries** — `<query>` content gets SQL/JSONQL highlighting (SQL keywords and `--`/`/* */` comments only when `language="sql"`), `$P!{}` parameter completion, and conservative warnings for an unclosed string literal or block comment (`jrxml.lint.queries`); `$P!{}`/`$X{}` fragments themselves are never flagged
 - Unbalanced parentheses and unclosed string literals
 - **Structural lint rules** ported from the project's commit-time `myhooks` hook:
   - `jrxml.lint.constantPrintWhen` — a `<printWhenExpression>` that is literally `true` or `false`
@@ -232,9 +252,51 @@ To view or edit the whole report layout instead, run **JRXML: Open Design View**
 | `JRXML: Open Settings` | Open the dedicated JRXML settings panel |
 | `JRXML: Open Tutorial` | Open the built-in guide to the editor, panels and settings |
 | `JRXML: Refresh Include Chain` | Re-scan the workspace for the include-chain view |
+| `JRXML: Validate Workspace` | Run all static checks over every `.jrxml` in the workspace and report the results in Problems |
+| `JRXML: Run Build` | Run `jrxml.build.command` as a task and parse JasperReports errors into Problems |
 
 The table lists the primary commands; issue context-menu commands and other
 context-only actions are omitted.
+
+---
+
+## Build bridge
+
+`JRXML: Run Build` runs `jrxml.build.command` (default
+`mvn -q -DskipTests jasperreports:compile`) as a VS Code task and attaches the
+contributed `$jrxml-file-line`, `$jrxml-javac` and `$jrxml-compile` problem
+matchers, so compiler and verifier output lands in the Problems panel.
+
+To wire the same command into the standard build group, add this to
+`.vscode/tasks.json` (adjust `./mvnw` for Windows or for Ant):
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "JRXML: compile and verify",
+      "type": "shell",
+      "command": "./mvnw",
+      "args": ["-q", "-DskipTests", "jasperreports:compile"],
+      "problemMatcher": ["$jrxml-file-line", "$jrxml-javac", "$jrxml-compile"],
+      "group": "build"
+    }
+  ]
+}
+```
+
+`verifyDesign` is a project-level step, not a JasperReports CLI switch. If the
+project has one, append it to the same command (or a second task), for example:
+
+```json
+"jrxml.build.command": "./mvnw -q -DskipTests jasperreports:compile exec:java@verify-design"
+```
+
+The extension runs whatever command you configure and parses its output; it does
+not call `JasperCompileManager.verifyDesign` itself. Keep the project's
+compile + verify step as the authoritative gate; the static checks in this
+extension are a fast pre-check, not a replacement.
 
 ---
 
@@ -256,6 +318,9 @@ context-only actions are omitted.
 | `jrxml.lint.nullDereference` | `true` | Warn on an unguarded `$F`/`$P`/`$V` method-call receiver |
 | `jrxml.lint.booleanEquals` | `true` | Warn on `==`/`!=` or `Boolean.TRUE/FALSE.equals` for Boolean values |
 | `jrxml.lint.duplicateNames` | `true` | Error when a field/parameter/variable/group/dataset/style name is declared more than once in the same scope |
+| `jrxml.lint.layout` | `true` | Error when columns overflow the page, band heights exceed the margins, or an element extends below its band |
+| `jrxml.lint.queries` | `true` | Warn on an unclosed string literal or block comment inside `<query>` content |
+| `jrxml.build.command` | `mvn -q -DskipTests jasperreports:compile` | Shell command run by `JRXML: Run Build`, parsed by the JRXML problem matchers |
 | `jrxml.format.reportName` | `true` | Set `jasperReport/@name` to the file base name |
 | `jrxml.format.positionType` | `true` | Add/set `positionType="Float"` on `textField`/`subreport` |
 | `jrxml.format.textAdjust` | `true` | Add/set `textAdjust="StretchHeight"` on `textField` |
@@ -277,16 +342,23 @@ context-only actions are omitted.
 3. Select the packaged `jrxml-editor-extension-<version>.vsix` (build it with `npm run package`)
 
 ### Manual (development)
+The extension sources are TypeScript; the Extension Host loads the compiled
+output from `out/`.
 ```
 npm install
+npm run build
 ```
-Press `F5` in VS Code to launch the Extension Development Host.
+Press `F5` in VS Code to launch the Extension Development Host (the launch task
+builds first). `npm run watch` keeps both the host and webview projects
+compiling while you work.
 
 ### Tests and linting
 ```
-npm test                          # node:test unit suite (parser, formatter, rules, webview HTML)
+npm run build                     # compile sources to out/ (npm test does this too)
+npm test                          # node:test unit suite against out/
 npm run test:integration          # Extension Host smoke suite (@vscode/test-cli; downloads VS Code)
 npm run test:integration:headless # same suite without a display (CI/sandbox)
+npm run typecheck                 # tsc --noEmit for the host and webview projects
 npm run lint                      # eslint
 ```
 The unit suite runs on plain Node with no VS Code needed. The integration suite
@@ -296,7 +368,20 @@ panel. On a headless Linux box run it under `xvfb-run -a npm run test:integratio
 or use `npm run test:integration:headless` when Electron's headless Ozone platform
 is available (CI containers and sandboxes without X/Wayland).
 
-When you add a command or a settings group, also update `tutorialHtml.js`;
+### CI validation
+The same analysis runs outside VS Code over every `.jrxml` under the given path:
+
+```
+npm run validate:workspace -- path/to/reports
+npm run validate:workspace -- --json path/to/reports
+```
+
+It prints `file:line:column severity message [rule]` and exits `1` when any
+error-severity finding exists, so a pipeline can gate on it. `--json` emits the
+same findings with a `summary` block. This is a static gate: keep the project's
+Maven/Ant compile + `verifyDesign` step as the authoritative build gate.
+
+When you add a command or a settings group, also update `tutorialHtml.ts`;
 `test/tutorialHtml.test.js` fails until the tutorial documents it. The pull
 request template repeats the reminder.
 
@@ -340,7 +425,7 @@ The editor activates for cursor positions inside any of these tags:
 `categoryExpression`, `seriesExpression`, `labelExpression`, `crosstabExpression`,
 `bookmarkLevelExpression`, `chartTitleExpression`, `chartSubtitleExpression`,
 `timePeriodExpression`, and more. The canonical list lives in
-[expressionTags.js](expressionTags.js); `test/expressionUtils.test.js` fails if it
+[expressionTags.ts](expressionTags.ts); `test/expressionUtils.test.js` fails if it
 drifts from the TextMate grammar.
 
 ---

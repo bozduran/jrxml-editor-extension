@@ -1,8 +1,9 @@
 {
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
-  "description": "Syntax highlighting, bracket colorization, and expression formatter for JasperReports .jrxml files",
-  "version": "0.4.0",
+  "description": "JasperReports JRXML authoring: expressions, diagnostics, design view, resource bundles, queries and workspace validation.",
+  "version": "1.1.2",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/bozduran/jrxml-editor-extension.git"
@@ -14,6 +15,7 @@
   "categories": [
     "Programming Languages",
     "Formatters",
+    "Linters",
     "Other"
   ],
   "keywords": [
@@ -21,9 +23,11 @@
     "jasperreports",
     "jasper",
     "java",
-    "expression"
+    "expression",
+    "report",
+    "design-view"
   ],
-  "main": "./extension.js",
+  "main": "./out/extension.js",
   "contributes": {
     "languages": [
       {
@@ -147,12 +151,60 @@
         "command": "jrxml.refreshIncludeChain",
         "title": "JRXML: Refresh Include Chain",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "jrxml.validateWorkspace",
+        "title": "JRXML: Validate Workspace",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "jrxml.runBuild",
+        "title": "JRXML: Run Build",
+        "icon": "$(play)"
       }
     ],
     "submenus": [
       {
         "id": "jrxml",
         "label": "JRXML"
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "jrxml-file-line",
+        "owner": "jrxml",
+        "source": "JasperReports",
+        "applyTo": "allDocuments",
+        "pattern": {
+          "regexp": "^\\[ERROR\\]\\s+(.+?\\.jrxml):(\\d+):\\s*(.*)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        }
+      },
+      {
+        "name": "jrxml-javac",
+        "owner": "jrxml",
+        "source": "JasperReports",
+        "applyTo": "allDocuments",
+        "pattern": {
+          "regexp": "^(?!\\[ERROR\\])\\s*(.+?\\.jrxml):(\\d+):\\s*(?:error:\\s*)?(.*)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        }
+      },
+      {
+        "name": "jrxml-compile",
+        "owner": "jrxml",
+        "source": "JasperReports",
+        "applyTo": "allDocuments",
+        "pattern": {
+          "regexp": "^\\s*(?:\\d+\\.\\s+)?ERROR in\\s+(.+?\\.jrxml)\\s+\\(at line (\\d+)\\)\\s*$",
+          "file": 1,
+          "line": 2,
+          "message": "JasperReports compile error"
+        }
       }
     ],
     "menus": {
@@ -245,6 +297,14 @@
         {
           "command": "jrxml.previousIssue",
           "group": "4_navigate@2"
+        },
+        {
+          "command": "jrxml.validateWorkspace",
+          "group": "5_validate@1"
+        },
+        {
+          "command": "jrxml.runBuild",
+          "group": "6_build@1"
         },
         {
           "command": "jrxml.openSettingsPanel",
@@ -446,6 +506,21 @@
           "default": true,
           "description": "Error when a field, parameter, variable, group, dataset or style name is declared more than once in the same scope."
         },
+        "jrxml.lint.layout": {
+          "type": "boolean",
+          "default": true,
+          "description": "Error when columns do not fit the page, band heights exceed the margins, or an element extends below its band."
+        },
+        "jrxml.lint.queries": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn about an unclosed string literal or block comment inside <query> content."
+        },
+        "jrxml.build.command": {
+          "type": "string",
+          "default": "mvn -q -DskipTests jasperreports:compile",
+          "description": "Shell command run by JRXML: Run Build. Its output is parsed by the contributed $jrxml-* problem matchers."
+        },
         "jrxml.format.reportName": {
           "type": "boolean",
           "default": true,
@@ -587,22 +662,31 @@
     ]
   },
   "scripts": {
-    "test": "node --test test/",
-    "test:integration": "vscode-test",
-    "test:integration:headless": "vscode-test --config .vscode-test.headless.mjs",
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/watch.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('out',{recursive:true,force:true})\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json",
+    "pretest": "npm run build",
+    "test": "node --enable-source-maps --test test/",
+    "test:integration": "npm run build && vscode-test",
+    "test:integration:headless": "npm run build && vscode-test --config .vscode-test.headless.mjs",
     "lint": "eslint .",
+    "validate:workspace": "npm run build && node out/tools/validate-workspace.js",
     "package": "vsce package --no-dependencies",
-    "version": "node tools/update-changelog.js && git add CHANGELOG.md",
-    "gen:jdk-index": "node tools/gen-jdk-index.js"
+    "vscode:prepublish": "npm run build",
+    "version": "npm run build && node out/tools/update-changelog.js && git add CHANGELOG.md",
+    "gen:jdk-index": "npm run build && node out/tools/gen-jdk-index.js"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^18.19.130",
     "@types/vscode": "^1.85.0",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.3.2",
     "eslint": "^9.0.0",
-    "globals": "^15.0.0"
+    "globals": "^15.0.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.2"
   },
   "overrides": {
     "@vscode/test-cli": {

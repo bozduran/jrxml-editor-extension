@@ -9,7 +9,7 @@ const {
     escapeHtmlText,
     jsonForInlineScript,
     getNonce,
-} = require('../expressionPanelHtml');
+} = require('../out/expressionPanelHtml');
 
 const NONCE = 'deadbeefdeadbeefdeadbeefdeadbeef';
 

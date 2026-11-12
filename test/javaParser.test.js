@@ -3,7 +3,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { parseExpression, childExpressions } = require('../javaParser');
+const { parseExpression, childExpressions } = require('../out/javaParser');
 
 test('parses names, literals and null', () => {
     assert.strictEqual(parseExpression('a').kind, 'name');

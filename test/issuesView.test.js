@@ -18,7 +18,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { collectIssueItems, pickFix, overlaps, pickNavigationTarget } = require('../issuesView');
+const { collectIssueItems, pickFix, overlaps, pickNavigationTarget } = require('../out/issuesView');
 
 const URI = { toString: () => 'file:///test/report.jrxml' };
 

@@ -50,7 +50,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-require('../hoverProvider');
+require('../out/hoverProvider');
 const provider = registered;
 
 let seq = 0;

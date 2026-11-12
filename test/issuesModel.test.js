@@ -4,7 +4,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { groupIssues, countIssues, groupInfo } = require('../issuesModel');
+const { groupIssues, countIssues, groupInfo } = require('../out/issuesModel');
 
 const issue = (group, line, character, label) => ({
     group, line, character, label: label || `${group}-${line}-${character}`, message: label || '',

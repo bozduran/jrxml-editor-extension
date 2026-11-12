@@ -3,7 +3,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { formatExpression } = require('../expressionFormatter');
+const { formatExpression } = require('../out/expressionFormatter');
 
 test('returns empty / whitespace-only input untouched', () => {
     assert.strictEqual(formatExpression(''), '');

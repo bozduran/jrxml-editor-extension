@@ -8,7 +8,7 @@ const {
     BUILTIN_PARAMETERS,
     BUILTIN_VARIABLE_NAMES,
     BUILTIN_PARAMETER_NAMES,
-} = require('../jasperBuiltins');
+} = require('../out/jasperBuiltins');
 
 test('builtin lists have unique names', () => {
     for (const [label, list] of [['variables', BUILTIN_VARIABLES], ['parameters', BUILTIN_PARAMETERS]]) {

@@ -8,7 +8,7 @@ const path   = require('node:path');
 const {
     findSubreportLinks,
     resolveSubreportCandidates,
-} = require('../subreports');
+} = require('../out/subreports');
 
 const MASTER = `<jasperReport name="M">
   <subreport>

@@ -1,0 +1,35 @@
+{
+  // Host-side compiler for the extension and the build tools. Every source is
+  // TypeScript now; the design-view browser client has its own DOM project
+  // (tsconfig.webview.json) and is excluded here.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "node16",
+    "moduleResolution": "node16",
+    "rootDir": ".",
+    "outDir": "out",
+    "types": ["node", "vscode"],
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "sourceMap": true,
+    "noEmitOnError": true,
+    "useDefineForClassFields": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["*.ts", "tools/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "out",
+    ".vscode-test",
+    "test",
+    "integration",
+    "scripts",
+    "webview",
+    "designViewClient.ts"
+  ]
+}

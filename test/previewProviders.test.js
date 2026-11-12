@@ -82,8 +82,8 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-require('../clearProvider').register({ subscriptions: [] });
-require('../sortProvider').register({ subscriptions: [] });
+require('../out/clearProvider').register({ subscriptions: [] });
+require('../out/sortProvider').register({ subscriptions: [] });
 
 const SORT_TEXT = '<jasperReport name="R"><detail><band height="100">' +
     '<element kind="staticText" x="0" y="20" width="10" height="10"><text>B</text></element>' +

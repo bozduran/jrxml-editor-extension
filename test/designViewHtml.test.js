@@ -4,8 +4,8 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { buildDesignViewHtml } = require('../designViewHtml');
-const { PROPERTY_SPECS } = require('../designSpec');
+const { buildDesignViewHtml } = require('../out/designViewHtml');
+const { PROPERTY_SPECS } = require('../out/designSpec');
 
 const NONCE = 'deadbeefdeadbeefdeadbeefdeadbeef';
 

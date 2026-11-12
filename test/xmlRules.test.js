@@ -8,8 +8,8 @@ const {
     discoverFormatFixes,
     discoverTextcheckFixes,
     combinedFormatterEdits,
-} = require('../xmlRules');
-const { applyEdits } = require('../edits');
+} = require('../out/xmlRules');
+const { applyEdits } = require('../out/edits');
 
 const FMT = [
     '<jasperReport name="Fmt" uuid="11111111-1111-1111-1111-111111111111">',

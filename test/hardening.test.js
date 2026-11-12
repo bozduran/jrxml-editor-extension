@@ -5,12 +5,12 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { parseExpression }   = require('../javaParser');
-const { checkNullDereference } = require('../lintNullDeref');
-const { scanXml }           = require('../xmlspan');
-const { parse: parseSort }  = require('../xmlSort');
-const { lintXml }           = require('../xmlLint');
-const { collectTextCheckIssues } = require('../textCheck');
+const { parseExpression }   = require('../out/javaParser');
+const { checkNullDereference } = require('../out/lintNullDeref');
+const { scanXml }           = require('../out/xmlspan');
+const { parse: parseSort }  = require('../out/xmlSort');
+const { lintXml }           = require('../out/xmlLint');
+const { collectTextCheckIssues } = require('../out/textCheck');
 
 const DEEP = 50000;
 

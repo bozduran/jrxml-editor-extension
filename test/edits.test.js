@@ -3,7 +3,7 @@
 const test   = require('node:test');
 const assert = require('node:assert');
 
-const { applyEdits, findOverlap, lineAwareSpan } = require('../edits');
+const { applyEdits, findOverlap, lineAwareSpan } = require('../out/edits');
 
 test('applies edits regardless of input order', () => {
     const text = 'abcdef';

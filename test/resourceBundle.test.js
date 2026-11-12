@@ -12,7 +12,7 @@ const {
     bundleAttribute,
     loadResourceBundle,
     clearResourceBundleCache,
-} = require('../resourceBundle');
+} = require('../out/resourceBundle');
 
 function tempDir() {
     clearResourceBundleCache();

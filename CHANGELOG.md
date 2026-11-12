@@ -10,6 +10,130 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- Format Document, null-dereference lint and text-check now cover every
+  expression element, including `filterExpression`, `labelExpression`, chart
+  expressions and the legacy `textExpression`/`patternExpression` spellings,
+  instead of a ten-element subset.
+- Go to Definition and Find All References work from a `<sortField name="...">`
+  attribute; it still counts as a use of the declaration.
+
+### Fixed
+- The Boolean comparison rule sees dashed names (`$F{my-flag}`) and uses the
+  declaration scope at the expression, so a dataset declaration shadows a
+  report declaration with the same name instead of producing a false positive.
+- `$R{...}` resource keys containing spaces are diagnosed like any other
+  missing key.
+
+### Changed
+- Internal: the extension sources are TypeScript compiled to `out/`; the
+  editor and CI run the same compiled modules. No user-facing behaviour change
+  beyond the fixes above.
+- Internal: one report index now owns declaration scope, references and usage
+  for diagnostics, navigation and the clear pass.
+
+## [1.1.2] - 2026-11-08
+
+### Fixed
+- `$F`/`$P`/`$V` names containing a dash (for example `$F{my-field}`) are now
+  found by Find All References and the unused-declaration check; the parser,
+  editor and clear pass share one token grammar.
+- Expression-looking text inside an XML comment is no longer treated as an
+  expression by the editor, completion or diagnostics.
+
+### Changed
+- Diagnostics scan each report once per pass instead of eight times, which
+  speeds up large reports and `JRXML: Validate Workspace`.
+- Internal: report symbols, expression regions and report sources now each
+  resolve through one module shared by the editor and the analysis pipeline.
+
+## [1.1.1] - 2026-11-08
+
+### Fixed
+- The “Add declaration” quick fix for an undeclared `$P{}`/`$F{}`/`$V{}`
+  reference now inserts at report level, in schema order, instead of after a
+  nested subreport or dataset parameter with the same tag name.
+
+## [1.1.0] - 2026-11-08
+
+### Added
+- **Function catalogue:** the remaining official date/time functions
+  (`DATEVALUE`, `DAY`, `MONTH`, `YEAR`, `WEEKS`, `EDATE`, `TIME`, …), a
+  checked-in reference manifest and a parity test.
+- **Build bridge:** a documented `verifyDesign` recipe for projects that have
+  one; the extension runs the configured command and parses its output.
+- **Queries:** SQL keyword/comment highlighting is scoped to
+  `language="sql"`; JSONQL gets strings, numbers and fragments only.
+
+### Fixed
+- Classic `<section><band height>` sections now count toward the page budget,
+  and classic frame children are measured against the frame.
+- Maven `[ERROR] file:line` output is no longer double-reported by the javac
+  problem matcher.
+- `DATERANGE` now uses the official one-argument `DateRange` contract.
+
+### Changed
+- Internal: shared `$F/$P/$V/$R/$X` token scanner and rule runner, one
+  workspace-scan exclude contract, one report-section list, the build default
+  read from the settings schema, and tests for the build bridge.
+
+## [1.0.0] - 2026-11-08
+
+### Added
+- **CI:** a GitHub Actions workflow runs lint, the unit suite, the Extension Host
+  integration suite and the static workspace validator on every push and PR.
+
+### Changed
+- **1.0.0:** command ids and `jrxml.*` settings are now a compatibility contract;
+  the README documents the supported scope and explicit non-goals.
+
+## [0.9.0] - 2026-11-08
+
+### Added
+- **Outline:** rebuilt from the XML tree — report → declarations → datasets →
+  groups with header/footer bands → bands → every element kind (frames nest
+  their children) → styles.
+- **Completion:** `$X{}` SQL clause names (`IN`, `BETWEEN`,
+  `GREATEROREQUAL`, …) and the missing `DATEFORMAT`, `DATERANGE`, `DAYS`,
+  `NETWORKDAYS`, `WORKDAY`, `msg()` and `str()` entries.
+
+### Fixed
+- **Provider schemes:** completion, hover, definition, references, outline,
+  formatting and code actions now work for untitled and non-`file` documents;
+  diagnostics accept any `jrxml` document.
+
+## [0.8.0] - 2026-11-08
+
+### Added
+- **Build bridge:** `JRXML: Run Build` runs the configured Maven/Ant command as
+  a VS Code task and parses its output with the contributed `$jrxml-*` problem
+  matchers into Problems, plus a documented `tasks.json` recipe. The engine is
+  not embedded; the project's compile + `verifyDesign` stays authoritative.
+
+## [0.7.0] - 2026-11-08
+
+### Added
+- **Queries:** `<query>` content is highlighted as SQL/JSONQL (keywords,
+  strings, comments, numbers and `$P!{}`/`$X{}` fragments), `$P!{` completes
+  parameters, and unclosed string literals or block comments are diagnosed
+  without flagging runtime fragments (`jrxml.lint.queries`).
+
+## [0.6.0] - 2026-11-08
+
+### Added
+- **Workspace validation:** `JRXML: Validate Workspace` runs every check over
+  all `.jrxml` files in the workspace and reports them in Problems. The same
+  pipeline is available for CI as `node tools/validate-workspace.js`
+  (`--json`, non-zero exit on errors).
+
+## [0.5.0] - 2026-11-08
+
+### Added
+- **Layout validation:** columns that do not fit the page width, band heights
+  that exceed the space between the margins, and elements that extend below
+  their band (or frame) are reported as compile-time errors
+  (`jrxml.lint.layout`).
+
 ## [0.4.0] - 2026-11-08
 
 ### Added

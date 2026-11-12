@@ -43,7 +43,7 @@ Module._load = function (request, ...rest) {
     return originalLoad.call(this, request, ...rest);
 };
 
-const { updateDiagnostics } = require('../diagnosticsProvider');
+const { updateDiagnostics } = require('../out/diagnosticsProvider');
 
 let docSeq = 0;
 
@@ -443,6 +443,49 @@ test('dynamic subreport expressions are not diagnosed', () => {
 
     assert.deepStrictEqual(
         subreportIssues(diagnose(text, { fileName: path.join(dir, 'master.jrxml') })),
+        []
+    );
+});
+
+const layoutIssues = diags => diags.filter(d => String(d.code).startsWith('jrxml.layout.'));
+
+test('layout violations are errors and can be switched off', () => {
+    const text = `<jasperReport name="R" pageWidth="595" pageHeight="842" columnWidth="555"
+      leftMargin="20" rightMargin="20" columnCount="2">
+  <detail><band height="20"/></detail>
+</jasperReport>`;
+
+    const diags = layoutIssues(diagnose(text));
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].code, 'jrxml.layout.columns');
+    assert.strictEqual(diags[0].severity, 0); // Error
+
+    assert.deepStrictEqual(
+        layoutIssues(diagnose(text, { settings: { 'lint.layout': false } })),
+        []
+    );
+});
+
+test('a valid layout produces no layout diagnostics', () => {
+    const text = `<jasperReport name="R" pageWidth="595" pageHeight="842" columnWidth="555"
+      leftMargin="20" rightMargin="20" topMargin="20" bottomMargin="20">
+  <pageHeader height="20"/>
+  <detail><band height="40"><element kind="textField" x="0" y="0" width="100" height="20"/></band></detail>
+</jasperReport>`;
+
+    assert.deepStrictEqual(layoutIssues(diagnose(text)), []);
+});
+
+test('query literals are validated and the rule can be switched off', () => {
+    const text = `<jasperReport name="R"><query language="sql"><![CDATA[SELECT * FROM t WHERE x = 'oops]]></query></jasperReport>`;
+
+    const diags = diagnose(text).filter(d => d.code === 'jrxml.query.unclosedString');
+    assert.strictEqual(diags.length, 1);
+    assert.strictEqual(diags[0].severity, 1); // Warning
+
+    assert.deepStrictEqual(
+        diagnose(text, { settings: { 'lint.queries': false } })
+            .filter(d => d.code === 'jrxml.query.unclosedString'),
         []
     );
 });

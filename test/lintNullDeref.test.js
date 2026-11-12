@@ -5,8 +5,8 @@ const assert = require('node:assert');
 const fs     = require('node:fs');
 const path   = require('node:path');
 
-const { checkNullDereference, maskReferences } = require('../lintNullDeref');
-const { lintXml } = require('../xmlLint');
+const { checkNullDereference, maskReferences } = require('../out/lintNullDeref');
+const { lintXml } = require('../out/xmlLint');
 
 const SAFE = [
     '$V{v} != null && $V{v}.foo()',

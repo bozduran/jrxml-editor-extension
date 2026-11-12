@@ -1,0 +1,74 @@
+// sortProvider.ts
+// The hook's `sort` step as an explicit command with a diff preview.
+//
+// Sorting rewrites the whole file, so it is never silent: the command opens a
+// diff of the current document against the sorted result and only applies it
+// when the user confirms (unless jrxml.sort.confirm is off).
+
+import * as vscode from 'vscode';
+import * as path from 'path';
+import { discoverSortFix } from './xmlSort';
+import * as preview from './preview';
+
+function register(context: vscode.ExtensionContext): void {
+    context.subscriptions.push(
+        vscode.commands.registerCommand('jrxml.sortElements', async (): Promise<void> => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor || !editor.document.fileName.endsWith('.jrxml')) {
+                vscode.window.showWarningMessage('Open a .jrxml file first.');
+                return;
+            }
+
+            const document = editor.document;
+            const version  = document.version;
+            const fix = discoverSortFix(document.getText());
+            if (!fix) {
+                vscode.window.showInformationMessage('Elements are already ordered by position.');
+                return;
+            }
+
+            const previewUri = preview.put(path.basename(document.fileName), fix.edit.replacement);
+            try {
+                await vscode.commands.executeCommand(
+                    'vscode.diff',
+                    document.uri,
+                    previewUri,
+                    `Sort elements: ${path.basename(document.fileName)}`
+                );
+
+                if (vscode.workspace.getConfiguration('jrxml').get('sort.confirm', true)) {
+                    const choice = await vscode.window.showInformationMessage(
+                        'Apply the geometry sort?',
+                        { modal: true },
+                        'Apply'
+                    );
+                    if (choice !== 'Apply') return;
+                }
+
+                // A WorkspaceEdit applies against the current text, so refuse to
+                // apply edits computed before the preview/confirmation wait.
+                if (!preview.ensureUnchanged(document, version)) return;
+
+                const edit = new vscode.WorkspaceEdit();
+                edit.replace(
+                    document.uri,
+                    new vscode.Range(
+                        document.positionAt(fix.edit.start),
+                        document.positionAt(fix.edit.end)
+                    ),
+                    fix.edit.replacement
+                );
+
+                if (await vscode.workspace.applyEdit(edit)) {
+                    vscode.window.showInformationMessage(`Sorted elements.\n${fix.description}`);
+                } else {
+                    vscode.window.showErrorMessage('Failed to apply the sort.');
+                }
+            } finally {
+                preview.drop(previewUri);
+            }
+        })
+    );
+}
+
+export { register };

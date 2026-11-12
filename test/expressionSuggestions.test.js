@@ -9,7 +9,7 @@ const {
     buildExpressionSuggestions,
     suggestionOptions,
     plainFromSnippet,
-} = require('../expressionSuggestions');
+} = require('../out/expressionSuggestions');
 
 const DECLARATIONS = {
     allFields: [
@@ -83,6 +83,22 @@ test('offers resource keys inside $R{ when a bundle is indexed', () => {
     assert.strictEqual(closed.items[0].insertTextPlain, 'title');
 });
 
+test('offers parameters inside $P!{} query fragments', () => {
+    const result = suggest('$P!{', 4);
+
+    assert.strictEqual(result.mode, 'param');
+    assert.ok(labels(result.items).includes('Total'));
+    assert.ok(result.items[0].insertTextPlain.endsWith('}'));
+});
+
+test('offers SQL clause names inside $X{', () => {
+    const result = suggest('$X{', 4);
+
+    assert.strictEqual(result.mode, 'clause');
+    assert.ok(labels(result.items).includes('IN'));
+    assert.strictEqual(result.items[0].insertTextPlain, 'IN}');
+});
+
 test('falls back to the general list when no resource bundle is indexed', () => {
     const result = suggest('$R{', 3);
 
@@ -95,7 +111,7 @@ test('offers the dollar shortcuts and replaces the typed dollar', () => {
 
     assert.strictEqual(result.mode, 'dollar');
     assert.deepStrictEqual(result.replace, { start: 0, end: 1 });
-    assert.deepStrictEqual(labels(result.items), ['$F{', '$P{', '$V{', '$R{']);
+    assert.deepStrictEqual(labels(result.items), ['$F{', '$P{', '$V{', '$R{', '$X{']);
     assert.strictEqual(result.items[0].insertTextPlain, '$F{}');
     assert.ok(result.items[0].placeholder);
     assert.strictEqual(result.items[0].placeholder.start, 3);
@@ -148,7 +164,7 @@ test('keeps the suggestion counts and plain insertion for each category', () => 
         ],
     });
 
-    assert.strictEqual(result.items.filter(item => item.kind === 'function').length, 41);
+    assert.strictEqual(result.items.filter(item => item.kind === 'function').length, 66);
     assert.strictEqual(result.items.filter(item => item.kind === 'class').length, 22);
     assert.strictEqual(result.items.filter(item => item.kind === 'method').length, 2);
 

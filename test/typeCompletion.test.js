@@ -13,7 +13,7 @@ const {
     snippetFor,
     parameterName,
     shortType,
-} = require('../typeCompletion');
+} = require('../out/typeCompletion');
 
 function resolved(typeKey, methods, fields = []) {
     return { typeKey, resolved: true, kind: 'class', methods, fields, ambiguous: false };

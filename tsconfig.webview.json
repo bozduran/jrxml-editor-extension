@@ -1,0 +1,24 @@
+{
+  // The design-view client runs inside the webview: DOM globals, no Node
+  // types, and it is emitted as a plain script (no module wrapper) because
+  // designViewHtml injects it inside a nonce'd <script> element.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // The client is a script, not a module: it has no imports/exports, so
+    // TypeScript emits the file without a CJS wrapper (module: none is
+    // deprecated in TS 6). Keep it import-free; designViewHtml injects it
+    // inside a nonce'd <script> element.
+    "module": "commonjs",
+    "rootDir": ".",
+    "outDir": "out",
+    "types": [],
+    "strict": true,
+    "sourceMap": true,
+    "noEmitOnError": true,
+    "useDefineForClassFields": false,
+    "allowJs": false
+  },
+  "include": ["designViewClient.ts", "webview/**/*.d.ts"],
+  "exclude": ["node_modules", "out"]
+}

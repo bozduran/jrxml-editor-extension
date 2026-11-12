@@ -7,8 +7,8 @@ const fs     = require('fs');
 const path   = require('path');
 const vm     = require('node:vm');
 
-const { buildIfElsePanelHtml, buildCoreScript } = require('../ifElsePanelHtml');
-const core = require('../ifElseBuilder');
+const { buildIfElsePanelHtml, buildCoreScript } = require('../out/ifElsePanelHtml');
+const core = require('../out/ifElseBuilder');
 
 const NONCE = 'cafebabecafebabecafebabecafebabe';
 const SCRIPT_RE = new RegExp(`<script nonce="${NONCE}">([\\s\\S]*?)</script>`);
@@ -115,7 +115,7 @@ test('the webview script parses as JavaScript', () => {
 });
 
 test('the core module is self-contained', () => {
-    const source = fs.readFileSync(path.join(__dirname, '..', 'ifElseBuilder.js'), 'utf8');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'out', 'ifElseBuilder.js'), 'utf8');
     assert.ok(!/\brequire\s*\(/.test(source), 'ifElseBuilder.js must stay inlinable (no require)');
     assert.ok(!source.includes('</script'), 'ifElseBuilder.js must not contain a script terminator');
     assert.ok(!/document\.|window\./u.test(source), 'ifElseBuilder.js must not use the DOM');

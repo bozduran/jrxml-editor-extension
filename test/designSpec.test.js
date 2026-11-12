@@ -7,16 +7,16 @@ const assert = require('node:assert');
 const {
     MAX_CONTENT,
     CONTENT_TAG_BY_KIND,
-} = require('../designSpec');
+} = require('../out/designSpec');
 const {
     buildDesignModel,
     MAX_CONTENT: MODEL_MAX_CONTENT,
-} = require('../designModel');
+} = require('../out/designModel');
 const {
     buildElementPatch,
     MAX_CONTENT: EDIT_MAX_CONTENT,
-} = require('../designEdit');
-const { applyEdits } = require('../edits');
+} = require('../out/designEdit');
+const { applyEdits } = require('../out/edits');
 
 function report(inner) {
     return '<jasperReport name="R" pageWidth="300" pageHeight="400" columnWidth="260"' +

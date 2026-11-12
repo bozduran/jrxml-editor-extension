@@ -10,7 +10,7 @@ const {
     findDuplicateNames,
     clearCache,
     clearAllCaches,
-} = require('../jrxmlParser');
+} = require('../out/jrxmlParser');
 
 let seq = 0;
 /** Build a minimal fake TextDocument with a unique URI each call. */
@@ -447,4 +447,59 @@ test('collects $R{} resource references from expression elements only', () => {
 
     assert.deepStrictEqual(refs.map(ref => ref.name), ['title', 'greeting.hello']);
     assert.strictEqual(text.slice(refs[0].offset, refs[0].end), '$R{title}');
+});
+
+test('outline covers datasets, groups, frames, every element kind and styles', () => {
+    const text = `<jasperReport name="O">
+  <field name="F" class="java.lang.String"/>
+  <dataset name="DS"><field name="DSF" class="java.lang.String"/></dataset>
+  <style name="Title" fontSize="14"/>
+  <group name="G">
+    <groupHeader height="20">
+      <band height="20">
+        <element kind="staticText" x="0" y="0" width="10" height="10"><text>Header</text></element>
+      </band>
+    </groupHeader>
+  </group>
+  <detail>
+    <band height="100">
+      <element kind="frame" x="0" y="0" width="50" height="50">
+        <element kind="textField" x="0" y="0" width="10" height="10">
+          <expression><![CDATA[$F{F}]]></expression>
+        </element>
+      </element>
+      <element kind="line" x="0" y="60" width="10" height="1"/>
+      <element kind="chart" x="0" y="70" width="100" height="50"/>
+    </band>
+  </detail>
+</jasperReport>`;
+
+    const report = parseDeclarations(makeDoc(text)).outline[0];
+
+    const datasets = report.children.find(child => child.name === 'Datasets');
+    assert.ok(datasets, 'missing Datasets group');
+    assert.strictEqual(datasets.children[0].name, 'Dataset: DS');
+    assert.deepStrictEqual(datasets.children[0].children.map(child => child.name), ['DSF']);
+
+    const group = report.children.find(child => child.name === 'Group: G');
+    assert.ok(group, 'missing group node');
+    assert.strictEqual(group.children[0].name, 'groupHeader');
+    assert.strictEqual(group.children[0].children[0].name, 'staticText: Header');
+
+    const detail = report.children.find(child => child.kind === 'band' && child.name === 'detail');
+    assert.deepStrictEqual(detail.children.map(child => child.kind), ['frame', 'line', 'chart']);
+    assert.deepStrictEqual(
+        detail.children[0].children.map(child => `${child.kind}:${child.name}`),
+        ['textField:$F{F}']
+    );
+
+    const styles = report.children.find(child => child.name === 'Styles');
+    assert.strictEqual(styles.children[0].name, 'Style: Title');
+});
+
+test('collects $R keys with spaces and dashes through the shared grammar', () => {
+    const text = `<jasperReport name="R"><textField><textFieldExpression><![CDATA[$R{key with space} $R{my-key}]]></textFieldExpression></textField></jasperReport>`;
+    const refs = parseDeclarations(makeDoc(text)).resourceReferences;
+
+    assert.deepStrictEqual(refs.map(ref => ref.name), ['key with space', 'my-key']);
 });
