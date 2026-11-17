@@ -10,6 +10,32 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Added
+- **Java symbol lint** (`jrxml.lint.javaSymbols`): imports, declaration
+  `class` attributes, static helper calls and typed receiver calls are checked
+  against the workspace's Java sources and the shipped JDK/engine member table.
+  A misspelled project class suggests the real one, a helper called without its
+  `<import>` is explained, a missing or non-static method is named, an arity
+  mismatch reports the argument count, and a literal `printWhenExpression` is
+  flagged. Third-party classes and JDK classes the member table does not cover
+  are skipped rather than guessed at.
+- **JRXML schema lint** (`jrxml.lint.schema`): a curated, version-tolerant
+  model of the JRXML vocabulary covers 6.x typed elements and 7.x
+  `<element kind="…">`, and reports unknown elements under a fully known
+  parent, unknown attributes on closed elements, missing required attributes,
+  invalid enum values, report-level declaration order and verified deprecated
+  attributes.
+- **Unused-resource lint** (`jrxml.lint.unusedResources`): named styles and
+  subdatasets that nothing references; default styles are exempt. The opt-in
+  `jrxml.lint.unusedResourceKeys` summarises resource-bundle keys the report
+  never uses.
+
+### Changed
+- Internal: completion and lint share one Java project index, so a workspace is
+  scanned once and the cache is dropped when Java sources or
+  `jrxml.java.sourcePaths` change. Diagnostics refresh open reports after a
+  `.java` save/create/delete/rename.
+
 ## [1.2.0] - 2026-11-17
 
 ### Added
