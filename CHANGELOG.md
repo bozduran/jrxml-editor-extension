@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-17
+
 ### Changed
 - Internal: the TypeScript strictness ladder is complete. Every strict compiler
   switch is on (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
