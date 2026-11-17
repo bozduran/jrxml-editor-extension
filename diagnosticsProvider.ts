@@ -7,7 +7,8 @@
 import * as vscode from 'vscode';
 import { collectFindings } from './diagnostics';
 import type { Finding, FindingSettings } from './diagnostics';
-import { getJavaProjectIndex, clearJavaProjectIndex } from './javaProjectIndex';
+import { getJavaProjectIndex } from './javaProjectIndex';
+import { javaBaseline, javaSourcePaths } from './javaSettings';
 import { clearCache } from './jrxmlParser';
 
 const diagnosticCollection = vscode.languages.createDiagnosticCollection('jrxml');
@@ -32,19 +33,6 @@ function settingsFromConfig(cfg: vscode.WorkspaceConfiguration): FindingSettings
         unusedResourceKeys: cfg.get('lint.unusedResourceKeys', false),
         javaBaseline:       javaBaseline(cfg),
     };
-}
-
-/** `jrxml.java.sourcePaths`, ignoring malformed values. */
-function javaSourcePaths(cfg: vscode.WorkspaceConfiguration): string[] {
-    const configured = cfg.get<unknown>('java.sourcePaths', []);
-    if (!Array.isArray(configured)) return [];
-    return configured.filter((entry): entry is string => typeof entry === 'string');
-}
-
-/** The configured member-table baseline, clamped to the values the data has. */
-function javaBaseline(cfg: vscode.WorkspaceConfiguration): number {
-    const raw = Number(cfg.get('typeCompletion.jdkBaseline', '8'));
-    return [8, 11, 17, 21].includes(raw) ? raw : 8;
 }
 
 /** Accept file documents and in-memory/virtual ones (untitled, remote). */
@@ -109,6 +97,22 @@ function updateDiagnostics(document: vscode.TextDocument): Finding[] {
 
 // ── Registration helper ───────────────────────────────────────────────────────
 
+let refreshTimer: NodeJS.Timeout | undefined;
+
+/**
+ * Re-run diagnostics for every open report after the Java project index was
+ * dropped. Debounced, so a multi-file save or a branch switch is one pass.
+ */
+function refreshOpenReports(): void {
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => {
+        for (const document of vscode.workspace.textDocuments) {
+            if (isJrxmlDocument(document)) updateDiagnostics(document);
+        }
+    }, 300);
+}
+
+
 function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(diagnosticCollection);
 
@@ -136,39 +140,11 @@ function register(context: vscode.ExtensionContext): void {
         })
     );
 
-    // Symbol findings depend on the Java sources: when they change, re-run the
-    // open reports after the project index is dropped.
-    let javaRefreshTimer: NodeJS.Timeout | undefined;
-    const scheduleJavaRefresh = (): void => {
-        clearTimeout(javaRefreshTimer);
-        javaRefreshTimer = setTimeout(() => {
-            clearJavaProjectIndex();
-            for (const document of vscode.workspace.textDocuments) {
-                if (isJrxmlDocument(document)) updateDiagnostics(document);
-            }
-        }, 300);
-    };
-    const affectsJava = (fsPath: string): boolean => fsPath.endsWith('.java');
-
-    // Run on save
+    // Run on save (Java changes are handled by extension.ts, which owns the
+    // project-index invalidation and calls refreshOpenReports afterwards).
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(doc => {
             if (isJrxmlDocument(doc)) updateDiagnostics(doc);
-            else if (affectsJava(doc.fileName)) scheduleJavaRefresh();
-        })
-    );
-
-    context.subscriptions.push(
-        vscode.workspace.onDidCreateFiles(event => {
-            if (event.files.some(file => affectsJava(file.fsPath))) scheduleJavaRefresh();
-        }),
-        vscode.workspace.onDidDeleteFiles(event => {
-            if (event.files.some(file => affectsJava(file.fsPath))) scheduleJavaRefresh();
-        }),
-        vscode.workspace.onDidRenameFiles(event => {
-            if (event.files.some(file => affectsJava(file.oldUri.fsPath) || affectsJava(file.newUri.fsPath))) {
-                scheduleJavaRefresh();
-            }
         })
     );
 
@@ -179,8 +155,8 @@ function register(context: vscode.ExtensionContext): void {
             clearCache(doc.uri);
         }),
         // Cancel pending debounces when the extension deactivates
-        { dispose: () => { clearTimeout(debounceTimer); clearTimeout(javaRefreshTimer); } }
+        { dispose: () => clearTimeout(debounceTimer) }
     );
 }
 
-export { register, updateDiagnostics };
+export { register, updateDiagnostics, refreshOpenReports };

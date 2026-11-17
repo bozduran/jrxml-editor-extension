@@ -166,7 +166,7 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
             {
                 key: 'lint.javaSymbols', type: 'boolean', default: true,
                 label: 'Java symbols',
-                description: 'Warn about unknown imports, declaration classes, static helper calls and typed receiver calls in expressions.',
+                description: 'Warn about unused or unknown imports, missing declaration classes, static helper calls and typed receiver calls in expressions.',
             },
             {
                 key: 'lint.schema', type: 'boolean', default: true,

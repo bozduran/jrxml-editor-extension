@@ -7,6 +7,7 @@
 
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { errorMessage } from './errors';
 
 import { parseDeclarations } from './jrxmlParser';
 import { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } from './jasperBuiltins';
@@ -42,15 +43,6 @@ function isJrxmlDocument(document: vscode.TextDocument | null | undefined): docu
 
 function sameDocument(left: vscode.TextDocument | null | undefined, right: vscode.TextDocument | null | undefined): boolean {
     return !!left && !!right && left.uri.toString() === right.uri.toString();
-}
-
-/** The message a thrown value carries, or its string form. */
-function errorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'message' in err) {
-        const message = (err as { message?: unknown }).message;
-        if (message) return String(message);
-    }
-    return String(err);
 }
 
 /** Find the expression tag under the editor cursor or selection. */

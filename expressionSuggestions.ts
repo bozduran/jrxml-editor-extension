@@ -624,7 +624,7 @@ function normalizeDeclarations(declarations: ExpressionDeclarations | null | und
     };
 }
 
-function normalizeBaseline(value: number | string | undefined): number {
+export function normalizeBaseline(value: number | string | undefined): number {
     const number = parseInt(String(value), 10);
     return Number.isFinite(number) && number > 0 ? number : 8;
 }

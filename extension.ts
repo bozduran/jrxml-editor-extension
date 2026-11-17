@@ -5,12 +5,13 @@ import * as vscode from 'vscode';
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- single-value CommonJS module, required as-is by the host suite
 import ExpressionEditorPanel  = require('./expressionEditorPanel');
 import { findExpressionAtCursor } from './expressionUtils';
-import { provider as completionProvider, clearCustomJavaCache } from './completionProvider';
+import { provider as completionProvider } from './completionProvider';
 import { provider as hoverProvider }      from './hoverProvider';
 import { provider as definitionProvider } from './definitionProvider';
 import { provider as referenceProvider }    from './referenceProvider';
 import { provider as outlineProvider }    from './outlineProvider';
-import { register as registerDiagnostics } from './diagnosticsProvider';
+import { register as registerDiagnostics, refreshOpenReports } from './diagnosticsProvider';
+import { clearJavaProjectIndex } from './javaProjectIndex';
 import { provider as codeActionsProvider }  from './codeActionsProvider';
 import { register as registerIssuesView } from './issuesView';
 import { register as registerContextKeys } from './contextKeys';
@@ -119,25 +120,31 @@ function activate(context: vscode.ExtensionContext): void {
     // Diff previews for whole-file rewrites
     context.subscriptions.push(previewProvider);
 
-    // The Java helper scan is cached; invalidate it when sources change.
+    // The Java project index is cached; drop it when sources or the scan
+    // setting change, and re-run the open reports that may depend on it.
+    const invalidateJava = (): void => {
+        clearJavaProjectIndex();
+        refreshOpenReports();
+    };
+    const touchesJava = (paths: readonly string[]): boolean =>
+        paths.some(fsPath => fsPath.endsWith('.java'));
+
     context.subscriptions.push(
-        vscode.workspace.onDidChangeWorkspaceFolders(() => clearCustomJavaCache()),
+        vscode.workspace.onDidChangeWorkspaceFolders(() => invalidateJava()),
         vscode.workspace.onDidSaveTextDocument(doc => {
-            if (doc.fileName.endsWith('.java')) clearCustomJavaCache();
+            if (touchesJava([doc.fileName])) invalidateJava();
         }),
         vscode.workspace.onDidCreateFiles(e => {
-            if (e.files.some(f => f.fsPath.endsWith('.java'))) clearCustomJavaCache();
+            if (touchesJava(e.files.map(file => file.fsPath))) invalidateJava();
         }),
         vscode.workspace.onDidDeleteFiles(e => {
-            if (e.files.some(f => f.fsPath.endsWith('.java'))) clearCustomJavaCache();
+            if (touchesJava(e.files.map(file => file.fsPath))) invalidateJava();
         }),
         vscode.workspace.onDidRenameFiles(e => {
-            if (e.files.some(f => f.newUri.fsPath.endsWith('.java') || f.oldUri.fsPath.endsWith('.java'))) {
-                clearCustomJavaCache();
-            }
+            if (touchesJava(e.files.flatMap(file => [file.oldUri.fsPath, file.newUri.fsPath]))) invalidateJava();
         }),
         vscode.workspace.onDidChangeConfiguration(e => {
-            if (e.affectsConfiguration('jrxml.java.sourcePaths')) clearCustomJavaCache();
+            if (e.affectsConfiguration('jrxml.java.sourcePaths')) invalidateJava();
         })
     );
 

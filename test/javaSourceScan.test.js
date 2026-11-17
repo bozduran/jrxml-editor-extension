@@ -11,11 +11,17 @@ const path   = require('node:path');
 
 const {
     discoverJavaSourceRoots,
-    extractStaticMethods,
+    extractJavaClass,
     scanJavaClasses,
-    scanJavaMethods,
-    collectJavaMethods,
+    collectJavaClasses,
+    staticMethodsOf,
 } = require('../out/javaSourceScan');
+
+/** Static completion entries for one source, via the class model. */
+function staticMethods(source) {
+    const javaClass = extractJavaClass(source);
+    return javaClass ? staticMethodsOf([javaClass]) : [];
+}
 
 const tempRoots = [];
 
@@ -107,7 +113,7 @@ test('discovery respects the depth bound', () => {
 // ── Extraction ───────────────────────────────────────────────────────────────
 
 test('extracts public static methods with fully qualified snippets', () => {
-    const methods = extractStaticMethods(HELPERS);
+    const methods = staticMethods(HELPERS);
     const byLabel = new Map(methods.map(method => [method.label, method]));
 
     assert.deepStrictEqual([...byLabel.keys()], [
@@ -124,7 +130,7 @@ test('extracts public static methods with fully qualified snippets', () => {
 });
 
 test('handles qualified and generic return types and generic parameters', () => {
-    const byLabel = new Map(extractStaticMethods(HELPERS).map(method => [method.label, method]));
+    const byLabel = new Map(staticMethods(HELPERS).map(method => [method.label, method]));
 
     assert.strictEqual(byLabel.get('Helpers.names').snippet, 'com.acme.util.Helpers.names(${1:prefix})');
     assert.match(byLabel.get('Helpers.names').detail, /java\.util\.List<String>/);
@@ -137,24 +143,24 @@ test('handles qualified and generic return types and generic parameters', () => 
 });
 
 test('skips instance methods, private methods and non-public classes', () => {
-    const labels = extractStaticMethods(HELPERS).map(method => method.label);
+    const labels = staticMethods(HELPERS).map(method => method.label);
     assert.ok(!labels.includes('Helpers.hidden'), 'private static is not callable');
     assert.ok(!labels.includes('Helpers.instance'), 'instance methods are not callable');
 
     assert.deepStrictEqual(
-        extractStaticMethods('package x;\nclass PackagePrivate { public static void run() {} }'),
+        staticMethods('package x;\nclass PackagePrivate { public static void run() {} }'),
         []
     );
 });
 
 test('a class without a package is inserted unqualified', () => {
-    const [method] = extractStaticMethods('public class Util {\n public static int one() { return 1; }\n}');
+    const [method] = staticMethods('public class Util {\n public static int one() { return 1; }\n}');
     assert.strictEqual(method.snippet, 'Util.one()');
     assert.strictEqual(method.detail, 'Util.one() : int');
 });
 
 test('enums and interfaces expose their public static methods', () => {
-    const labels = extractStaticMethods(`package x;
+    const labels = staticMethods(`package x;
 public enum Mode { A, B; public static Mode parse(String raw) { return A; } }
 `).map(method => method.label);
     assert.deepStrictEqual(labels, ['Mode.parse']);
@@ -169,7 +175,7 @@ test('collects helpers from every module and de-duplicates files', () => {
     write(root, 'web/src/main/java/com/acme/web/Web.java',
         'package com.acme.web; public final class Web { public static String tag() { return "web"; } }');
 
-    const methods = collectJavaMethods([root]);
+    const methods = staticMethodsOf(collectJavaClasses([root]));
     const snippets = methods.map(method => method.snippet).sort();
 
     assert.deepStrictEqual(snippets, [
@@ -178,7 +184,7 @@ test('collects helpers from every module and de-duplicates files', () => {
     ]);
 
     // Scanning overlapping roots must not duplicate entries.
-    const again = collectJavaMethods([root], { extraPaths: ['core/src/main/java'] });
+    const again = staticMethodsOf(collectJavaClasses([root], { extraPaths: ['core/src/main/java'] }));
     assert.strictEqual(again.length, 2);
 });
 
@@ -193,9 +199,11 @@ test('the file cap stops the scan early', () => {
     const original = console.warn;
     console.warn = message => warned.push(String(message));
     try {
-        const methods = scanJavaMethods([path.join(root, 'mod0/src/main/java'),
+        const methods = staticMethodsOf(scanJavaClasses([
+            path.join(root, 'mod0/src/main/java'),
             path.join(root, 'mod1/src/main/java'),
-            path.join(root, 'mod2/src/main/java')], { maxFiles: 1 });
+            path.join(root, 'mod2/src/main/java'),
+        ], { maxFiles: 1 }));
         assert.strictEqual(methods.length, 1);
         assert.match(warned.join('\n'), /stopped after 1 files/);
     } finally {
@@ -204,8 +212,8 @@ test('the file cap stops the scan early', () => {
 });
 
 test('unreadable roots do not throw', () => {
-    assert.deepStrictEqual(scanJavaMethods(['/definitely/not/here']), []);
-    assert.deepStrictEqual(collectJavaMethods([], {}), []);
+    assert.deepStrictEqual(staticMethodsOf(scanJavaClasses(['/definitely/not/here'])), []);
+    assert.deepStrictEqual(staticMethodsOf(collectJavaClasses([], {})), []);
 });
 
 // ── Class/method model ──────────────────────────────────────────────────────

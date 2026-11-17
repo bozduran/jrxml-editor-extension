@@ -199,9 +199,38 @@ test('a known method and an unknown receiver type are not reported', () => {
     }).findings), []);
 
     assert.deepStrictEqual(codes(run({
-        fields: [{ name: 'F', className: 'com.acme.util.Helpers' }],
+        fields: [{ name: 'F', className: 'com.acme.Unknown' }],
         expressions: ['$F{F}.trimX()'],
     }).findings), []);
+});
+
+test('a project class works as a receiver, with a proper arity finding', () => {
+    const unknown = one({
+        fields: [{ name: 'F', className: 'com.acme.util.Helpers' }],
+        expressions: ['$F{F}.missing()'],
+    }, 'jrxml.unknownJavaMember');
+    assert.ok(unknown, 'a declared project class is no longer treated as unknown');
+
+    const arity = one({
+        fields: [{ name: 'F', className: 'java.lang.String' }],
+        expressions: ['$F{F}.substring()'],
+    }, 'jrxml.javaMemberArity');
+    assert.ok(arity);
+    assert.match(arity.message, /substring/);
+    assert.match(arity.message, /0 argument/);
+});
+
+test('a project superclass suppresses unknown-method guesses', () => {
+    const base = extractJavaClass('package com.acme; public class Base { public String inherited() { return ""; } }');
+    const child = extractJavaClass('package com.acme; public class Child extends Base { public String own() { return ""; } }');
+    const index = buildJavaProjectIndex([base, child]);
+    const { text, scan, parsed } = report({
+        fields: [{ name: 'F', className: 'com.acme.Child' }],
+        expressions: ['$F{F}.inherited()'],
+    });
+
+    const findings = checkJavaSymbols({ text, scan, parsed, index, baseline: 8 });
+    assert.deepStrictEqual(codes(findings), [], 'inherited methods are not scanned, so stay quiet');
 });
 
 // ── printWhenExpression ─────────────────────────────────────────────────────
@@ -229,4 +258,64 @@ test('finding spans point at the offending source text', () => {
         text.slice(finding.offset, finding.offset + finding.length),
         'com.acme.util.Helpers.nope()'
     );
+});
+
+// ── Java expressions outside the formatter's tag list ───────────────────────
+
+function rawReport(text) {
+    seq += 1;
+    const scan = scanXml(text);
+    return { text, scan, parsed: parseReport(textSource(text, `raw-${seq}.jrxml`, seq), scan) };
+}
+
+test('propertyExpression counts as a Java expression', () => {
+    const used = rawReport(`<jasperReport name="R">
+  <import value="com.acme.util.Helpers"/>
+  <propertyExpression name="p"><![CDATA[com.acme.util.Helpers.upper("x")]]></propertyExpression>
+  <detail><band height="20"/></detail>
+</jasperReport>`);
+
+    const findings = checkJavaSymbols({ ...used, index: INDEX, baseline: 8 });
+    assert.ok(!codes(findings).includes('jrxml.unusedImport'));
+    assert.ok(!codes(findings).includes('jrxml.unknownJavaHelper'));
+
+    const broken = rawReport(`<jasperReport name="R">
+  <propertyExpression name="p"><![CDATA[com.acme.util.Helpers.nope()]]></propertyExpression>
+  <detail><band height="20"/></detail>
+</jasperReport>`);
+    assert.ok(codes(checkJavaSymbols({ ...broken, index: INDEX, baseline: 8 }))
+        .includes('jrxml.unknownJavaHelper'));
+});
+
+test('an import is unused even when the report has no expressions', () => {
+    const { text, scan, parsed } = rawReport(`<jasperReport name="R">
+  <import value="com.acme.util.Helpers"/>
+  <detail><band height="20"/></detail>
+</jasperReport>`);
+
+    const findings = checkJavaSymbols({ text, scan, parsed, index: INDEX, baseline: 8 });
+    assert.ok(codes(findings).includes('jrxml.unusedImport'));
+});
+
+test('a null printWhenExpression is not a boolean', () => {
+    const finding = one({ printWhen: ['null'] }, 'jrxml.printWhenNotBoolean');
+    assert.ok(finding);
+});
+
+test('a missing class in a scanned package is reported without a near miss', () => {
+    const field = one({
+        fields: [{ name: 'F', className: 'com.acme.util.Missing' }],
+    }, 'jrxml.unknownClass');
+    assert.ok(field);
+    assert.match(field.message, /com\.acme\.util\.Missing/);
+
+    const imported = one({
+        imports: ['com.acme.util.Missing'],
+    }, 'jrxml.unknownImport');
+    assert.ok(imported);
+
+    const called = one({
+        expressions: ['com.acme.util.Missing.run()'],
+    }, 'jrxml.unknownClass');
+    assert.ok(called);
 });

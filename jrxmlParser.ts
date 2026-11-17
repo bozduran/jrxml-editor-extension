@@ -10,6 +10,7 @@ import type { ReferenceSigil } from './referenceTokens';
 import { languageOfScan } from './reportLanguage';
 import type { ReportLanguage } from './reportLanguage';
 import { REPORT_SECTIONS } from './jrxmlSections';
+import { localName } from './xmlName';
 import { bundleAttributeOfScan } from './resourceBundle';
 import type { BundleAttribute } from './resourceBundle';
 import { documentSource } from './reportSource';
@@ -562,18 +563,13 @@ function extractVariables(text: string): Declaration[] {
 
 // ── Groups ────────────────────────────────────────────────────────────────────
 
-function localTagName(tag: string): string {
-    const colon = tag.indexOf(':');
-    return colon === -1 ? tag : tag.slice(colon + 1);
-}
-
 /** Report-level `<import value="…">` elements, in document order. */
 function extractImports(scan: XmlScanResult | null): ImportDeclaration[] {
     if (!scan || scan.error || !scan.doc) return [];
 
     const imports: ImportDeclaration[] = [];
     for (const node of scan.doc.root.children) {
-        if (localTagName(node.tag) !== 'import') continue;
+        if (localName(node.tag) !== 'import') continue;
 
         const value = node.attr('value');
         if (!value) continue;

@@ -8,6 +8,7 @@
 // expression while the panel is open so A -> B -> A does not lose A's edits.
 
 import * as vscode from 'vscode';
+import { errorMessage } from './errors';
 import { formatExpression } from './expressionFormatter';
 import { buildPanelHtml, getNonce } from './expressionPanelHtml';
 import { applyExpressionToEditor } from './expressionApply';
@@ -20,15 +21,6 @@ interface EditorMessage {
     expression: string;
     text?: unknown;
     value?: unknown;
-}
-
-/** The message a thrown value carries, or its string form. */
-function errorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'message' in err) {
-        const message = (err as { message?: unknown }).message;
-        if (message) return String(message);
-    }
-    return String(err);
 }
 
 class ExpressionEditorPanel {

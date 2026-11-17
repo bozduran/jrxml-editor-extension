@@ -1,5 +1,8 @@
 // javaProjectIndex.ts
 // The workspace's Java sources, indexed once and shared by completion, lint and
+//
+// This module is vscode-free: the completion provider supplies the folders
+// and configuration, the index itself only knows classes.
 // the CI validator.
 //
 // The scanner (javaSourceScan) only walks the file system; this module owns the
@@ -43,13 +46,6 @@ export function buildJavaProjectIndex(classes: readonly JavaClass[]): JavaProjec
         const sameName = bySimpleName.get(javaClass.className);
         if (sameName) sameName.push(javaClass);
         else bySimpleName.set(javaClass.className, [javaClass]);
-    }
-
-    // Short-name lookups are only trustworthy when the name is unambiguous.
-    for (const [simpleName, list] of bySimpleName) {
-        if (list.length > 1) bySimpleName.set(simpleName, list.slice().sort(
-            (a, b) => a.qualifiedName.localeCompare(b.qualifiedName)
-        ));
     }
 
     return {

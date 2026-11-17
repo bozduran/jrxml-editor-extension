@@ -1,5 +1,7 @@
 // expressionMask.ts
 // Length-preserving masking of JasperReports references so a report expression
+//
+// This module is vscode-free: null-deref lint and the Java symbol checks share it.
 // can be parsed as Java without shifting its character offsets.
 //
 // `$F{name}` / `$P{name}` / `$V{name}` become `$F_name_` — same length, and a
