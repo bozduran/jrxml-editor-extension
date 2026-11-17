@@ -72,7 +72,7 @@ function toCompletionItem(suggestion: ExpressionSuggestion): vscode.CompletionIt
 
     const item = new vscode.CompletionItem(
         label,
-        KIND_MAP[suggestion.kind] ?? vscode.CompletionItemKind.Text
+        KIND_MAP[suggestion.kind]
     );
 
     item.detail        = suggestion.detail || suggestion.label;

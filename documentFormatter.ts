@@ -83,7 +83,7 @@ function registerFormatOnSave(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.workspace.onWillSaveTextDocument((event: vscode.TextDocumentWillSaveEvent) => {
             const cfg = vscode.workspace.getConfiguration('jrxml');
-            if (!cfg.get('formatOnSave', false)) return;
+            if (!cfg.get<boolean>('formatOnSave', false)) return;
 
             const edits = computeEdits(event.document);
             if (edits && edits.length) event.waitUntil(Promise.resolve(edits));

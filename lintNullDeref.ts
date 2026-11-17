@@ -61,7 +61,7 @@ function refName(node: JavaExpressionNode): NullDerefReference | null {
 
 function unwrap(node: JavaExpressionNode): JavaExpressionNode {
     let e = node;
-    while (e && e.kind === 'enclosed') e = e.expr;
+    while (e.kind === 'enclosed') e = e.expr;
     return e;
 }
 
@@ -183,7 +183,6 @@ function walk(
     warnings: NullDerefWarning[]
 ): void {
     const e = unwrap(node);
-    if (!e) return;
 
     if (e.kind === 'conditional') {
         walk(e.cond, nonNull, warnings);

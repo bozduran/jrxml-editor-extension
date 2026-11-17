@@ -57,7 +57,7 @@ const GROUP_BY_ID = new Map<IssueGroup, GroupInfo>(
 function compareIssues(a: Issue, b: Issue): number {
     if (a.line !== b.line) return a.line - b.line;
     if (a.character !== b.character) return a.character - b.character;
-    return String(a.label).localeCompare(String(b.label));
+    return a.label.localeCompare(b.label);
 }
 
 /**

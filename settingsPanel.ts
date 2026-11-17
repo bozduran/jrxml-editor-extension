@@ -33,7 +33,7 @@ class SettingsPanel {
 
         this._update();
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.onDidDispose(() => { this.dispose(); }, null, this._disposables);
         this._panel.webview.onDidReceiveMessage(
             (message: unknown) => this._handleMessage(message),
             null,
@@ -141,7 +141,7 @@ class SettingsPanel {
 
 function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.openSettingsPanel', () => SettingsPanel.createOrShow())
+        vscode.commands.registerCommand('jrxml.openSettingsPanel', () => { SettingsPanel.createOrShow(); })
     );
 }
 

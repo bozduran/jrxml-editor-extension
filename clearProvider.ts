@@ -33,7 +33,7 @@ function applyEdits(document: vscode.TextDocument, edits: readonly Edit[]): Then
 }
 
 async function confirm(message: string): Promise<boolean> {
-    if (!vscode.workspace.getConfiguration('jrxml').get('clear.confirm', true)) return true;
+    if (!vscode.workspace.getConfiguration('jrxml').get<boolean>('clear.confirm', true)) return true;
     const choice = await vscode.window.showInformationMessage(message, { modal: true }, 'Apply');
     return choice === 'Apply';
 }
@@ -101,7 +101,7 @@ function register(context: vscode.ExtensionContext): void {
 
             const summary = groups
                 .filter(g => g.fixes.some(f => f.edit))
-                .map(g => `${g.label} (${g.fixes.filter(f => f.edit).length})`)
+                .map(g => `${g.label} (${String(g.fixes.filter(f => f.edit).length)})`)
                 .join(', ');
 
             const proposed = proposedText(document, fixes);
@@ -111,7 +111,7 @@ function register(context: vscode.ExtensionContext): void {
                 proposed,
                 'Clear fixes',
                 fixes,
-                `Apply ${fixes.length} clear fix(es)? ${summary}`
+                `Apply ${String(fixes.length)} clear fix(es)? ${summary}`
             );
             if (applied) vscode.window.showInformationMessage(`Applied clear fixes: ${summary}.`);
         }),

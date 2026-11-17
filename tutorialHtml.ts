@@ -240,7 +240,7 @@ function formatKeybinding(binding: string): string {
         up: 'Up', down: 'Down', left: 'Left', right: 'Right',
         escape: 'Esc', enter: 'Enter', space: 'Space', pageup: 'PageUp', pagedown: 'PageDown',
     };
-    return String(binding)
+    return binding
         .split('+')
         .map(part => {
             const key = part.trim();

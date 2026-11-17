@@ -99,14 +99,14 @@ function formatText(results: readonly ValidationResult[]): string {
         for (const finding of result.findings) {
             const position = positionOf(result.text, finding.offset);
             lines.push(
-                `${result.file}:${position.line}:${position.column} `
+                `${result.file}:${String(position.line)}:${String(position.column)} `
                 + `${finding.severity} ${finding.message} [${finding.code}]`
             );
         }
     }
 
     const totals = summarise(results);
-    lines.push(`${totals.files} file(s), ${totals.errors} error(s), ${totals.warnings} warning(s)`);
+    lines.push(`${String(totals.files)} file(s), ${String(totals.errors)} error(s), ${String(totals.warnings)} warning(s)`);
     return lines.join('\n');
 }
 

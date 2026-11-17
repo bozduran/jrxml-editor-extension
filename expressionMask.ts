@@ -40,7 +40,7 @@ export function maskReferences(code: string): string {
             continue;
         }
 
-        const c = code[i];
+        const c = code.charAt(i);
         if (c === '$' && i + 2 < n) {
             const kind = code[i + 1];
             if (kind !== undefined && KINDS.has(kind) && code[i + 2] === '{') {

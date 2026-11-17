@@ -261,7 +261,7 @@ export function buildDesignModel(text: string): DesignModel {
     }
 
     const root = scan.doc.root;
-    if (!root || localName(root.tag) !== 'jasperreport') {
+    if (localName(root.tag) !== 'jasperreport') {
         model.error = 'No <jasperReport> root element found.';
         return model;
     }
@@ -294,11 +294,11 @@ export function buildDesignModel(text: string): DesignModel {
 
     if (ctx.invalid > 0) {
         model.warnings.push(
-            `${ctx.invalid} element${ctx.invalid === 1 ? '' : 's'} had missing or non-numeric geometry and were drawn at 0.`
+            `${String(ctx.invalid)} element${ctx.invalid === 1 ? '' : 's'} had missing or non-numeric geometry and were drawn at 0.`
         );
     }
     if (ctx.truncated) {
-        model.warnings.push(`Only the first ${MAX_ELEMENTS} elements are shown.`);
+        model.warnings.push(`Only the first ${String(MAX_ELEMENTS)} elements are shown.`);
     }
 
     return model;
@@ -348,7 +348,7 @@ function readReport(root: XmlNode): DesignReport {
     }
 
     return {
-        name:           String(attrValue(root, 'name') || 'Report'),
+        name:           (attrValue(root, 'name') || 'Report'),
         pageWidth:      positiveOr(pageWidth, DEFAULT_PAGE_WIDTH),
         pageHeight:     positiveOr(pageHeight, DEFAULT_PAGE_HEIGHT),
         leftMargin:     nonNegativeOr(leftMargin, DEFAULT_MARGIN),
@@ -358,9 +358,9 @@ function readReport(root: XmlNode): DesignReport {
         columnWidth:    nonNegativeOr(columnWidth, 0),
         columnSpacing:  nonNegativeOr(numericAttr(root, 'columnSpacing', 0), 0),
         columnCount,
-        orientation:    String(attrValue(root, 'orientation') || 'Portrait'),
-        language:       String(attrValue(root, 'language') || 'java'),
-        whenNoDataType: String(attrValue(root, 'whenNoDataType') || 'NoPages'),
+        orientation:    (attrValue(root, 'orientation') || 'Portrait'),
+        language:       (attrValue(root, 'language') || 'java'),
+        whenNoDataType: (attrValue(root, 'whenNoDataType') || 'NoPages'),
     };
 }
 
@@ -390,7 +390,7 @@ function collectBandDescriptors(root: XmlNode): BandDescriptor[] {
     // in reverse declaration order — the order JasperReports fills them in.
     const groups = directChildren(root, 'group');
     for (const group of groups) {
-        const name = String(attrValue(group, 'name') || 'Group');
+        const name = (attrValue(group, 'name') || 'Group');
         const header = directChild(group, 'groupHeader');
         if (!header) continue;
         for (const node of sectionBands(header)) {
@@ -412,7 +412,7 @@ function collectBandDescriptors(root: XmlNode): BandDescriptor[] {
         if (!band) continue;
         out.push({
             key:   'detail',
-            label: detailBands.length > 1 ? `Detail (${i + 1})` : 'Detail',
+            label: detailBands.length > 1 ? `Detail (${String(i + 1)})` : 'Detail',
             group: '',
             node:  band,
         });
@@ -421,7 +421,7 @@ function collectBandDescriptors(root: XmlNode): BandDescriptor[] {
     for (let i = groups.length - 1; i >= 0; i--) {
         const group = groups[i];
         if (!group) continue;
-        const name  = String(attrValue(group, 'name') || 'Group');
+        const name  = (attrValue(group, 'name') || 'Group');
         const footer = directChild(group, 'groupFooter');
         if (!footer) continue;
         for (const node of sectionBands(footer)) {
@@ -483,8 +483,7 @@ function readElements(container: XmlNode, ctx: ElementContext, styles: ResolvedS
             continue;
         }
 
-        const element = readElement(child, ctx, styles);
-        if (element) out.push(element);
+        out.push(readElement(child, ctx, styles));
     }
     return out;
 }
@@ -493,7 +492,7 @@ function readElement(node: XmlNode, ctx: ElementContext, styles: ResolvedStyles)
     ctx.remaining -= 1;
     ctx.count     += 1;
 
-    const kind = String(attrValue(node, 'kind') || localName(node.tag) || 'element');
+    const kind = (attrValue(node, 'kind') || localName(node.tag) || 'element');
     const key  = kind.toLowerCase();
     const style = resolveStyle(node, styles);
 
@@ -627,7 +626,7 @@ export function findSelectionTarget(model: DesignModel | null, offset: number): 
     for (const band of model.bands) {
         if (!(offset >= band.offset && offset < band.end)) continue;
 
-        const element = deepestElementAt(band.elements || [], offset);
+        const element = deepestElementAt(band.elements, offset);
         if (element) {
             return { kind: 'element', offset: element.offset, end: element.end };
         }
@@ -640,7 +639,7 @@ function deepestElementAt(elements: readonly DesignElement[], offset: number): D
     for (const element of elements) {
         if (!(offset >= element.offset && offset < element.end)) continue;
 
-        const child = deepestElementAt(element.children || [], offset);
+        const child = deepestElementAt(element.children, offset);
         return child || element;
     }
     return null;
@@ -678,7 +677,7 @@ function readLine(node: XmlNode, style: DesignStyle): DesignLine {
     const widthRaw = attrValue(node, 'lineWidth') ?? (pen ? attrValue(pen, 'lineWidth') : undefined);
     const width    = nonNegativeOr(Number.parseFloat(widthRaw ?? ''), 1);
 
-    const direction = String(attrValue(node, 'direction') || '').toLowerCase() === 'bottomup'
+    const direction = (attrValue(node, 'direction') || '').toLowerCase() === 'bottomup'
         ? 'BottomUp'
         : 'TopDown';
 
@@ -754,9 +753,9 @@ function readStyles(root: XmlNode): ResolvedStyles {
     let defaultProps: StyleProps = {};
 
     for (const node of directChildren(root, 'style')) {
-        const name = String(attrValue(node, 'name') || '');
+        const name = (attrValue(node, 'name') || '');
         const props = pickStyleProps(node);
-        const isDefault = String(attrValue(node, 'default') || '').toLowerCase() === 'true';
+        const isDefault = (attrValue(node, 'default') || '').toLowerCase() === 'true';
 
         if (name) {
             byName.set(name, { name, props });
@@ -785,7 +784,7 @@ function resolveStyle(node: XmlNode, styles: ResolvedStyles): DesignStyle {
 function pickStyleProps(node: XmlNode): StyleProps {
     const props: StyleProps = {};
     const put = (key: keyof StyleProps, value: string | undefined): void => {
-        if (value !== undefined && value !== null && value !== '') props[key] = value;
+        if (value !== undefined && value !== '') props[key] = value;
     };
 
     put('fontName',       attrValue(node, 'fontName'));
@@ -809,7 +808,7 @@ function pickStyleProps(node: XmlNode): StyleProps {
 
 function normalizeStyle(raw: StyleProps): DesignStyle {
     const fontSize = Number.parseFloat(raw.fontSize ?? '');
-    const mode     = String(raw.mode || 'Transparent').toLowerCase();
+    const mode     = (raw.mode || 'Transparent').toLowerCase();
 
     return {
         fontFamily:    fontStack(raw.fontName),
@@ -831,7 +830,7 @@ function normalizeStyle(raw: StyleProps): DesignStyle {
 function fontStack(value: string | undefined): string {
     if (!value) return DEFAULT_FONT_FAMILY;
 
-    const name = String(value).replace(/[^A-Za-z0-9 _,'-]/g, '').trim().slice(0, 80);
+    const name = value.replace(/[^A-Za-z0-9 _,'-]/g, '').trim().slice(0, 80);
     if (!name) return DEFAULT_FONT_FAMILY;
 
     const generic = /mono|courier|consolas/i.test(name) ? 'monospace' : 'sans-serif';
@@ -839,19 +838,19 @@ function fontStack(value: string | undefined): string {
 }
 
 function normalizeColor(value: string | undefined, fallback: string): string {
-    const color = String(value ?? '').trim();
+    const color = (value ?? '').trim();
     if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(color)) return color;
     if (color.toLowerCase() === 'transparent') return 'transparent';
     return fallback;
 }
 
 function normalizeAlign(value: string | undefined, allowed: ReadonlySet<string>, fallback: string): string {
-    const align = String(value ?? '').trim().toLowerCase();
+    const align = (value ?? '').trim().toLowerCase();
     return allowed.has(align) ? align : fallback;
 }
 
 function normalizeRotation(value: string | undefined): number {
-    switch (String(value ?? '').trim().toLowerCase()) {
+    switch ((value ?? '').trim().toLowerCase()) {
         case 'left':        return -90;
         case 'right':       return 90;
         case 'upsidedown':  return 180;
@@ -860,12 +859,12 @@ function normalizeRotation(value: string | undefined): number {
 }
 
 function normalizeMarkup(value: string | undefined): string {
-    const markup = String(value ?? '').trim().toLowerCase();
+    const markup = (value ?? '').trim().toLowerCase();
     return MARKUPS.has(markup) ? markup : 'none';
 }
 
 function normalizeLineStyle(value: string | undefined): string {
-    const style = String(value ?? '').trim().toLowerCase();
+    const style = (value ?? '').trim().toLowerCase();
     if (style === 'dashed' || style === 'dotted' || style === 'double') return style;
     return 'solid';
 }
@@ -878,7 +877,7 @@ function normalizeLineStyle(value: string | undefined): string {
  * receives plain text, never markup.
  */
 export function prepareText(raw: string, markup: string): string {
-    let out = String(raw ?? '');
+    let out = raw;
     const mode = normalizeMarkup(markup);
 
     if (mode === 'styled' || mode === 'html' || mode === 'rtf') {
@@ -889,7 +888,7 @@ export function prepareText(raw: string, markup: string): string {
 
 /** Strip markup from a styled/HTML/RTF text value, keeping the inner text. */
 export function flattenMarkup(value: string): string {
-    return String(value ?? '')
+    return value
         .replace(/<br\s*\/?>/gi, '\n')
         .replace(/<[^>]*>/g, '')
         .replace(/\n{3,}/g, '\n\n');
@@ -897,7 +896,7 @@ export function flattenMarkup(value: string): string {
 
 /** Decode the predefined XML entities plus numeric character references. */
 export function decodeXmlEntities(value: string): string {
-    return String(value ?? '').replace(/&(#\d+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, (match: string, body: string) => {
+    return value.replace(/&(#\d+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);/g, (match: string, body: string) => {
         switch (body) {
             case 'amp':  return '&';
             case 'lt':   return '<';
@@ -946,7 +945,7 @@ function placeholderLabel(expression: string, kind: string): string {
 
 /** Turn `"Detail.jasper"` into `Detail.jasper`; return null otherwise. */
 function unwrapLiteral(expression: string): string | null {
-    const match = /^"((?:\\.|[^"\\])*)"$/.exec(String(expression ?? '').trim());
+    const match = /^"((?:\\.|[^"\\])*)"$/.exec(expression.trim());
     if (!match) return null;
     return (match[1] ?? '').replace(/\\(["\\])/g, '$1');
 }
@@ -956,13 +955,13 @@ function nestedComponentKind(node: XmlNode): string {
         if (descendant === node) continue;
         if (localName(descendant.tag) !== 'component') continue;
         const kind = attrValue(descendant, 'kind');
-        if (kind) return String(kind);
+        if (kind) return kind;
     }
     return '';
 }
 
 function cap(value: string, max: number): string {
-    const text = String(value ?? '');
+    const text = value;
     return text.length > max ? text.slice(0, max) + '…' : text;
 }
 
@@ -990,7 +989,7 @@ function firstDescendant(node: XmlNode, tag: string): XmlNode | null {
 }
 
 function isTrue(value: string | undefined): boolean {
-    return String(value ?? '').trim().toLowerCase() === 'true';
+    return (value ?? '').trim().toLowerCase() === 'true';
 }
 
 function nonNegativeOr(value: number, fallback: number): number {

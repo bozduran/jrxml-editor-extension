@@ -53,7 +53,7 @@ function diagnosticToIssue(diagnostic: vscode.Diagnostic, uri: vscode.Uri): View
     const group: IssueGroup = diagnostic.severity === vscode.DiagnosticSeverity.Error ? 'error' : 'warning';
     return {
         group,
-        label:    `Line ${diagnostic.range.start.line + 1}: ${diagnostic.message}`,
+        label:    `Line ${String(diagnostic.range.start.line + 1)}: ${diagnostic.message}`,
         message:  diagnostic.message,
         code:     codeString(diagnostic.code),
         line:     diagnostic.range.start.line,
@@ -103,7 +103,7 @@ function messageItem(message: string, icon: string): vscode.TreeItem {
 
 function groupItem(group: ViewGroup): IssueTreeItem {
     const item: IssueTreeItem = new vscode.TreeItem(
-        `${group.title} (${group.items.length})`,
+        `${group.title} (${String(group.items.length)})`,
         vscode.TreeItemCollapsibleState.Expanded
     );
     item.iconPath     = new vscode.ThemeIcon(GROUP_ICON[group.group] || 'info');
@@ -130,8 +130,8 @@ function leafItem(issue: ViewIssue): IssueTreeItem {
 }
 
 class IssuesProvider {
-    private readonly _onDidChangeTreeData: vscode.EventEmitter<IssueTreeItem | undefined | null | void>;
-    readonly onDidChangeTreeData: vscode.Event<IssueTreeItem | undefined | null | void>;
+    private readonly _onDidChangeTreeData: vscode.EventEmitter<IssueTreeItem | undefined | null>;
+    readonly onDidChangeTreeData: vscode.Event<IssueTreeItem | undefined | null>;
     private _document: vscode.TextDocument | null;
     groups: ViewGroup[];
 
@@ -207,13 +207,13 @@ type EditAction = vscode.CodeAction & { edit: vscode.WorkspaceEdit };
 
 /** Quick-fix actions offered for one diagnostic range. */
 async function quickFixesFor(uri: vscode.Uri, range: vscode.Range): Promise<EditAction[]> {
-    const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+    const actions = await vscode.commands.executeCommand<vscode.CodeAction[] | undefined>(
         'vscode.executeCodeActionProvider',
         uri,
         range,
         vscode.CodeActionKind.QuickFix
     );
-    return (actions || []).filter((action): action is EditAction => !!action && !!action.edit);
+    return (actions ?? []).filter((action): action is EditAction => Boolean(action.edit));
 }
 
 /** The lightbulb's preferred fix, else the first edit-bearing one. */
@@ -221,7 +221,7 @@ function pickFix(
     actions: readonly vscode.CodeAction[] | undefined,
     { preferredOnly = false }: { preferredOnly?: boolean } = {}
 ): EditAction | null {
-    const withEdit = (actions || []).filter((action): action is EditAction => !!action && !!action.edit);
+    const withEdit = (actions ?? []).filter((action): action is EditAction => Boolean(action.edit));
     const preferred = withEdit.find(action => action.isPreferred);
     if (preferred) return preferred;
     return preferredOnly ? null : (withEdit[0] || null);
@@ -288,7 +288,7 @@ async function fixAll(): Promise<void> {
         return;
     }
     if (await vscode.workspace.applyEdit(merged)) {
-        vscode.window.showInformationMessage(`Fixed ${fixed} issue${fixed === 1 ? '' : 's'}.`);
+        vscode.window.showInformationMessage(`Fixed ${String(fixed)} issue${fixed === 1 ? '' : 's'}.`);
     }
 }
 
@@ -367,7 +367,7 @@ function navigate(direction: number): void {
 
 function updateBadge(view: vscode.TreeView<IssueTreeItem>, count: number): void {
     view.badge = count > 0
-        ? { value: count, tooltip: `${count} issue${count === 1 ? '' : 's'}` }
+        ? { value: count, tooltip: `${String(count)} issue${count === 1 ? '' : 's'}` }
         : undefined;
 }
 
@@ -391,8 +391,8 @@ function register(context: vscode.ExtensionContext): void {
         updateBadge(view, count);
 
         if (count > 0) {
-            statusBar.text    = `$(warning) ${count}`;
-            statusBar.tooltip = `${count} JRXML issue${count === 1 ? '' : 's'} — click to open Issues (JRXML)`;
+            statusBar.text    = `$(warning) ${String(count)}`;
+            statusBar.tooltip = `${String(count)} JRXML issue${count === 1 ? '' : 's'} — click to open Issues (JRXML)`;
             statusBar.show();
         } else {
             statusBar.hide();
@@ -430,19 +430,19 @@ function register(context: vscode.ExtensionContext): void {
         vscode.commands.registerCommand('jrxml.issues.copyCode', copyCode),
         vscode.commands.registerCommand('jrxml.issues.editInExpressionEditor', editInExpressionEditor),
         vscode.commands.registerCommand('jrxml.issues.editInIfElseBuilder', editInIfElseBuilder),
-        vscode.commands.registerCommand('jrxml.nextIssue', () => navigate(1)),
-        vscode.commands.registerCommand('jrxml.previousIssue', () => navigate(-1)),
+        vscode.commands.registerCommand('jrxml.nextIssue', () => { navigate(1); }),
+        vscode.commands.registerCommand('jrxml.previousIssue', () => { navigate(-1); }),
 
         // Diagnostics are pushed by diagnosticsProvider; this keeps us in sync.
-        vscode.languages.onDidChangeDiagnostics(() => refresh()),
-        vscode.window.onDidChangeActiveTextEditor(() => refresh()),
+        vscode.languages.onDidChangeDiagnostics(() => { refresh(); }),
+        vscode.window.onDidChangeActiveTextEditor(() => { refresh(); }),
         // File-level actions are not diagnostics, so recompute on edits.
         vscode.workspace.onDidChangeTextDocument(event => { if (isJrxml(event.document)) schedule(); }),
         vscode.workspace.onDidChangeConfiguration(event => {
             if (event.affectsConfiguration('jrxml')) refresh();
         }),
 
-        { dispose: () => clearTimeout(timer) }
+        { dispose: () => { clearTimeout(timer); } }
     );
 
     refresh();

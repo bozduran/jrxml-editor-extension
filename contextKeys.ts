@@ -50,13 +50,13 @@ function register(context: vscode.ExtensionContext): void {
     const schedule = (): void => { clearTimeout(timer); timer = setTimeout(update, DEBOUNCE_MS); };
 
     context.subscriptions.push(
-        vscode.window.onDidChangeActiveTextEditor(() => update()),
+        vscode.window.onDidChangeActiveTextEditor(() => { update(); }),
         vscode.workspace.onDidChangeTextDocument(event => { if (isJrxml(event.document)) schedule(); }),
         vscode.workspace.onDidSaveTextDocument(document => { if (isJrxml(document)) update(); }),
         vscode.workspace.onDidChangeConfiguration(event => {
             if (event.affectsConfiguration('jrxml')) update();
         }),
-        { dispose: () => clearTimeout(timer) }
+        { dispose: () => { clearTimeout(timer); } }
     );
 
     update();

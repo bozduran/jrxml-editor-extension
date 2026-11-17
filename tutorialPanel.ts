@@ -23,7 +23,7 @@ class TutorialPanel {
         this._panel       = panel;
         this._disposables = [];
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.onDidDispose(() => { this.dispose(); }, null, this._disposables);
         this._render();
     }
 
@@ -63,7 +63,7 @@ class TutorialPanel {
 
 function register(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
-        vscode.commands.registerCommand('jrxml.openTutorial', () => TutorialPanel.createOrShow())
+        vscode.commands.registerCommand('jrxml.openTutorial', () => { TutorialPanel.createOrShow(); })
     );
 }
 

@@ -42,8 +42,8 @@ function isJrxmlDocument(document: vscode.TextDocument): boolean {
 }
 
 function workspaceRoots(): string[] {
-    return ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
-        .map(folder => folder.uri && folder.uri.fsPath)
+    return (vscode.workspace.workspaceFolders ?? [])
+        .map(folder => folder.uri.fsPath)
         .filter((root): root is string => Boolean(root));
 }
 
@@ -155,7 +155,7 @@ function register(context: vscode.ExtensionContext): void {
             clearCache(doc.uri);
         }),
         // Cancel pending debounces when the extension deactivates
-        { dispose: () => clearTimeout(debounceTimer) }
+        { dispose: () => { clearTimeout(debounceTimer); } }
     );
 }
 

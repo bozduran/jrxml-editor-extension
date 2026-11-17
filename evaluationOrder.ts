@@ -40,7 +40,7 @@ export interface OrderFinding {
 /** Scope key for a variable node: 'report' or 'dataset:<startTag>'. */
 function scopeKeyOf(node: XmlNode, root: XmlNode): string | null {
     const dataset = node.ancestors().find(a => a.tag === 'dataset' || a.tag === 'subDataset');
-    if (dataset) return 'dataset:' + dataset.startTag;
+    if (dataset) return `dataset:${String(dataset.startTag)}`;
     if (node.parent === root) return 'report';
     return null; // nested in a subreport etc. — not a declaration here
 }

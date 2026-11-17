@@ -80,7 +80,7 @@ function splitTernary(expr: string): TernarySegments | null {
     let condEnd = -1, thenEnd = -1;
 
     for (let i = 0; i < expr.length; i++) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
         if (inStr) {
             if (ch === '\\') { i++; continue; }
             if (ch === strCh) inStr = false;
@@ -145,11 +145,11 @@ function formatMethodChain(expr: string, indent: string): string {
     let i = 0;
 
     while (i < expr.length) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
 
         if (inStr) {
             result += ch;
-            if (ch === '\\') { result += expr[++i]; }
+            if (ch === '\\') { result += expr.charAt(++i); }
             i++;
             if (ch === strCh) inStr = false;
             continue;
@@ -179,7 +179,7 @@ function formatMethodChain(expr: string, indent: string): string {
 function countTopLevelMethodCalls(expr: string): number {
     let count = 0, depth = 0, inStr = false, strCh = '';
     for (let i = 0; i < expr.length; i++) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
         if (inStr) {
             if (ch === '\\') { i++; continue; }
             if (ch === strCh) inStr = false;
@@ -209,11 +209,11 @@ function formatBinaryOperators(expr: string, indent: string): string {
     let i = 0;
 
     while (i < expr.length) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
 
         if (inStr) {
             result += ch;
-            if (ch === '\\') { result += expr[++i]; }
+            if (ch === '\\') { result += expr.charAt(++i); }
             i++;
             if (ch === strCh) inStr = false;
             continue;
@@ -261,18 +261,18 @@ function formatLongArgumentLists(expr: string, indent: string, indentUnit: strin
         // Find next `identifier(`
         const identMatch = expr.slice(i).match(/^([a-zA-Z_$][a-zA-Z0-9_$.]*)\s*\(/);
         if (!identMatch) {
-            result += expr[i++];
+            result += expr.charAt(i++);
             continue;
         }
 
-        const fnName  = identMatch[1];
+        const fnName  = identMatch[1] ?? '';
         const parenStart = i + identMatch[0].length - 1; // index of `(`
 
         // Find the matching closing paren
         const parenEnd = findMatchingParen(expr, parenStart);
         if (parenEnd === -1) {
             // No match found — emit as-is
-            result += expr[i++];
+            result += expr.charAt(i++);
             continue;
         }
 
@@ -289,7 +289,7 @@ function formatLongArgumentLists(expr: string, indent: string, indentUnit: strin
                 const outdent = indent.length >= indentUnit.length
                     ? indent.slice(0, indent.length - indentUnit.length)
                     : '';
-                result += fnName + '(\n' + formattedArgs + '\n' + outdent + ')';
+                result += `${fnName}(\n${formattedArgs}\n${outdent})`;
                 i = parenEnd + 1;
                 continue;
             }
@@ -310,7 +310,7 @@ function formatLongArgumentLists(expr: string, indent: string, indentUnit: strin
 function findMatchingParen(expr: string, openIdx: number): number {
     let depth = 0, inStr = false, strCh = '';
     for (let i = openIdx; i < expr.length; i++) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
         if (inStr) {
             if (ch === '\\') { i++; continue; }
             if (ch === strCh) inStr = false;
@@ -334,7 +334,7 @@ function findMatchingParen(expr: string, openIdx: number): number {
 function hasTopLevelChar(expr: string, char: string): boolean {
     let depth = 0, inStr = false, strCh = '';
     for (let i = 0; i < expr.length; i++) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
         if (inStr) {
             if (ch === '\\') { i++; continue; }
             if (ch === strCh) inStr = false;
@@ -357,13 +357,13 @@ function splitRespectingStrings(expr: string): string[] {
     let buf = '', i = 0;
 
     while (i < expr.length) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
         if (ch === '"' || ch === "'") {
             parts.push(buf); buf = ch; i++;
             while (i < expr.length) {
-                const c = expr[i];
+                const c = expr.charAt(i);
                 buf += c;
-                if (c === '\\') { buf += expr[++i]; i++; continue; }
+                if (c === '\\') { buf += expr.charAt(++i); i++; continue; }
                 if (c === ch)   { i++; break; }
                 i++;
             }
@@ -381,10 +381,10 @@ function splitTopLevelCommas(str: string): string[] {
     let depth = 0, inStr = false, strCh = '', buf = '';
 
     for (let i = 0; i < str.length; i++) {
-        const ch = str[i];
+        const ch = str.charAt(i);
         if (inStr) {
             buf += ch;
-            if (ch === '\\') { buf += str[++i]; continue; }
+            if (ch === '\\') { buf += str.charAt(++i); continue; }
             if (ch === strCh) inStr = false;
             continue;
         }

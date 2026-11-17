@@ -5,9 +5,11 @@ import tseslint from "typescript-eslint";
 // scope them to TypeScript: the repository also carries CommonJS tests and
 // scripts where `require()` is correct.
 //
-// recommendedTypeChecked is the correctness tier: it adds the rules that need
-// the compiler's project graph (unsafe-* access, floating promises, …).
-const typescriptRecommended = tseslint.configs.recommendedTypeChecked.map(config => ({
+// strictTypeChecked is the correctness tier: the type-aware rules from
+// recommended plus the ones that catch dead conditions, implicit string
+// conversion, void-returning expressions and the like. The stylistic tier is
+// deliberately not enabled (see .local-docs/TYPESCRIPT_A_GRADE_PLAN.md).
+const typescriptRecommended = tseslint.configs.strictTypeChecked.map(config => ({
     ...config,
     files: config.files ?? ["**/*.ts"],
 }));

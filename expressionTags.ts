@@ -63,7 +63,7 @@ const DESIGN_CONTENT = new Set<string>(DESIGN_CONTENT_TAGS);
 
 /** Lowercased local name: the design model and some consumers use this form. */
 export function normalizeTag(tag: string): string {
-    const text = String(tag ?? '');
+    const text = tag;
     const colon = text.indexOf(':');
     return (colon === -1 ? text : text.slice(colon + 1)).toLowerCase();
 }

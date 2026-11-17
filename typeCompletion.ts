@@ -135,7 +135,7 @@ export function mdText(text: unknown): string {
 
 /** `java.lang.String` → `String`, `java.util.Map$Entry` → `Map.Entry`. */
 export function shortType(type: string | null | undefined): string {
-    const text = String(type ?? '').trim();
+    const text = (type ?? '').trim();
     if (!text) return '';
     if (text.endsWith('[]')) return `${shortType(text.slice(0, -2))}[]`;
     if (text === '?') return '?';
@@ -152,11 +152,11 @@ export function parameterName(type: string, index: number, used: Set<string>): s
     const base = PARAMETER_NAMES[type]
         || (short.endsWith('[]') ? `${shortType(short.slice(0, -2)).toLowerCase()}s` : null)
         || short.replace(/[^A-Za-z0-9_]/g, '').toLowerCase()
-        || `arg${index + 1}`;
+        || `arg${String(index + 1)}`;
 
     let name = base;
     let suffix = 2;
-    while (used.has(name)) name = `${base}${suffix++}`;
+    while (used.has(name)) name = `${base}${String(suffix++)}`;
     used.add(name);
     return name;
 }
@@ -165,7 +165,7 @@ export function parameterName(type: string, index: number, used: Set<string>): s
 export function snippetFor(member: MemberLike): string {
     const used = new Set<string>();
     const args = (member.params || []).map(
-        (type, index) => `\${${index + 1}:${parameterName(type, index, used)}}`
+        (type, index) => `\${${String(index + 1)}:${parameterName(type, index, used)}}`
     );
     return `${member.name}(${args.join(', ')})`;
 }
@@ -197,16 +197,16 @@ export function buildMemberCandidates(
 
     const candidates: CompletionCandidate[] = [];
 
-    for (const method of members.methods || []) {
+    for (const method of members.methods) {
         const tier = tierOf(method, typeKey);
         candidates.push({
             name: method.name,
             label: method.name,
-            labelDetail: `(${(method.params || []).map(shortType).join(', ')})`,
+            labelDetail: `(${method.params.map(shortType).join(', ')})`,
             labelDescription: shortType(method.returns),
             filterText: method.name,
             kind: 'method',
-            arity: (method.params || []).length,
+            arity: method.params.length,
             insertText: snippetFor(method),
             signature: signatureOf(method),
             detail: `${signatureOf(method)} : ${shortType(method.returns)}`,
@@ -218,7 +218,7 @@ export function buildMemberCandidates(
         });
     }
 
-    for (const field of members.fields || []) {
+    for (const field of members.fields) {
         const tier = tierOf(field, typeKey);
         candidates.push({
             name: field.name,
@@ -262,7 +262,7 @@ function tierOf(member: { declaringType?: string }, typeKey: string): number {
 
 /** Markdown documentation for one candidate. */
 export function documentationFor(candidate: DocumentedCandidate, typeLabel: string): string {
-    const lines = [`\`\`\`java`, `${candidate.signature}`, '```'];
+    const lines = ['```java', candidate.signature, '```'];
     lines.push(`Declared by \`${candidate.declaringType}\``);
     if (candidate.declaringType !== typeLabel && typeLabel) {
         lines.push(`Inherited for \`${typeLabel}\``);
@@ -284,7 +284,7 @@ export function buildTypeHint(
     if (!resolution || resolution.resolved) return null;
 
     const reference = mdCode(
-        resolution.reference || (resolution.sigil ? `$${resolution.sigil}{${resolution.name}}` : '')
+        resolution.reference || (resolution.sigil ? `$${resolution.sigil}{${String(resolution.name)}}` : '')
     );
     const fieldName = mdCode(resolution.name);
     const hint: TypeHint = {
@@ -325,7 +325,7 @@ export function buildTypeHint(
         hint.label = `${mdText(resolution.name)} matches ${candidates.join(' and ')} — use the full class name`;
         hint.detail = 'JRXML typed completion';
         hint.documentation = [
-            `\`${resolution.name}\` is a short name for more than one indexed type:`,
+            `\`${String(resolution.name)}\` is a short name for more than one indexed type:`,
             '',
             ...candidates.map(candidate => `- \`${candidate}\``),
             '',

@@ -32,7 +32,7 @@ const MEMBER_ACCESS_AFTER = /^\./;
 
 function isBoolean(type: string | null | undefined): boolean {
     if (!type) return false;
-    const value = String(type).toLowerCase();
+    const value = type.toLowerCase();
     return value === 'boolean' || value === 'java.lang.boolean';
 }
 
@@ -71,7 +71,7 @@ export function checkBooleanEquals(
     declarations: Declarations,
     scope: Declarations | null = null
 ): BooleanEqualsHit[] {
-    const expr = String(expression == null ? '' : expression);
+    const expr = expression;
     const boolNames = buildTypeSet(scope || declarations || {}, isBoolean);
     const tokens = referenceTokens(expr).filter(token =>
         token.sigil !== 'R' && !token.bang && token.name && boolNames[token.sigil].has(token.name));
@@ -109,7 +109,7 @@ export function checkBooleanEquals(
         if (!afterMatch) continue;
 
         const ref = referenceText(token);
-        const inner = `EQUALS(${ref}, ${afterMatch[2]})`;
+        const inner = `EQUALS(${ref}, ${String(afterMatch[2])})`;
         const replacement = afterMatch[1] === '!=' ? `NOT(${inner})` : inner;
         hits.push(hit(token.start, token.end + afterMatch[0].length, replacement));
         claimed.add(token.start);

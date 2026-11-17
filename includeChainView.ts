@@ -153,15 +153,16 @@ function fileItem(node: IncludeTreeNode, uriByPath: Map<string, vscode.Uri>): In
 }
 
 class IncludeChainProvider implements vscode.TreeDataProvider<IncludeTreeItem> {
-    _onDidChangeTreeData: vscode.EventEmitter<IncludeTreeItem | undefined | null | void>;
-    onDidChangeTreeData: vscode.Event<IncludeTreeItem | undefined | null | void>;
+    _onDidChangeTreeData: vscode.EventEmitter<IncludeTreeItem | undefined | null>;
+    onDidChangeTreeData: vscode.Event<IncludeTreeItem | undefined | null>;
 
     constructor() {
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData  = this._onDidChangeTreeData.event;
     }
 
-    refresh(): void { this._onDidChangeTreeData.fire(); }
+    /** `undefined` means "the whole tree changed" (vs. one item). */
+    refresh(): void { this._onDidChangeTreeData.fire(undefined); }
 
     dispose(): void { this._onDidChangeTreeData.dispose(); }
 
@@ -191,7 +192,7 @@ class IncludeChainProvider implements vscode.TreeDataProvider<IncludeTreeItem> {
         }
 
         const uriByPath = new Map<string, vscode.Uri>(
-            files.filter(file => file.uri).map((file): [string, vscode.Uri] => [file.path, file.uri])
+            files.map((file): [string, vscode.Uri] => [file.path, file.uri])
         );
         uriByPath.set(target, document.uri);
 
@@ -227,7 +228,7 @@ export function register(context: vscode.ExtensionContext): void {
     });
 
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule     = (): void => { clearTimeout(timer); timer = setTimeout(() => provider.refresh(), DEBOUNCE_MS); };
+    const schedule     = (): void => { clearTimeout(timer); timer = setTimeout(() => { provider.refresh(); }, DEBOUNCE_MS); };
     const hardRefresh  = (): void => { invalidate(); provider.refresh(); };
 
     context.subscriptions.push(
@@ -236,14 +237,14 @@ export function register(context: vscode.ExtensionContext): void {
 
         vscode.commands.registerCommand('jrxml.refreshIncludeChain', hardRefresh),
 
-        vscode.window.onDidChangeActiveTextEditor(() => provider.refresh()),
+        vscode.window.onDidChangeActiveTextEditor(() => { provider.refresh(); }),
         vscode.workspace.onDidChangeTextDocument(event => { if (isJrxml(event.document)) schedule(); }),
         vscode.workspace.onDidSaveTextDocument(document => { if (isJrxml(document)) hardRefresh(); }),
-        vscode.workspace.onDidCreateFiles(() => hardRefresh()),
-        vscode.workspace.onDidDeleteFiles(() => hardRefresh()),
-        vscode.workspace.onDidRenameFiles(() => hardRefresh()),
-        vscode.workspace.onDidChangeWorkspaceFolders(() => hardRefresh()),
+        vscode.workspace.onDidCreateFiles(() => { hardRefresh(); }),
+        vscode.workspace.onDidDeleteFiles(() => { hardRefresh(); }),
+        vscode.workspace.onDidRenameFiles(() => { hardRefresh(); }),
+        vscode.workspace.onDidChangeWorkspaceFolders(() => { hardRefresh(); }),
 
-        { dispose: () => clearTimeout(timer) }
+        { dispose: () => { clearTimeout(timer); } }
     );
 }

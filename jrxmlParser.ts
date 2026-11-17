@@ -199,7 +199,7 @@ function parseReport(
     source: ReportSource | null | undefined,
     providedScan: XmlScanResult | null = null
 ): ParseResult {
-    const id      = source && source.id != null ? String(source.id) : null;
+    const id      = source ? source.id : null;
     const version = source ? source.version : undefined;
     const cached  = id !== null ? cache.get(id) : null;
     if (cached && cached.version === version) return cached.result;
@@ -664,11 +664,11 @@ function findDuplicateNames(parsed: ParseResult): DuplicateName[] {
     check('variable', parsed.variables, '');
     // parsed.groups also contains dataset groups (they are declared inside a
     // <dataset>); those belong to that dataset's scope, not the report's.
-    check('group', (parsed.groups || []).filter(group => !insideAnyDataset(parsed, group.offset)), '');
+    check('group', parsed.groups.filter(group => !insideAnyDataset(parsed, group.offset)), '');
     check('style', parsed.styles, '');
     check('dataset', parsed.datasets, '');
 
-    for (const dataset of parsed.datasets || []) {
+    for (const dataset of parsed.datasets) {
         check('field', dataset.fields, dataset.name);
         check('parameter', dataset.parameters, dataset.name);
         check('variable', dataset.variables, dataset.name);
@@ -678,7 +678,7 @@ function findDuplicateNames(parsed: ParseResult): DuplicateName[] {
 }
 
 function insideAnyDataset(parsed: ParseResult, offset: number): boolean {
-    return (parsed.datasets || []).some(dataset =>
+    return parsed.datasets.some(dataset =>
         dataset.offset <= offset && offset < dataset.end);
 }
 
@@ -864,7 +864,7 @@ function extractOutline(
             const bands = section.children.filter(child => child.tag === 'band');
             if (bands.length > 0) {
                 bands.forEach((band, index) => {
-                    const label = bands.length > 1 ? `${tag} ${index + 1}` : tag;
+                    const label = bands.length > 1 ? `${tag} ${String(index + 1)}` : tag;
                     reportNode.children.push(bandNode(band, label));
                 });
             } else {
@@ -879,7 +879,7 @@ function extractOutline(
     const lastStyle = styles[styles.length - 1];
     if (firstStyle && lastStyle) {
         reportNode.children.push(container('group', 'Styles',
-            styles.map(style => leaf('style', `Style: ${style.attrValue('name')}`, nodeSpan(style))),
+            styles.map(style => leaf('style', `Style: ${String(style.attrValue('name'))}`, nodeSpan(style))),
             firstStyle.startTag, lastStyle.end));
     }
 

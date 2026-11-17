@@ -55,7 +55,7 @@ function quote(value: string): string {
 }
 
 function occurrences(n: number): string {
-    return n === 1 ? '1 occurrence' : `${n} occurrences`;
+    return n === 1 ? '1 occurrence' : `${String(n)} occurrences`;
 }
 
 /** Replace unrenderable characters; one finding per distinct character. */
@@ -141,7 +141,7 @@ export function applyNewline(text: string, markup: string, changes?: TextChange[
             i += 2;
             continue;
         }
-        out += text[i];
+        out += text.charAt(i);
         i++;
     }
     return out;
@@ -212,7 +212,7 @@ export function transformExpression(
 
         const end = literalEnd(content, i);
         if (end < 0) {
-            out += content[i];
+            out += content.charAt(i);
             i++;
             continue;
         }

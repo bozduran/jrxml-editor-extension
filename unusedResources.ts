@@ -125,12 +125,12 @@ function checkResourceKeys(
     const attribute = parsed.resourceBundle;
     if (!attribute || !bundle || bundle.entries.size === 0) return [];
 
-    const used = new Set((parsed.resourceReferences || []).map(reference => reference.name));
+    const used = new Set(parsed.resourceReferences.map(reference => reference.name));
     const unused = [...bundle.entries.keys()].filter(key => !used.has(key)).sort();
     if (unused.length === 0) return [];
 
     const shown = unused.slice(0, 5).join(', ');
-    const suffix = unused.length > 5 ? `, … (${unused.length} in total)` : '';
+    const suffix = unused.length > 5 ? `, … (${String(unused.length)} in total)` : '';
     return [{
         offset: attribute.offset,
         length: attribute.length,
@@ -142,7 +142,7 @@ function checkResourceKeys(
 /** Every unused-resource finding for one report. */
 export function checkUnusedResources(input: UnusedResourceInput): UnusedResourceFinding[] {
     const { scan, parsed } = input;
-    if (!scan || scan.error || !scan.doc) return [];
+    if (scan.error || !scan.doc) return [];
 
     const findings: UnusedResourceFinding[] = [
         ...(input.includeStyles === false ? [] : checkStyles(scan)),

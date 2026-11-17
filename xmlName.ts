@@ -8,7 +8,7 @@
 
 /** The name after any namespace prefix, with its case preserved. */
 export function localName(tag: string): string {
-    const text = String(tag ?? '');
+    const text = tag;
     const colon = text.indexOf(':');
     return colon === -1 ? text : text.slice(colon + 1);
 }

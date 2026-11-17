@@ -410,7 +410,7 @@ function clauseItems(): ExpressionSuggestion[] {
 /** `$R{key}` suggestions from the report's resource bundle. */
 function resourceItems(resources: readonly ResourceEntry[]): ExpressionSuggestion[] {
     return resources.map(resource => {
-        const value = resource && typeof resource.defaultValue === 'string'
+        const value = typeof resource.defaultValue === 'string'
             ? resource.defaultValue
             : null;
         const hasValue = value !== null && value !== '';
@@ -424,7 +424,7 @@ function resourceItems(resources: readonly ResourceEntry[]): ExpressionSuggestio
             documentation:     hasValue
                 ? `**${resource.key}**\n\n${markdownSafe(value)}`
                 : `**${resource.key}**\n\n_No default value in the default bundle._`,
-            insertTextSnippet: String(resource.key).replace(/\$/g, '\\$'),
+            insertTextSnippet: resource.key.replace(/\$/g, '\\$'),
             kind:              'reference',
             sortText:          '0_' + resource.key,
         }, resource.key);
@@ -433,7 +433,7 @@ function resourceItems(resources: readonly ResourceEntry[]): ExpressionSuggestio
 
 /** Keep property-file content from injecting markdown while it is rendered. */
 function markdownSafe(text: string): string {
-    return String(text ?? '')
+    return text
         .replace(/\\/g, '\\\\')
         .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
         .replace(/\r?\n+/g, ' ')
@@ -452,12 +452,12 @@ function shortcutItems(): ExpressionSuggestion[] {
 
 function shortcut(label: string, detailText: string, kind: SuggestionKind): ExpressionSuggestion {
     const sigil = label[1];
-    const plain = `$${sigil}{}`;
+    const plain = `$${String(sigil)}{}`;
     return withPlain({
         label,
         detail:            `${detailText}  (choose a ${sigil === 'R' ? 'key' : detailText.toLowerCase()})`,
         documentation:     '',
-        insertTextSnippet: `${sigil}{$1}`,
+        insertTextSnippet: `${String(sigil)}{$1}`,
         kind,
         sortText:          '0_' + label,
     }, plain, { start: 3, end: 3 });
@@ -475,12 +475,12 @@ function declarationSuggestion(
     const snippet = alreadyInsideBrace ? decl.name : `\\$${sigil}{${decl.name}}`;
     const kindName = sigil === 'F' ? 'Field' : sigil === 'P' ? 'Parameter' : 'Variable';
     const doc = [
-        `**${decl.type}**`,
+        `**${String(decl.type)}**`,
         decl.fullType && decl.fullType !== decl.type ? `\`${decl.fullType}\`` : '',
         decl.description ? `\n\n${decl.description}` : '',
     ].filter(Boolean).join('  \n');
 
-    let detail = `${decl.type}  [${kindName}]`;
+    let detail = `${String(decl.type)}  [${kindName}]`;
     if (decl.isSystem || decl.isBuiltin) detail += ' ⚙';
 
     return withPlain({
@@ -536,7 +536,7 @@ function generalItems(
 
     pushSnippetSuggestions(items, JASPER_FUNCTIONS, 'function', '2_', fn => ({
         detail:        fn.detail || '',
-        documentation: `**JasperReports built-in**\n\n${fn.doc}`,
+        documentation: `**JasperReports built-in**\n\n${String(fn.doc)}`,
     }));
     pushSnippetSuggestions(items, JAVA_TYPES, 'class', '3_', type => ({
         detail:        type.label,
@@ -591,8 +591,8 @@ function provideMemberItems(
                         documentation:    documentationFor(candidate, resolution.typeKey || ''),
                         insertTextSnippet: candidate.insertText,
                         kind:             candidate.kind === 'field' ? 'field' : 'method',
-                        sortText:         `${candidate.tier}_${String(candidate.rank).padStart(3, '0')}_${candidate.name}_${candidate.arity}`,
-                        deprecated:       !!candidate.deprecated,
+                        sortText:         `${String(candidate.tier)}_${String(candidate.rank).padStart(3, '0')}_${candidate.name}_${String(candidate.arity)}`,
+                        deprecated:       candidate.deprecated,
                     }, plain.text, plain.placeholder ?? undefined);
                 });
             }
@@ -650,7 +650,7 @@ function withPlain(
  * Handles `\$`, `${n:label}`, `${n}` and `$n`.
  */
 export function plainFromSnippet(snippet: string): { text: string; placeholder: SuggestionPlaceholder | null } {
-    const source = String(snippet ?? '');
+    const source = snippet;
     let text = '';
     let placeholder: SuggestionPlaceholder | null = null;
     let i = 0;
@@ -681,7 +681,7 @@ export function plainFromSnippet(snippet: string): { text: string; placeholder: 
             continue;
         }
 
-        text += source[i];
+        text += source.charAt(i);
         i++;
     }
 

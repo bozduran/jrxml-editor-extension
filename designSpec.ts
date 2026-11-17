@@ -134,7 +134,7 @@ export type DesignPropertyName = keyof typeof PROPERTY_SPECS;
 
 /** Local XML name: strip a namespace prefix and lower-case it. */
 export function localName(tag: string): string {
-    const text = String(tag ?? '');
+    const text = tag;
     const colon = text.indexOf(':');
     return (colon === -1 ? text : text.slice(colon + 1)).toLowerCase();
 }
@@ -145,7 +145,7 @@ export function attrValue(node: XmlNode, name: string): string | undefined {
 }
 
 export function directChild(node: XmlNode, tag: string): XmlNode | null {
-    const wanted = String(tag).toLowerCase();
+    const wanted = tag.toLowerCase();
     for (const child of node.children) {
         if (localName(child.tag) === wanted) return child;
     }

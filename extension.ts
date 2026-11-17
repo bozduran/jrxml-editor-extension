@@ -130,7 +130,7 @@ function activate(context: vscode.ExtensionContext): void {
         paths.some(fsPath => fsPath.endsWith('.java'));
 
     context.subscriptions.push(
-        vscode.workspace.onDidChangeWorkspaceFolders(() => invalidateJava()),
+        vscode.workspace.onDidChangeWorkspaceFolders(() => { invalidateJava(); }),
         vscode.workspace.onDidSaveTextDocument(doc => {
             if (touchesJava([doc.fileName])) invalidateJava();
         }),

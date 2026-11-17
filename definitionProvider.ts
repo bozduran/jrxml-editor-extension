@@ -14,8 +14,8 @@ function detectReferenceAtPosition(document: vscode.TextDocument, position: vsco
 }
 
 function workspaceRoots(): string[] {
-    return ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
-        .map(folder => folder.uri && folder.uri.fsPath)
+    return (vscode.workspace.workspaceFolders ?? [])
+        .map(folder => folder.uri.fsPath)
         .filter((root): root is string => Boolean(root));
 }
 

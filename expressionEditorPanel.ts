@@ -60,11 +60,11 @@ class ExpressionEditorPanel {
 
         this._buildHtml();
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.onDidDispose(() => { this.dispose(); }, null, this._disposables);
 
         // Handle messages from the webview
         this._panel.webview.onDidReceiveMessage(
-            (message: EditorMessage) => this._handleMessage(message),
+            (message: EditorMessage) => { this._handleMessage(message); },
             null,
             this._disposables
         );
@@ -138,7 +138,7 @@ class ExpressionEditorPanel {
         sourceEditor: vscode.TextEditor | null | undefined
     ): string {
         if (!expressionResult) return '';
-        if (!expressionResult.range || !sourceEditor || !sourceEditor.document) {
+        if (!expressionResult.range || !sourceEditor) {
             return expressionResult.tagName || '';
         }
 
@@ -146,7 +146,7 @@ class ExpressionEditorPanel {
         const offset = typeof document.offsetAt === 'function'
             ? document.offsetAt(expressionResult.range.start)
             : -1;
-        return `${document.uri.toString()}|${expressionResult.tagName}|${offset}`;
+        return `${document.uri.toString()}|${expressionResult.tagName}|${String(offset)}`;
     }
 
     private _format(expression: string): string {
@@ -163,7 +163,7 @@ class ExpressionEditorPanel {
     private _readAutoFormat(): boolean {
         try {
             return vscode.workspace.getConfiguration('jrxml')
-                .get<boolean>('expressionEditor.autoFormat', false) === true;
+                .get<boolean>('expressionEditor.autoFormat', false);
         } catch {
             return false;
         }

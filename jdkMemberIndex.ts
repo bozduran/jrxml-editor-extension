@@ -378,7 +378,7 @@ function stripGenerics(text: string): string {
 export function normalizeTypeKey(raw: string | null | undefined): string | null {
     if (raw === null || raw === undefined) return null;
 
-    const key = stripGenerics(String(raw).trim()).replace(/\.\.\.$/, '[]');
+    const key = stripGenerics(raw.trim()).replace(/\.\.\.$/, '[]');
     if (!key) return null;
     if (PRIMITIVES.has(key) || key.endsWith('[]')) return key;
 
@@ -402,7 +402,7 @@ export function isIndexed(rawTypeKey: string | null | undefined): boolean {
 
 /** `{ candidates: [...] }` when a short name is ambiguous, else null. */
 export function ambiguityOf(rawTypeKey: string | null | undefined): Ambiguity | null {
-    const key = stripGenerics(String(rawTypeKey ?? '').trim());
+    const key = stripGenerics((rawTypeKey ?? '').trim());
     const index = loadIndex();
     if (!key || key.includes('.') || index.types[key]) return null;
     const candidates = index.ambiguous.get(key);

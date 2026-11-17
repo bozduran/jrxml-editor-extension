@@ -74,7 +74,7 @@ function finding(offset: number, length: number, message: string, code: string):
 
 /** Strip `[]`/`...` and generics; primitives and arrays are not class lookups. */
 function baseTypeName(raw: string | null | undefined): string | null {
-    let text = String(raw ?? '').trim();
+    let text = (raw ?? '').trim();
     if (!text) return null;
     text = text.replace(/\.\.\.$/, '');
     text = text.replace(/(\[\])+$/, '');
@@ -364,7 +364,7 @@ function checkStaticCall(
     if (!statics.some(method => arityMatches(method, call.args.length))) {
         return finding(
             base + call.start, call.end - call.start,
-            `No overload of '${resolved.fqn}.${call.name}' takes ${call.args.length} argument(s).`,
+            `No overload of '${resolved.fqn}.${call.name}' takes ${String(call.args.length)} argument(s).`,
             'jrxml.javaHelperArity'
         );
     }
@@ -403,7 +403,7 @@ function checkProjectMethod(call: MethodCallNode, projectClass: JavaClass, base:
     if (!statics.some(accepts)) {
         return finding(
             base + call.start, call.end - call.start,
-            `No overload of '${projectClass.qualifiedName}.${call.name}' takes ${call.args.length} argument(s).`,
+            `No overload of '${projectClass.qualifiedName}.${call.name}' takes ${String(call.args.length)} argument(s).`,
             'jrxml.javaHelperArity'
         );
     }
@@ -418,7 +418,7 @@ function memberCallFinding(
     resolution: Resolution,
     base: number,
     index: JavaProjectIndex,
-    lookup: (typeKey: string | null) => MemberLookup
+    lookup: (typeKey: string | null) => MemberLookup | null | undefined
 ): JavaSymbolFinding | null {
     if (resolution.reason !== 'unknown-method') return null;
     if (resolution.methodName !== call.name) return null;
@@ -442,7 +442,7 @@ function memberCallFinding(
     if (named.length > 0) {
         return finding(
             offset, call.name.length,
-            `No overload of '${resolution.typeKey}.${call.name}' takes ${call.args.length} argument(s).`,
+            `No overload of '${resolution.typeKey}.${call.name}' takes ${String(call.args.length)} argument(s).`,
             'jrxml.javaMemberArity'
         );
     }
@@ -470,7 +470,7 @@ export function checkJavaSymbols(input: JavaSymbolInput): JavaSymbolFinding[] {
     const seen = new Set<string>();
     const push = (entry: JavaSymbolFinding | null): void => {
         if (!entry) return;
-        const key = `${entry.offset}:${entry.code}`;
+        const key = `${String(entry.offset)}:${entry.code}`;
         if (seen.has(key)) return;
         seen.add(key);
         findings.push(entry);

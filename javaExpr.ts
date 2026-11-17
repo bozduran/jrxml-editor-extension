@@ -67,7 +67,7 @@ export function maskLiteralsAndRefs(code: string): MaskResult {
             const end = scanTextBlock(code, i + 3);
             if (!(end >= i + 6 && code.startsWith('"""', end - 3))) terminated = false;
             replacements.push(code.slice(i, end));
-            out += MASK_PREFIX + (replacements.length - 1) + '__';
+            out += `${MASK_PREFIX}${String(replacements.length - 1)}__`;
             i = end;
             continue;
         }
@@ -76,14 +76,14 @@ export function maskLiteralsAndRefs(code: string): MaskResult {
             const end = scanQuoted(code, i, c);
             if (!(end > i + 1 && code[end - 1] === c)) terminated = false;
             replacements.push(code.slice(i, end));
-            out += MASK_PREFIX + (replacements.length - 1) + '__';
+            out += `${MASK_PREFIX}${String(replacements.length - 1)}__`;
             i = end;
             continue;
         }
         if (c === '$' && i + 1 < n && /[A-Za-z]/.test(at(code, i + 1))) {
             const end = scanJrReference(code, i);
             replacements.push(code.slice(i, end));
-            out += MASK_PREFIX + (replacements.length - 1) + '__';
+            out += `${MASK_PREFIX}${String(replacements.length - 1)}__`;
             i = end;
             continue;
         }
@@ -97,7 +97,7 @@ export function maskLiteralsAndRefs(code: string): MaskResult {
 export function unmask(text: string, replacements: readonly string[]): string {
     let result = text;
     for (let k = replacements.length - 1; k >= 0; k--) {
-        result = result.split(MASK_PREFIX + k + '__').join(replacements[k]);
+        result = result.split(`${MASK_PREFIX}${String(k)}__`).join(replacements[k] ?? '');
     }
     return result;
 }

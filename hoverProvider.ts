@@ -119,7 +119,7 @@ const provider = vscode.languages.registerHoverProvider(
                 if (decl.description) {
                     md.appendMarkdown(`| **Info** | ${mdSafe(decl.description)} |\n`);
                 }
-                md.appendMarkdown(`| **Used** | ${refCount} time${refCount !== 1 ? 's' : ''} in this file |\n`);
+                md.appendMarkdown(`| **Used** | ${String(refCount)} time${refCount !== 1 ? 's' : ''} in this file |\n`);
             } else if (elsewhere) {
                 md.appendMarkdown(`### $${ref.sigil}${bang}{${ref.name}}\n\n`);
                 md.appendMarkdown(

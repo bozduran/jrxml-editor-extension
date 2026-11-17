@@ -44,7 +44,7 @@ function nodesToSymbols(
 ): vscode.DocumentSymbol[] {
     return nodes.map(node => {
         const start = document.positionAt(node.offset);
-        const end   = document.positionAt(Math.max(node.offset, node.end ?? node.offset));
+        const end   = document.positionAt(Math.max(node.offset, node.end));
         const range = new vscode.Range(start, end);
         const kind  = KIND_MAP[node.kind] ?? vscode.SymbolKind.Object;
 
@@ -56,7 +56,7 @@ function nodesToSymbols(
             range
         );
 
-        if (node.children && node.children.length > 0) {
+        if (node.children.length > 0) {
             symbol.children = nodesToSymbols(node.children, document);
         }
 

@@ -40,7 +40,7 @@ async function validateWorkspace(): Promise<WorkspaceValidationResult> {
         async progress => {
             for (let index = 0; index < uris.length; index++) {
                 progress.report({
-                    message: `${index + 1}/${uris.length}`,
+                    message: `${String(index + 1)}/${String(uris.length)}`,
                     increment: 100 / uris.length,
                 });
 
@@ -61,7 +61,7 @@ async function validateWorkspace(): Promise<WorkspaceValidationResult> {
         }
     );
 
-    const message = `Validated ${uris.length} JRXML file(s): ${errors} error(s), ${warnings} warning(s).`;
+    const message = `Validated ${String(uris.length)} JRXML file(s): ${String(errors)} error(s), ${String(warnings)} warning(s).`;
     if (errors > 0) vscode.window.showWarningMessage(message);
     else vscode.window.showInformationMessage(message);
 

@@ -429,7 +429,7 @@ function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalPropert
             if (!Number.isFinite(number)) return { value: null, error: 'This value must be a number.' };
             const rounded = Math.round(number);
             if (rounded < spec.min || rounded > spec.max) {
-                return { value: null, error: `This value must be between ${spec.min} and ${spec.max}.` };
+                return { value: null, error: `This value must be between ${String(spec.min)} and ${String(spec.max)}.` };
             }
             return { value: String(rounded), error: null };
         }
@@ -510,8 +510,8 @@ function applyBox(
         has('style') ? patch.style : (existingPen ? attrValue(existingPen, 'lineStyle') : 'Solid')
     ) || 'Solid';
     const color    = has('color')
-        ? String(patch.color || '').trim()
-        : (existingPen ? String(attrValue(existingPen, 'lineColor') || '') : '');
+        ? (patch.color || '').trim()
+        : (existingPen ? (attrValue(existingPen, 'lineColor') || '') : '');
 
     const attrs: { name: string; value: string }[] = [];
     if (existing) {
@@ -565,7 +565,7 @@ function isPenTag(tag: string): boolean {
 }
 
 function rebuildAttrValue(value: string): string {
-    return String(value).replace(/"/g, '&quot;');
+    return value.replace(/"/g, '&quot;');
 }
 
 // ── Line pen ────────────────────────────────────────────────────────────────
@@ -588,8 +588,8 @@ function applyLine(
         has('style') ? patch.style : (existing ? attrValue(existing, 'lineStyle') : 'Solid')
     ) || 'Solid';
     const color = has('color')
-        ? String(patch.color || '').trim()
-        : (existing ? String(attrValue(existing, 'lineColor') || '') : '');
+        ? (patch.color || '').trim()
+        : (existing ? (attrValue(existing, 'lineColor') || '') : '');
 
     const markup = `<pen lineWidth="${formatNumber(width)}" lineStyle="${style}"${color ? ` lineColor="${color}"` : ''}/>`;
 
@@ -612,10 +612,10 @@ function applyContent(
     insertions: string[]
 ): string | null {
     if (value.length > MAX_CONTENT) {
-        return `The content is longer than ${MAX_CONTENT} characters; edit it in the source.`;
+        return `The content is longer than ${String(MAX_CONTENT)} characters; edit it in the source.`;
     }
 
-    const kind = String(node.attrValue('kind') || '').toLowerCase();
+    const kind = (node.attrValue('kind') || '').toLowerCase();
     const expectedTag = contentTagFor(kind);
     if (!expectedTag) return 'This element does not have editable content.';
 
@@ -750,12 +750,12 @@ function insertChild(
 }
 
 function formatNumber(value: number): string {
-    return String(Math.round(Number(value) * 100) / 100);
+    return String(Math.round(value * 100) / 100);
 }
 
 /** Split a CDATA terminator so user content cannot close the section early. */
 function splitCdata(value: string): string {
-    return String(value).replace(/\]\]>/g, ']]]]><![CDATA[>');
+    return value.replace(/\]\]>/g, ']]]]><![CDATA[>');
 }
 
 // ── Small helpers ───────────────────────────────────────────────────────────
