@@ -15,9 +15,9 @@ const KINDS: ReadonlySet<string> = new Set(['F', 'P', 'V']);
 
 /** True when `name` can be used as a Java identifier. */
 export function isIdentifier(name: string): boolean {
-    if (!name || !/[A-Za-z_]/.test(name[0])) return false;
+    if (!name || !/[A-Za-z_]/.test(name.charAt(0))) return false;
     for (let i = 1; i < name.length; i++) {
-        if (!/[A-Za-z0-9_]/.test(name[i])) return false;
+        if (!/[A-Za-z0-9_]/.test(name.charAt(i))) return false;
     }
     return true;
 }
@@ -43,7 +43,7 @@ export function maskReferences(code: string): string {
         const c = code[i];
         if (c === '$' && i + 2 < n) {
             const kind = code[i + 1];
-            if (KINDS.has(kind) && code[i + 2] === '{') {
+            if (kind !== undefined && KINDS.has(kind) && code[i + 2] === '{') {
                 const close = code.indexOf('}', i + 3);
                 if (close > i + 3) {
                     const name = code.slice(i + 3, close);

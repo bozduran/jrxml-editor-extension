@@ -386,7 +386,8 @@ export function normalizeTypeKey(raw: string | null | undefined): string | null 
     if (index.types[key]) return key;
 
     const candidates = index.bySimpleName.get(key);
-    if (candidates && candidates.length) return candidates[0];
+    const first = candidates && candidates.length ? candidates[0] : undefined;
+    if (first !== undefined) return first;
 
     return key; // unknown, but the caller can still report what was asked for
 }

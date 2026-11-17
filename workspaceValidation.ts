@@ -46,7 +46,9 @@ async function validateWorkspace(): Promise<WorkspaceValidationResult> {
 
                 let document: vscode.TextDocument;
                 try {
-                    document = await vscode.workspace.openTextDocument(uris[index]);
+                    const uri = uris[index];
+                    if (!uri) continue;
+                    document = await vscode.workspace.openTextDocument(uri);
                 } catch {
                     continue; // deleted or unreadable since findFiles ran
                 }

@@ -90,7 +90,7 @@ export function matchTrailingReference(text: string): TrailingReference | null {
     if (!match) return null;
     return {
         sigil: match[1] as ReferenceSigil,
-        name: match[2].trim(),
+        name: (match[2] ?? '').trim(),
         start: match.index,
         reference: match[0],
     };
@@ -306,12 +306,13 @@ export function resolveExpression(
         const argCount = countArguments(text.slice(open + 1, text.length - 1));
 
         const constructorMatch = /(?:^|[^\w$.])new\s+([\w.$]+)$/.exec(beforeArgs);
-        if (constructorMatch) {
+        const constructed = constructorMatch ? constructorMatch[1] : undefined;
+        if (constructed) {
             return {
                 resolved: true,
                 reason: 'ok',
-                typeKey: constructorMatch[1],
-                declaredType: constructorMatch[1],
+                typeKey: constructed,
+                declaredType: constructed,
             };
         }
 
@@ -324,7 +325,7 @@ export function resolveExpression(
         const receiver = resolveExpression(receiverText, context, depth + 1);
         if (!receiver.resolved) return receiver;
 
-        return resolveReturnType(receiver, nameMatch[1], argCount, context);
+        return resolveReturnType(receiver, nameMatch[1] ?? '', argCount, context);
     }
 
     // A bare identifier is a local variable or a class name: neither is a

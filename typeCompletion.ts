@@ -143,7 +143,7 @@ export function shortType(type: string | null | undefined): string {
     // the index already erases them (`List`, not `List<String>`).
     const plain = text.replace(/<.*$/, '').trim();
     const parts = plain.split('.');
-    return parts[parts.length - 1].replace(/\$/g, '.');
+    return (parts[parts.length - 1] ?? '').replace(/\$/g, '.');
 }
 
 /** A readable, identifier-safe placeholder for the nth parameter. */

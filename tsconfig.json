@@ -18,15 +18,14 @@
     "sourceMap": true,
     "noEmitOnError": true,
     "useDefineForClassFields": false,
-    // Strictness ladder (see .local-docs/TYPESCRIPT_A_GRADE_PLAN.md). The
-    // noUncheckedIndexedAccess switch is still off until Phase 2.
+    // Strictness ladder (see .local-docs/TYPESCRIPT_A_GRADE_PLAN.md).
     "noImplicitOverride": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "allowUnreachableCode": false,
     "exactOptionalPropertyTypes": true,
     "noPropertyAccessFromIndexSignature": true,
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": true
   },
   "include": ["*.ts", "tools/**/*.ts"],
   "exclude": [

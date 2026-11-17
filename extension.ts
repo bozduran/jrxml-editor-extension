@@ -188,7 +188,9 @@ function activate(context: vscode.ExtensionContext): void {
         const cfg = vscode.workspace.getConfiguration('jrxml');
         if (!cfg.get('autoOpenEditor')) return;
         if (!e.textEditor.document.fileName.endsWith('.jrxml')) return;
-        const result = findExpressionAtCursor(e.textEditor.document, e.selections[0].active);
+        const selection = e.selections[0];
+        if (!selection) return;
+        const result = findExpressionAtCursor(e.textEditor.document, selection.active);
         if (result) ExpressionEditorPanel.createOrShow(context.extensionUri, result, e.textEditor, { preserveFocus: true });
     }, null, context.subscriptions);
 

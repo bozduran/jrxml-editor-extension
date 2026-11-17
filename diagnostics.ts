@@ -464,7 +464,7 @@ function checkParens(expr: string): SyntaxProblem | null {
     let inStr = false;
 
     for (let i = 0; i < expr.length; i++) {
-        const ch = expr[i];
+        const ch = expr.charAt(i);
 
         if (isFragmentStart(expr, i)) {
             i = skipFragment(expr, i) - 1;
@@ -483,7 +483,7 @@ function checkParens(expr: string): SyntaxProblem | null {
             stack.push({ ch, index: i });
         } else if (')]'.includes(ch)) {
             const top = stack[stack.length - 1];
-            if (stack.length === 0 || top.ch !== pairs[ch]) {
+            if (!top || top.ch !== pairs[ch]) {
                 return { index: i, message: `Unmatched closing '${ch}' in expression.` };
             }
             stack.pop();
@@ -492,6 +492,7 @@ function checkParens(expr: string): SyntaxProblem | null {
 
     if (stack.length > 0) {
         const unclosed = stack[stack.length - 1];
+        if (!unclosed) return null;
         return { index: unclosed.index, message: `Unclosed '${unclosed.ch}' in expression.` };
     }
     return null;

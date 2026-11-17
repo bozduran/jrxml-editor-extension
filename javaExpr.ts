@@ -38,6 +38,11 @@ export interface TernaryIndices {
     colons: Set<number>;
 }
 
+/** The character at `index`; past the end of the input this is ''. */
+function at(text: string, index: number): string {
+    return text[index] ?? '';
+}
+
 interface FormatEdit {
     start: number;
     end: number;
@@ -66,7 +71,7 @@ export function maskLiteralsAndRefs(code: string): MaskResult {
             i = end;
             continue;
         }
-        const c = code[i];
+        const c = at(code, i);
         if (c === '"' || c === "'") {
             const end = scanQuoted(code, i, c);
             if (!(end > i + 1 && code[end - 1] === c)) terminated = false;
@@ -75,7 +80,7 @@ export function maskLiteralsAndRefs(code: string): MaskResult {
             i = end;
             continue;
         }
-        if (c === '$' && i + 1 < n && /[A-Za-z]/.test(code[i + 1])) {
+        if (c === '$' && i + 1 < n && /[A-Za-z]/.test(at(code, i + 1))) {
             const end = scanJrReference(code, i);
             replacements.push(code.slice(i, end));
             out += MASK_PREFIX + (replacements.length - 1) + '__';
@@ -105,7 +110,7 @@ export function unmask(text: string, replacements: readonly string[]): string {
 export function literalEnd(code: string, start: number): number {
     if (start < 0 || start >= code.length) return -1;
     if (code.startsWith('"""', start)) return scanTextBlock(code, start + 3);
-    const c = code[start];
+    const c = at(code, start);
     if (c === '"' || c === "'") return scanQuoted(code, start, c);
     return -1;
 }
@@ -113,7 +118,7 @@ export function literalEnd(code: string, start: number): number {
 function scanQuoted(s: string, start: number, quote: string): number {
     let i = start + 1;
     while (i < s.length) {
-        const c = s[i];
+        const c = at(s, i);
         if (c === '\\') { i += 2; continue; }
         if (c === quote) return i + 1;
         i++;
@@ -124,7 +129,7 @@ function scanQuoted(s: string, start: number, quote: string): number {
 function scanTextBlock(s: string, start: number): number {
     let i = start;
     while (i + 2 < s.length) {
-        const c = s[i];
+        const c = at(s, i);
         if (c === '\\') { i += 2; continue; }
         if (s.startsWith('"""', i)) return i + 3;
         i++;
@@ -134,9 +139,9 @@ function scanTextBlock(s: string, start: number): number {
 
 function scanJrReference(s: string, start: number): number {
     let i = start + 1;
-    if (i < s.length && /[A-Za-z]/.test(s[i])) i++;
-    if (i < s.length && s[i] === '!') i++;
-    if (i < s.length && s[i] === '{') {
+    if (i < s.length && /[A-Za-z]/.test(at(s, i))) i++;
+    if (i < s.length && at(s, i) === '!') i++;
+    if (i < s.length && at(s, i) === '{') {
         const close = s.indexOf('}', i + 1);
         return close < 0 ? s.length : close + 1;
     }
@@ -160,32 +165,32 @@ export function tokenize(code: string): Token[] {
     const n = code.length;
 
     while (i < n) {
-        const c = code[i];
+        const c = at(code, i);
 
         if (/\s/.test(c)) {
             const start = i;
-            while (i < n && /\s/.test(code[i])) i++;
+            while (i < n && /\s/.test(at(code, i))) i++;
             tokens.push({ type: 'ws', value: code.slice(start, i), start, end: i });
             continue;
         }
         if (code.startsWith('//', i)) {
             const start = i;
             i += 2;
-            while (i < n && code[i] !== '\n') i++;
+            while (i < n && at(code, i) !== '\n') i++;
             tokens.push({ type: 'comment', value: code.slice(start, i), start, end: i });
             continue;
         }
         if (code.startsWith('/*', i)) {
             const start = i;
             i += 2;
-            while (i < n && !(code[i] === '*' && code[i + 1] === '/')) i++;
+            while (i < n && !(at(code, i) === '*' && at(code, i + 1) === '/')) i++;
             i = Math.min(n, i + 2);
             tokens.push({ type: 'comment', value: code.slice(start, i), start, end: i });
             continue;
         }
         if (/[A-Za-z_$]/.test(c)) {
             const start = i;
-            while (i < n && /[A-Za-z0-9_$]/.test(code[i])) i++;
+            while (i < n && /[A-Za-z0-9_$]/.test(at(code, i))) i++;
             tokens.push({ type: 'ident', value: code.slice(start, i), start, end: i });
             continue;
         }
@@ -245,9 +250,11 @@ export function findGenericTokenIndices(sig: readonly Token[]): ReadonlySet<numb
     const inside = new Set<number>();
 
     for (let i = 0; i < detect.length; i++) {
-        if (detect[i].value !== '<' || i === 0) continue;
+        const current = detect[i];
+        if (!current || current.value !== '<' || i === 0) continue;
 
         const prev = detect[i - 1];
+        if (!prev) continue;
         const prevOk = prev.type === 'ident'
             || prev.value === '>' || prev.value === ']' || prev.value === '.' || prev.value === '?';
         if (!prevOk) continue;
@@ -261,7 +268,10 @@ export function findGenericTokenIndices(sig: readonly Token[]): ReadonlySet<numb
             || ['(', ')', '[', ']', '.', ',', '>', '{', '}', ':', '::', '&', '?', '<', '='].includes(after.value);
         if (!afterOk) continue;
 
-        for (let k = i; k <= end; k++) inside.add(detect[k].orig);
+        for (let k = i; k <= end; k++) {
+            const token = detect[k];
+            if (token) inside.add(token.orig);
+        }
         i = end;
     }
 
@@ -278,7 +288,7 @@ function buildDetectTokens(sig: readonly Token[]): DetectToken[] {
     const detect: DetectToken[] = [];
     sig.forEach((t, orig) => {
         const leading = /^>+/.exec(t.value);
-        if (leading && (t.value === '>>' || t.value === '>>>' || t.value === '>=' || t.value === '>>=' || t.value === '>>>=')) {
+        if (leading && (t.value === '>>' || t.value === '>>>' || t.value === '>=' || t.value === '>>=' || t.value === '>>>=' )) {
             for (let k = 0; k < leading[0].length; k++) detect.push({ type: 'op', value: '>', orig });
             const rest = t.value.slice(leading[0].length);
             if (rest) detect.push({ type: 'op', value: rest, orig });
@@ -292,45 +302,58 @@ function buildDetectTokens(sig: readonly Token[]): DetectToken[] {
 /** Index of the `>` closing the type-argument list opening at `lt`, or -1. */
 function matchTypeArgs(sig: readonly DetectToken[], lt: number): number {
     // Empty diamond: `new HashMap<>()`
-    if (sig[lt + 1] && sig[lt + 1].value === '>') return lt + 1;
+    const first = sig[lt + 1];
+    if (first && first.value === '>') return lt + 1;
 
     let k = lt + 1;
     for (;;) {
         const next = matchTypeArg(sig, k);
         if (next === -1) return -1;
         k = next;
-        if (sig[k] && sig[k].value === ',') { k++; continue; }
-        if (sig[k] && sig[k].value === '>') return k;
+        const token = sig[k];
+        if (token && token.value === ',') { k++; continue; }
+        if (token && token.value === '>') return k;
         return -1;
     }
 }
 
 function matchTypeArg(sig: readonly DetectToken[], k: number): number {
-    if (sig[k] && sig[k].value === '?') {
+    const question = sig[k];
+    if (question && question.value === '?') {
         k++;
-        if (sig[k] && (sig[k].value === 'extends' || sig[k].value === 'super')) return matchType(sig, k + 1);
+        const bound = sig[k];
+        if (bound && (bound.value === 'extends' || bound.value === 'super')) return matchType(sig, k + 1);
         return k;
     }
     return matchType(sig, k);
 }
 
 function matchType(sig: readonly DetectToken[], k: number): number {
-    if (!sig[k] || sig[k].type !== 'ident') return -1;
+    const head = sig[k];
+    if (!head || head.type !== 'ident') return -1;
     k++;
     for (;;) {
-        if (sig[k] && sig[k].value === '<') {
+        const token = sig[k];
+        if (token && token.value === '<') {
             const end = matchTypeArgs(sig, k);
             if (end === -1) return -1;
             k = end + 1;
+            continue;
         }
-        if (sig[k] && sig[k].value === '.') {
-            if (!sig[k + 1] || sig[k + 1].type !== 'ident') return -1;
+        if (token && token.value === '.') {
+            const qualified = sig[k + 1];
+            if (!qualified || qualified.type !== 'ident') return -1;
             k += 2;
             continue;
         }
         break;
     }
-    while (sig[k] && sig[k].value === '[' && sig[k + 1] && sig[k + 1].value === ']') k += 2;
+    for (;;) {
+        const open = sig[k];
+        const close = sig[k + 1];
+        if (!open || open.value !== '[' || !close || close.value !== ']') break;
+        k += 2;
+    }
     return k;
 }
 
@@ -343,11 +366,12 @@ export function findTernaryIndices(
     const colons = new Set<number>();
 
     for (let i = 0; i < sig.length; i++) {
-        if (sig[i].value !== '?' || generics.has(i)) continue;
+        const question = sig[i];
+        if (!question || question.value !== '?' || generics.has(i)) continue;
 
         let pending = 1;
         for (let j = i + 1; j < sig.length; j++) {
-            const v = sig[j].value;
+            const v = sig[j]?.value;
             if (v === '?') {
                 if (!generics.has(j)) pending++;
             } else if (v === ':') {
@@ -395,18 +419,19 @@ export function formatExpression(code: string | null | undefined): string | null
     const edits: FormatEdit[] = [];
 
     const spaceAround = (index: number): void => {
+        const current = sig[index];
         const prev = sig[index - 1];
         const next = sig[index + 1];
-        if (!prev || !next) return;
+        if (!current || !prev || !next) return;
         // Never rewrite a span that contains a comment.
         const between = mask.text.slice(prev.end, next.start);
         if (between.includes('/*') || between.includes('//')) return;
-        edits.push({ start: prev.end, end: next.start, replacement: ` ${sig[index].value} ` });
+        edits.push({ start: prev.end, end: next.start, replacement: ` ${current.value} ` });
     };
 
     for (let i = 0; i < sig.length; i++) {
         const t = sig[i];
-        if (t.type !== 'op') continue;
+        if (!t || t.type !== 'op') continue;
 
         if (SPACED_BINARY.has(t.value)) {
             spaceAround(i);
@@ -426,22 +451,25 @@ export function formatExpression(code: string | null | undefined): string | null
 
     // Uppercase reference-type cast: (Type)x -> (Type) x
     for (let i = 0; i < sig.length; i++) {
-        if (sig[i].value !== '(') continue;
+        if (sig[i]?.value !== '(') continue;
 
         let k = i + 1;
         let typeText: string | null = '';
-        while (sig[k] && sig[k].value !== ')') {
-            if (sig[k].type === 'ident' || sig[k].value === '.') typeText += sig[k].value;
+        for (;;) {
+            const token = sig[k];
+            if (!token || token.value === ')') break;
+            if (token.type === 'ident' || token.value === '.') typeText += token.value;
             else { typeText = null; break; }
             k++;
         }
-        if (typeText === null || !sig[k] || sig[k].value !== ')') continue;
+        const closing = sig[k];
+        if (typeText === null || !closing || closing.value !== ')') continue;
         if (!/^[A-Z][A-Za-z0-9_$.]*$/.test(typeText)) continue;
 
         const after = sig[k + 1];
         if (!after) continue;
         // Whitespace immediately after ')' means the cast is already spaced.
-        if (/\s/.test(mask.text[sig[k].end] || '')) continue;
+        if (/\s/.test(at(mask.text, closing.end))) continue;
         if (after.value === ')' || after.value === '.' || after.value === '::' || after.value === '[') continue;
 
         const isCastFollow = after.type === 'ident' || after.type === 'number'

@@ -66,7 +66,9 @@ function collectTextCheckIssues(
 
         if (transformed === cdata.content || changes.length === 0) continue;
 
-        const first = changes.reduce((a, b) => (b.offset < a.offset ? b : a), changes[0]);
+        // `changes` is non-empty here, so reduce without a seed is safe and
+        // keeps the result a Change rather than Change | undefined.
+        const first = changes.reduce((a, b) => (b.offset < a.offset ? b : a));
 
         issues.push({
             code:    CODE,

@@ -37,6 +37,7 @@ export function parseProperties(text: string): PropertyEntry[] {
     let index = 0;
     while (index < lines.length) {
         const first = lines[index];
+        if (!first) break;
         const lead  = first.text.length - first.text.replace(/^\s+/, '').length;
         const head  = first.text.slice(lead);
 
@@ -48,7 +49,9 @@ export function parseProperties(text: string): PropertyEntry[] {
         const startLine = index;
         let logical = head;
         while (hasContinuation(logical) && index + 1 < lines.length) {
-            logical = logical.slice(0, -1) + lines[index + 1].text.replace(/^\s+/, '');
+            const continuation = lines[index + 1];
+            if (!continuation) break;
+            logical = logical.slice(0, -1) + continuation.text.replace(/^\s+/, '');
             index++;
         }
 
@@ -87,7 +90,7 @@ function splitKeyValue(logical: string): KeyValue {
     let escaped = false;
 
     for (let i = 0; i < logical.length; i++) {
-        const ch = logical[i];
+        const ch = logical.charAt(i);
 
         if (escaped) {
             escaped = false;
@@ -99,9 +102,9 @@ function splitKeyValue(logical: string): KeyValue {
         }
         if (ch === '=' || ch === ':' || /\s/.test(ch)) {
             let valueStart = i;
-            while (valueStart < logical.length && /\s/.test(logical[valueStart])) valueStart++;
-            if (logical[valueStart] === '=' || logical[valueStart] === ':') valueStart++;
-            while (valueStart < logical.length && /\s/.test(logical[valueStart])) valueStart++;
+            while (valueStart < logical.length && /\s/.test(logical.charAt(valueStart))) valueStart++;
+            if (logical.charAt(valueStart) === '=' || logical.charAt(valueStart) === ':') valueStart++;
+            while (valueStart < logical.length && /\s/.test(logical.charAt(valueStart))) valueStart++;
 
             return { rawKey: logical.slice(0, i), rawValue: logical.slice(valueStart) };
         }

@@ -12,6 +12,11 @@
 
 import { literalEnd } from './javaExpr';
 
+/** The character at `index`; past the end of the input this is ''. */
+function at(text: string, index: number): string {
+    return text[index] ?? '';
+}
+
 // Longest-first so `>>` wins over `>`.
 const OPERATORS = [
     '>>>=', '>>>', '>>=', '<<=', '...', '->', '::', '++', '--', '&&', '||',
@@ -159,13 +164,13 @@ export function tokenize(code: string): JavaToken[] {
     const n = code.length;
 
     while (i < n) {
-        const c = code[i];
+        const c = at(code, i);
 
         if (/\s/.test(c)) { i++; continue; }
         if (code.startsWith('//', i)) { i += 2; while (i < n && code[i] !== '\n') i++; continue; }
         if (code.startsWith('/*', i)) {
             i += 2;
-            while (i < n && !(code[i] === '*' && code[i + 1] === '/')) i++;
+            while (i < n && !(at(code, i) === '*' && at(code, i + 1) === '/')) i++;
             i = Math.min(n, i + 2);
             continue;
         }
@@ -179,7 +184,7 @@ export function tokenize(code: string): JavaToken[] {
         }
         if (/[A-Za-z_$]/.test(c)) {
             const start = i;
-            while (i < n && /[A-Za-z0-9_$]/.test(code[i])) i++;
+            while (i < n && /[A-Za-z0-9_$]/.test(at(code, i))) i++;
             tokens.push({ type: 'ident', value: code.slice(start, i), start, end: i });
             continue;
         }
@@ -232,6 +237,9 @@ class Parser {
     peek(k = 0): JavaToken | undefined { return this.tokens[this.i + k]; }
     next(): JavaToken { const t = this.tokens[this.i++]; if (!t) throw FAIL; return t; }
     at(value: string): boolean { const t = this.peek(); return !!t && t.value === value; }
+
+    /** End offset of the token just consumed. */
+    previousEnd(): number { return this.tokens[this.i - 1]?.end ?? 0; }
 
     eat(value: string): boolean {
         if (!this.at(value)) return false;
@@ -341,7 +349,7 @@ class Parser {
                     const args = this.parseArguments();
                     node = {
                         kind: 'methodCall', scope: node, name: nameToken.value,
-                        args, start: node.start, end: this.tokens[this.i - 1].end,
+                        args, start: node.start, end: this.previousEnd(),
                     };
                 } else {
                     node = { kind: 'fieldAccess', scope: node, name: nameToken.value, start: node.start };
@@ -355,7 +363,7 @@ class Parser {
                 // recogniser can see it.
                 const args = this.parseArguments();
                 node = node.kind === 'name'
-                    ? { kind: 'methodCall', scope: null, name: node.name, args, start: node.start, end: this.tokens[this.i - 1].end }
+                    ? { kind: 'methodCall', scope: null, name: node.name, args, start: node.start, end: this.previousEnd() }
                     : { kind: 'other', children: [node, ...args], start: node.start };
                 continue;
             }

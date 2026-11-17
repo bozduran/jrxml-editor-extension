@@ -398,7 +398,10 @@ function combinedFormatterEdits(
 
     return edits
         .sort((a, b) => a.start - b.start || a.end - b.end)
-        .filter((edit, index, all) => index === 0 || edit.start >= all[index - 1].end);
+        .filter((edit, index, all) => {
+            const previous = all[index - 1];
+            return index === 0 || (previous !== undefined && edit.start >= previous.end);
+        });
 }
 
 export {

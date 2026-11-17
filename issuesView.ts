@@ -340,10 +340,10 @@ function pickNavigationTarget(
     if (!ranges || ranges.length === 0) return null;
 
     if (direction >= 0) {
-        return ranges.find(range => comparePosition(range.start, cursor) > 0) || ranges[0];
+        return ranges.find(range => comparePosition(range.start, cursor) > 0) ?? ranges[0] ?? null;
     }
     return [...ranges].reverse().find(range => comparePosition(range.start, cursor) < 0)
-        || ranges[ranges.length - 1];
+        ?? ranges[ranges.length - 1] ?? null;
 }
 
 function navigate(direction: number): void {

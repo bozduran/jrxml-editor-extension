@@ -88,7 +88,7 @@ const provider = vscode.languages.registerHoverProvider(
             if (!symbol) return null;
 
             const decl      = symbol.declaration;
-            const kind      = symbol.kind[0].toUpperCase() + symbol.kind.slice(1);
+            const kind      = symbol.kind.charAt(0).toUpperCase() + symbol.kind.slice(1);
             const isBuiltin = symbol.builtin;
             const scope     = symbol.scope;
 

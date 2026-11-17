@@ -86,7 +86,7 @@ function checkVariableOrder(
                 REFERENCE_RE.lastIndex = 0;
                 let match: RegExpExecArray | null;
                 while ((match = REFERENCE_RE.exec(content.content)) !== null) {
-                    const referenced = decodeXml(match[1]).trim();
+                    const referenced = decodeXml(match[1] ?? '').trim();
                     if (!referenced || referenced === variableName) continue;
                     if (BUILTIN_VARIABLE_NAMES.has(referenced)) continue;
 

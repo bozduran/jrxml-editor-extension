@@ -36,7 +36,8 @@ export function findInsertionPoint(text: string, tagName: string): number {
 
     // After the last declaration of the same kind (report level only).
     const sameKind = root.children.filter(child => child.tag === tagName);
-    if (sameKind.length > 0) return sameKind[sameKind.length - 1].end;
+    const lastSameKind = sameKind[sameKind.length - 1];
+    if (lastSameKind) return lastSameKind.end;
 
     // Otherwise before the first element that must follow this kind.
     const next = root.children.find(child => rankOf(child.tag) > targetRank);

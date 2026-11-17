@@ -98,7 +98,10 @@ export function parse(text: string): ParsedSort | null {
             });
         }
 
-        for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+        for (let i = node.children.length - 1; i >= 0; i--) {
+            const child = node.children[i];
+            if (child) stack.push(child);
+        }
     }
 
     return { containers, warnings };
@@ -122,8 +125,11 @@ export function rectsOverlap(a: SortChild, b: SortChild): boolean {
 export function overlaps(children: readonly SortChild[]): [SortChild, SortChild][] {
     const out: [SortChild, SortChild][] = [];
     for (let i = 0; i < children.length; i++) {
+        const left = children[i];
+        if (!left) continue;
         for (let j = i + 1; j < children.length; j++) {
-            if (rectsOverlap(children[i], children[j])) out.push([children[i], children[j]]);
+            const right = children[j];
+            if (right && rectsOverlap(left, right)) out.push([left, right]);
         }
     }
     return out;
@@ -131,7 +137,7 @@ export function overlaps(children: readonly SortChild[]): [SortChild, SortChild]
 
 function trailingWhitespace(text: string): string {
     let end = text.length;
-    while (end > 0 && /\s/.test(text[end - 1])) end--;
+    while (end > 0 && /\s/.test(text.charAt(end - 1))) end--;
     return text.slice(end);
 }
 
@@ -140,26 +146,32 @@ function reorderContainer(text: string, container: SortContainer): string {
 
     const original = container.children;
     const sorted   = sortedChildren(original);
-    const count    = original.length;
+    const first    = original[0];
+    if (!first) return text; // reorderChanged() guarantees two or more
 
-    const prefix = text.slice(container.innerStart, original[0].start);
+    const prefix = text.slice(container.innerStart, first.start);
     const prefixWhitespace = trailingWhitespace(prefix);
     const containerTrivia  = prefix.slice(0, prefix.length - prefixWhitespace.length);
 
     let separator = prefixWhitespace;
-    if (separator === '') separator = trailingWhitespace(text.slice(original[0].end, original[1].start));
+    if (separator === '') {
+        const second = original[1];
+        if (second) separator = trailingWhitespace(text.slice(first.end, second.start));
+    }
     if (separator === '') separator = '\n';
 
     let out = containerTrivia;
     for (const child of sorted) {
         const index = original.indexOf(child);
+        const previous = original[index - 1];
         if (index === 0) {
-            out += separator + text.slice(original[0].start, child.end);
-        } else {
-            out += text.slice(original[index - 1].end, child.end);
+            out += separator + text.slice(first.start, child.end);
+        } else if (previous) {
+            out += text.slice(previous.end, child.end);
         }
     }
-    out += text.slice(original[count - 1].end, container.innerEnd);
+    const last = original[original.length - 1];
+    if (last) out += text.slice(last.end, container.innerEnd);
 
     return text.slice(0, container.innerStart) + out + text.slice(container.innerEnd);
 }

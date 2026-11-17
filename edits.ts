@@ -20,9 +20,10 @@ export interface Span {
 export function findOverlap(edits: readonly Edit[]): [Edit, Edit] | null {
     const sorted = [...edits].sort((a, b) => a.start - b.start || a.end - b.end);
     for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i].start < sorted[i - 1].end) {
-            return [sorted[i - 1], sorted[i]];
-        }
+        const current = sorted[i];
+        const previous = sorted[i - 1];
+        if (!current || !previous) continue;
+        if (current.start < previous.end) return [previous, current];
     }
     return null;
 }

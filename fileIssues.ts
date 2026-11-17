@@ -41,11 +41,12 @@ function collectFileIssues(text: string, options: FileIssueOptions = {}): FileIs
     }
 
     const migration = discoverClearFixes(text).find(group => group.label === 'query migration');
-    if (migration) {
+    const migrationFix = migration ? migration.fixes[0] : undefined;
+    if (migrationFix) {
         issues.push({
             kind:    QUERY_KIND,
             title:   `SQL query can be migrated to ${targetLanguage}`,
-            detail:  migration.fixes[0].description,
+            detail:  migrationFix.description,
             command: 'jrxml.migrateSqlQuery',
         });
     }

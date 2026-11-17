@@ -392,6 +392,12 @@ function memberType(raw: string): MemberType {
     return { key, raw: raw.trim(), text: stripGenerics(raw).replace(/\.\.\.$/, '[]') };
 }
 
+/** True when the last parameter was declared with `...`. */
+function isVarargs(params: readonly MemberType[]): boolean {
+    const last = params[params.length - 1];
+    return last !== undefined && /\.\.\.$/.test(last.raw);
+}
+
 /** Parse one javap body line into a method, a field, or null. */
 function parseMember(line: string, simpleClassName: string): ParsedMember | null {
     const text = line.trim().replace(/;$/, '');
@@ -401,8 +407,10 @@ function parseMember(line: string, simpleClassName: string): ParsedMember | null
     const modifiers = [];
     for (;;) {
         const match = /^([A-Za-z-]+)\s+/.exec(rest);
-        if (!match || !MODIFIERS.has(match[1])) break;
-        modifiers.push(match[1]);
+        if (!match) break;
+        const modifier = match[1] ?? '';
+        if (!MODIFIERS.has(modifier)) break;
+        modifiers.push(modifier);
         rest = rest.slice(match[0].length);
     }
     rest = stripMethodTypeParams(rest);
@@ -412,7 +420,8 @@ function parseMember(line: string, simpleClassName: string): ParsedMember | null
         // Field: `<type> <name>`
         const nameMatch = /([A-Za-z_$][\w$]*)$/.exec(rest);
         if (!nameMatch) return null;
-        const name = nameMatch[1];
+        const name = nameMatch[1] ?? '';
+        if (!name) return null;
         const type = memberType(rest.slice(0, nameMatch.index));
         return { kind: 'field', name, type, modifiers };
     }
@@ -420,14 +429,16 @@ function parseMember(line: string, simpleClassName: string): ParsedMember | null
     const declaration = rest.slice(0, parenIndex);
     const nameMatch = /([A-Za-z_$][\w$]*)$/.exec(declaration);
     if (!nameMatch) return null;
-    const name = nameMatch[1];
-    if (name === simpleClassName) return null; // constructor — not offered as a member
+    const name = nameMatch[1] ?? '';
+    if (!name || name === simpleClassName) return null; // constructor — not offered as a member
 
     const returns = memberType(declaration.slice(0, nameMatch.index));
 
     const closeIndex = matchingParen(rest, parenIndex);
     if (closeIndex === -1) return null;
-    const params = splitTopLevel(rest.slice(parenIndex + 1, closeIndex), ',').map(memberType);
+    const params = splitTopLevel(rest.slice(parenIndex + 1, closeIndex), ',')
+        .filter(part => part.trim() !== '')
+        .map(memberType);
 
     return { kind: 'method', name, returns, params, modifiers };
 }
@@ -466,14 +477,15 @@ function parseHeader(line: string): Header | null {
 
     const nameMatch = /\b(?:class|interface|enum)\s+([\w.$]+)/.exec(flat);
     if (!nameMatch) return null;
-    const fqn = nameMatch[1];
+    const fqn = nameMatch[1] ?? '';
+    if (!fqn) return null;
     const simpleClassName = fqn.split('.').pop() ?? fqn;
 
     const supertypes = [];
     for (const keyword of ['extends', 'implements']) {
         const match = new RegExp(`\\b${keyword}\\s+(.+?)(?=\\bimplements\\b|$)`).exec(flat);
         if (!match) continue;
-        for (const part of splitTopLevel(match[1], ',')) {
+        for (const part of splitTopLevel(match[1] ?? '', ',')) {
             const key = typeKey(part);
             if (key) supertypes.push(key);
         }
@@ -526,12 +538,13 @@ function bridgeDeclarations(verboseOutput: string): Set<string> {
     for (const line of verboseOutput.split(/\r?\n/)) {
         const declaration = /^ {2}(\S.*;)$/.exec(line);
         if (declaration) {
-            pending = declaration[1].trim();
+            pending = (declaration[1] ?? '').trim();
             continue;
         }
         const flags = /^ {4}flags: \((0x[0-9a-f]+)\)(.*)$/.exec(line);
         if (flags) {
-            if (pending && (flags[2].includes('ACC_BRIDGE') || flags[2].includes('ACC_SYNTHETIC'))) {
+            const flagText = flags[2] ?? '';
+            if (pending && (flagText.includes('ACC_BRIDGE') || flagText.includes('ACC_SYNTHETIC'))) {
                 skipped.add(pending);
             }
             pending = null;
@@ -625,7 +638,7 @@ function extractType(fqn: string, javapBin: string): RawType {
             static: member.modifiers.includes('static'),
             // `...` is lost when the parameter type is normalised to `[]`;
             // keep it so overload resolution can accept a variable argument count.
-            varargs: member.params.length > 0 && /\.\.\.$/.test(member.params[member.params.length - 1].raw),
+            varargs: isVarargs(member.params),
             // Kept for now: some bridges are the only public declaration of a
             // callable method (StringBuilder.charAt), so removal is decided
             // later, against the members the user can actually reach.
@@ -775,6 +788,7 @@ function main(): void {
     const argv = process.argv.slice(2);
     const jdkIndex = argv.indexOf('--jdk');
     const javapBin = jdkIndex === -1 ? 'javap' : argv[jdkIndex + 1];
+    if (javapBin === undefined) throw new Error('--jdk needs the path to javap');
 
     const version = execFileSync(javapBin, ['-version'], { encoding: 'utf8' }).trim();
 

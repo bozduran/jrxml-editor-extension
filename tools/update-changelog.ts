@@ -50,7 +50,11 @@ function insertVersionHeading(text: string, version: string, date: string): stri
         throw new Error(`CHANGELOG.md already has a "${existing}" section`);
     }
 
-    lines.splice(unreleased[0] + 1, 0, '', `${existing} - ${date}`);
+    const unreleasedHeading = unreleased[0];
+    if (unreleasedHeading === undefined) {
+        throw new Error(`CHANGELOG.md must contain exactly one "${UNRELEASED}" heading`);
+    }
+    lines.splice(unreleasedHeading + 1, 0, '', `${existing} - ${date}`);
     return lines.join(eol);
 }
 
