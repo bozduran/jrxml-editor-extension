@@ -17,6 +17,7 @@ import path from 'node:path';
 
 import { collectFindings } from '../diagnostics';
 import type { Finding } from '../diagnostics';
+import { getJavaProjectIndex } from '../javaProjectIndex';
 import { EXCLUDED_DIRS } from '../workspaceFiles';
 
 interface ValidationResult {
@@ -60,12 +61,14 @@ function collectFiles(target: string): string[] {
 
 /** Analyse every file, keeping the text for line/column reporting. */
 function validateFiles(files: readonly string[], workspaceRoots: readonly string[] = []): ValidationResult[] {
+    // One Java scan for the whole run; collectFindings is called per file.
+    const javaIndex = getJavaProjectIndex(workspaceRoots);
     return files.map(file => {
         const text = fs.readFileSync(file, 'utf8');
         return {
             file,
             text,
-            findings: collectFindings({ text, fileName: file, workspaceRoots }),
+            findings: collectFindings({ text, fileName: file, workspaceRoots, javaIndex }),
         };
     });
 }

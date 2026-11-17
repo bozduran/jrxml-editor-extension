@@ -128,6 +128,8 @@ export interface MethodCallNode {
     name: string;
     args: JavaExpressionNode[];
     start: number;
+    /** Offset just past the closing parenthesis. */
+    end: number;
 }
 
 /** Anything the subset does not model in detail (arrays, `new`, blocks, …). */
@@ -336,9 +338,10 @@ class Parser {
                 this.next();
 
                 if (this.at('(')) {
+                    const args = this.parseArguments();
                     node = {
                         kind: 'methodCall', scope: node, name: nameToken.value,
-                        args: this.parseArguments(), start: node.start,
+                        args, start: node.start, end: this.tokens[this.i - 1].end,
                     };
                 } else {
                     node = { kind: 'fieldAccess', scope: node, name: nameToken.value, start: node.start };
@@ -352,7 +355,7 @@ class Parser {
                 // recogniser can see it.
                 const args = this.parseArguments();
                 node = node.kind === 'name'
-                    ? { kind: 'methodCall', scope: null, name: node.name, args, start: node.start }
+                    ? { kind: 'methodCall', scope: null, name: node.name, args, start: node.start, end: this.tokens[this.i - 1].end }
                     : { kind: 'other', children: [node, ...args], start: node.start };
                 continue;
             }

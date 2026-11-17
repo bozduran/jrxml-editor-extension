@@ -163,6 +163,26 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
                 label: 'Query validation',
                 description: 'Warn about an unclosed string literal or block comment inside <query> content.',
             },
+            {
+                key: 'lint.javaSymbols', type: 'boolean', default: true,
+                label: 'Java symbols',
+                description: 'Warn about unknown imports, declaration classes, static helper calls and typed receiver calls in expressions.',
+            },
+            {
+                key: 'lint.schema', type: 'boolean', default: true,
+                label: 'JRXML schema',
+                description: 'Warn about unknown elements or attributes, invalid enum values, missing required attributes and report-level element order.',
+            },
+            {
+                key: 'lint.unusedResources', type: 'boolean', default: true,
+                label: 'Unused styles and subdatasets',
+                description: 'Warn about named styles and subdatasets that nothing in the report references.',
+            },
+            {
+                key: 'lint.unusedResourceKeys', type: 'boolean', default: false,
+                label: 'Unused resource keys',
+                description: 'Report resource bundle keys this report never uses. Off by default because bundles are often shared between reports.',
+            },
         ],
     },
     {

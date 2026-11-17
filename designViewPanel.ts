@@ -149,7 +149,7 @@ function buildCompletionsForDocument(
         language: { language: 'java', declared: false, offset: -1, length: 0 },
         allFields: [], allParameters: [], allVariables: [],
         groups: [], styles: [], references: [], resourceReferences: [],
-        resourceBundle: null, datasets: [], scopeRanges: [], outline: [],
+        resourceBundle: null, imports: [], datasets: [], scopeRanges: [], outline: [],
     };
 
     const config = vscode.workspace.getConfiguration('jrxml');

@@ -28,6 +28,18 @@ export interface Declaration {
     isSystem?: boolean;
 }
 
+/** One report-level `<import value="…">` element. */
+export interface ImportDeclaration {
+    /** The imported class or package, exactly as written. */
+    value: string;
+    /** Span of the whole `<import …/>` element. */
+    offset: number;
+    length: number;
+    /** Span of the value attribute's contents. */
+    valueOffset: number;
+    valueLength: number;
+}
+
 /** A `$F`/`$P`/`$V` usage. Attribute-form references carry no `end`. */
 export interface Reference {
     sigil: ReferenceSigil;
@@ -116,6 +128,7 @@ export interface ParseResult {
     };
     language: ReportLanguage;
     resourceBundle: BundleAttribute | null;
+    imports: ImportDeclaration[];
     datasets: DatasetDeclaration[];
     scopeRanges: ScopeRange[];
     allFields: Declaration[];
@@ -226,6 +239,7 @@ function parseReport(
         },
         language:    languageOfScan(scan),
         resourceBundle: bundleAttributeOfScan(scan),
+        imports:     extractImports(scan),
         datasets:    buildDatasets(scopes, rawFields, rawParameters, rawVariables),
         // Ranges where a dataset's declarations are the visible scope: the
         // <dataset>/<subDataset> definition itself and, inside list/table
@@ -547,6 +561,33 @@ function extractVariables(text: string): Declaration[] {
 }
 
 // ── Groups ────────────────────────────────────────────────────────────────────
+
+function localTagName(tag: string): string {
+    const colon = tag.indexOf(':');
+    return colon === -1 ? tag : tag.slice(colon + 1);
+}
+
+/** Report-level `<import value="…">` elements, in document order. */
+function extractImports(scan: XmlScanResult | null): ImportDeclaration[] {
+    if (!scan || scan.error || !scan.doc) return [];
+
+    const imports: ImportDeclaration[] = [];
+    for (const node of scan.doc.root.children) {
+        if (localTagName(node.tag) !== 'import') continue;
+
+        const value = node.attr('value');
+        if (!value) continue;
+
+        imports.push({
+            value: value.value,
+            offset: node.startTag,
+            length: node.end - node.startTag,
+            valueOffset: value.valueStart,
+            valueLength: value.valueEnd - value.valueStart,
+        });
+    }
+    return imports;
+}
 
 function extractGroups(text: string): Declaration[] {
     const results: Declaration[] = [];
