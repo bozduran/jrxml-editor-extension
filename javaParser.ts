@@ -553,7 +553,7 @@ export function childExpressions(node: JavaExpressionNode): JavaExpressionNode[]
         case 'methodCall':  return [...(node.scope ? [node.scope] : []), ...node.args];
         case 'cast':        return [node.expr];
         case 'enclosed':    return [node.expr];
-        case 'other':       return node.children || [];
+        case 'other':       return node.children;
         default:            return [];
     }
 }

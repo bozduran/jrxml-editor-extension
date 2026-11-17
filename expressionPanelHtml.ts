@@ -27,7 +27,7 @@ export function escapeHtmlText(value: unknown): string {
  * markup/script injection from file content. Emit unicode escapes instead.
  */
 export function jsonForInlineScript(value: unknown): string {
-    const serialized = JSON.stringify(value === undefined ? null : value) ?? 'null';
+    const serialized = JSON.stringify(value === undefined ? null : value);
     return serialized
         .replace(/</g, '\\u003c')
         .replace(/>/g, '\\u003e')
@@ -319,8 +319,8 @@ export function buildPanelHtml({
 </div>
 
 <div class="statusbar">
-  <span id="stat-chars">Chars: ${formattedExpression.length}</span>
-  <span id="stat-lines">Lines: ${formattedExpression.split('\n').length}</span>
+  <span id="stat-chars">Chars: ${String(formattedExpression.length)}</span>
+  <span id="stat-lines">Lines: ${String(formattedExpression.split('\n').length)}</span>
   <span id="stat-depth">Max depth: 0</span>
 </div>
 

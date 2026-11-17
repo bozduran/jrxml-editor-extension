@@ -34,12 +34,12 @@ export function findOverlap(edits: readonly Edit[]): [Edit, Edit] | null {
  * @throws {Error} when two edits overlap
  */
 export function applyEdits(text: string, edits: readonly Edit[]): string {
-    if (!edits || edits.length === 0) return text;
+    if (edits.length === 0) return text;
 
     const overlap = findOverlap(edits);
     if (overlap) {
         throw new Error(
-            `overlapping edits: [${overlap[0].start},${overlap[0].end}) and [${overlap[1].start},${overlap[1].end})`
+            `overlapping edits: [${String(overlap[0].start)},${String(overlap[0].end)}) and [${String(overlap[1].start)},${String(overlap[1].end)})`
         );
     }
 

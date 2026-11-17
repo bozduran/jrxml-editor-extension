@@ -61,8 +61,8 @@ function findTargetAtEditor(editor: vscode.TextEditor | null | undefined): Expre
 function readOptions(): NormalizedOptions {
     const config = vscode.workspace.getConfiguration('jrxml');
     return {
-        nullSafe: config.get<boolean>('ifElse.nullSafe', true) !== false,
-        multiline: config.get<boolean>('ifElse.multiline', true) !== false,
+        nullSafe: config.get<boolean>('ifElse.nullSafe', true),
+        multiline: config.get<boolean>('ifElse.multiline', true),
         style: config.get<string>('ifElse.style', 'ternary') === 'functions' ? 'functions' : 'ternary',
     };
 }
@@ -130,7 +130,7 @@ class IfElsePanel {
         this._schemaFingerprint = this._fingerprint(schema, error);
         this._activeFile = this._activeFilePayload();
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.onDidDispose(() => { this.dispose(); }, null, this._disposables);
         this._panel.webview.onDidReceiveMessage(
             (message: IfElseMessage) => this._handleMessage(message),
             null,
@@ -138,7 +138,7 @@ class IfElsePanel {
         );
 
         vscode.window.onDidChangeActiveTextEditor(
-            editor => this._handleActiveEditorChange(editor),
+            editor => { this._handleActiveEditorChange(editor); },
             null,
             this._disposables
         );
@@ -150,7 +150,7 @@ class IfElsePanel {
             this._disposables
         );
         vscode.workspace.onDidChangeTextDocument(
-            event => this._handleDocumentChange(event.document),
+            event => { this._handleDocumentChange(event.document); },
             null,
             this._disposables
         );

@@ -589,7 +589,7 @@ function collectSuperEdges(rootClasses: readonly string[], javapBin: string): Su
                 : [...header.supertypes, 'java.lang.Object'];
         } catch (err) {
             edges[fqn] = [];
-            failures.push(`${fqn}: ${(err as Error).message.split('\n')[0]}`);
+            failures.push(`${fqn}: ${String((err as Error).message.split('\n')[0])}`);
         }
         for (const parent of edges[fqn]) {
             if (!edges[parent]) queue.push(parent);
@@ -761,7 +761,7 @@ function sinceFor(fqn: string, member: { name: string; params?: readonly string[
         const bySignature = SINCE_BY_SIGNATURE[`${fqn}#${member.name}|${params.join(',')}`];
         if (bySignature !== undefined) return bySignature;
 
-        const byArity = SINCE_OVERRIDES[`${fqn}#${member.name}/${arity}`];
+        const byArity = SINCE_OVERRIDES[`${fqn}#${member.name}/${String(arity)}`];
         if (byArity !== undefined) return byArity;
     }
     const byName = SINCE_OVERRIDES[`${fqn}#${member.name}`];
@@ -802,7 +802,7 @@ function main(): void {
         try {
             raw[fqn] = extractType(fqn, javapBin);
         } catch (err) {
-            failures.push(`${fqn}: ${(err as Error).message.split('\n')[0]}`);
+            failures.push(`${fqn}: ${String((err as Error).message.split('\n')[0])}`);
         }
     }
 
@@ -815,8 +815,8 @@ function main(): void {
         for (const member of [...type.methods, ...type.fields]) {
             const since = member.since ?? BASELINE;
             if (since <= BASELINE) continue;
-            const arity = 'params' in member ? `/${member.params.length}` : '';
-            newerThanBaseline.push(`${fqn}#${member.name}${arity} → ${since}`);
+            const arity = 'params' in member ? `/${String(member.params.length)}` : '';
+            newerThanBaseline.push(`${fqn}#${member.name}${arity} → ${String(since)}`);
         }
     }
 
@@ -835,14 +835,14 @@ function main(): void {
     fs.writeFileSync(outFile, JSON.stringify(index, null, 1) + '\n');
 
     const memberCount = Object.values(types).reduce((n, t) => n + t.methods.length + t.fields.length, 0);
-    console.log(`${Object.keys(types).length} types, ${memberCount} members → ${path.relative(process.cwd(), outFile)}`);
+    console.log(`${String(Object.keys(types).length)} types, ${String(memberCount)} members → ${path.relative(process.cwd(), outFile)}`);
     console.log(`javap: ${version}`);
     if (newerThanBaseline.length) {
-        console.log(`\n${newerThanBaseline.length} members newer than Java ${BASELINE} (tagged, hidden by default):`);
+        console.log(`\n${String(newerThanBaseline.length)} members newer than Java ${String(BASELINE)} (tagged, hidden by default):`);
         for (const entry of newerThanBaseline) console.log(`  ${entry}`);
     }
     if (failures.length) {
-        console.error(`\n${failures.length} classes failed:`);
+        console.error(`\n${String(failures.length)} classes failed:`);
         for (const failure of failures) console.error(`  ${failure}`);
         process.exitCode = 1;
     }

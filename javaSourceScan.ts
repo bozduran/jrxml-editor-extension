@@ -194,7 +194,7 @@ function parametersOf(argsString: string): { parameters: JavaParameter[]; vararg
 
         const tokens = withoutAnnotations.split(/\s+/).filter(Boolean);
         const rawName = tokens[tokens.length - 1] ?? '';
-        const name = /^[A-Za-z_$][\w$]*$/.test(rawName) ? rawName : `arg${parameters.length + 1}`;
+        const name = /^[A-Za-z_$][\w$]*$/.test(rawName) ? rawName : `arg${String(parameters.length + 1)}`;
 
         let type = tokens.slice(0, -1).join(' ').replace(/^final\s+/, '').trim();
         if (type.endsWith('...')) {
@@ -262,7 +262,7 @@ function customMethodOf(javaClass: JavaClass, method: JavaMethod): CustomMethod 
         .map(parameter => (parameter.type ? `${parameter.type} ${parameter.name}` : parameter.name))
         .join(', ');
     const snippetArgs = method.parameters
-        .map((parameter, index) => `\${${index + 1}:${parameter.name}}`)
+        .map((parameter, index) => `\${${String(index + 1)}:${parameter.name}}`)
         .join(', ');
 
     return {
@@ -286,13 +286,14 @@ export function scanJavaClasses(
     const seenFiles = new Set<string>();
     const seenClasses = new Set<string>();
     let filesRead = 0;
-    let exhausted = false;
 
+    // The budget is the exhaust condition: `filesRead` only grows, so testing
+    // it directly is the same check without a second flag to keep in sync.
     const walk = (dir: string, depth: number): void => {
-        if (exhausted || depth > maxDepth) return;
+        if (filesRead >= maxFiles || depth > maxDepth) return;
 
         for (const entry of children(dir)) {
-            if (exhausted) return;
+            if (filesRead >= maxFiles) return;
 
             if (entry.isSymbolicLink()) continue;
 
@@ -307,7 +308,6 @@ export function scanJavaClasses(
             const file = path.resolve(dir, entry.name);
             if (seenFiles.has(file)) continue;
             if (filesRead >= maxFiles) {
-                exhausted = true;
                 return;
             }
             seenFiles.add(file);
@@ -329,9 +329,9 @@ export function scanJavaClasses(
 
     for (const root of roots) walk(path.resolve(root), 0);
 
-    if (exhausted) {
+    if (filesRead >= maxFiles) {
         console.warn(
-            `[jrxml] Java helper scan stopped after ${maxFiles} files; ` +
+            `[jrxml] Java helper scan stopped after ${String(maxFiles)} files; ` +
             'some helper methods may be missing.'
         );
     }

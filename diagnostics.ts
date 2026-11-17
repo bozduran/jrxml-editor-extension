@@ -155,7 +155,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [], j
 
     // ── 0. Language model ────────────────────────────────────────────────────
     const language = parsed.language;
-    if (language && language.declared && language.language !== 'java') {
+    if (language.declared && language.language !== 'java') {
         add(
             language.offset, language.length,
             `Report language '${language.language}' is not modeled: only Java expressions are fully supported. Typed completion is disabled and expression checks may be inaccurate.`,
@@ -177,7 +177,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [], j
                 'warning', 'jrxml.missingResourceBundle'
             );
         } else {
-            for (const ref of parsed.resourceReferences || []) {
+            for (const ref of parsed.resourceReferences) {
                 if (resources.entries.has(ref.name)) continue;
                 add(
                     ref.offset, ref.end - ref.offset,
@@ -282,7 +282,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [], j
             if (scope.kind === 'dataset' && declarationInAnyScope(parsed, { sigil, name: ref.name })) {
                 add(
                     ref.offset, tokenLen,
-                    `${kindName} '${ref.name}' is declared at report scope and is not available inside dataset '${scope.datasetName}'. Pass it to the dataset as a parameter.`,
+                    `${kindName} '${ref.name}' is declared at report scope and is not available inside dataset '${String(scope.datasetName)}'. Pass it to the dataset as a parameter.`,
                     'error', 'jrxml.outOfScopeReference'
                 );
                 continue;
@@ -379,7 +379,7 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [], j
     if (enabled.schema) runRule(() => checkSchema(context.scan), 'warning');
 
     // ── 7. Java imports, classes and calls ──────────────────────────────────
-    if (enabled.javaSymbols && (parsed.language?.language ?? 'java') === 'java') {
+    if (enabled.javaSymbols && parsed.language.language === 'java') {
         const index = javaIndex ?? EMPTY_JAVA_PROJECT_INDEX;
         runRule(() => checkJavaSymbols({
             text,

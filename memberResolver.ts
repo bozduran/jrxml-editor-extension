@@ -254,7 +254,7 @@ function resolveReturnType(
 }
 
 export function isTypeVariable(type: string | null | undefined): boolean {
-    return /^[A-Z](\[\])*$/.test(String(type || '').trim());
+    return /^[A-Z](\[\])*$/.test((type || '').trim());
 }
 
 /** Type of a trailing literal (string, char, number, boolean) or null. */
@@ -275,7 +275,7 @@ export function resolveReceiver(
     textBeforeDot: string | null | undefined,
     context: ResolverContext
 ): Resolution {
-    const text = String(textBeforeDot ?? '').replace(/\s+$/, '');
+    const text = (textBeforeDot ?? '').replace(/\s+$/, '');
     if (!text) return outcome('not-a-receiver');
     return resolveExpression(text, context, 0);
 }

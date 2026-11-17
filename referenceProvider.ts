@@ -42,7 +42,7 @@ const provider = vscode.languages.registerReferenceProvider(
                     ));
                 }
 
-                if (context && context.includeDeclaration) {
+                if (context.includeDeclaration) {
                     const declaration = symbol.scope.kind === 'unknown'
                         ? declarationInAnyScope(parsed, symbol.token)
                         : symbol.declaration;

@@ -212,7 +212,7 @@ function px(value: number): string {
 function make(tag: string, className?: string, text?: string): HTMLElement {
   const node = document.createElement(tag);
   if (className) node.className = className;
-  if (text !== undefined && text !== null) node.textContent = text;
+  if (text !== undefined) node.textContent = text;
   return node;
 }
 
@@ -281,21 +281,21 @@ function syncModeControls() {
     ? 'Edit mode \u00b7 drag to move, handles to resize \u00b7 changes are undoable'
     : 'Read-only \u00b7 click an element or band label to reveal it in the source';
 
-  if (model && model.report) {
+  if (model) {
     statusLeft.textContent = (editMode ? 'Editing' : 'Read-only') + ' \u00b7 ' + model.report.language;
   }
 }
 
 function setEditMode(next: boolean): void {
   if (drag) cancelDrag(true);
-  editMode = !!next;
+  editMode = next;
   persistState();
   syncModeControls();
   applySelection(lastSelection, false);
 }
 
 function setFollowCursor(next: boolean): void {
-  followCursor = !!next;
+  followCursor = next;
   persistState();
   syncModeControls();
   if (followCursor) applySelection(lastSourceSelection, true);
@@ -367,12 +367,10 @@ function render() {
     return;
   }
 
-  if (!model.bands || model.bands.length === 0) {
+  if (model.bands.length === 0) {
     hideBanner();
     setEmptyState('No bands yet', 'This report has no bands to display. Add a band in the source and the view will refresh.');
-    if (model.report) {
-      metaEl.textContent = 'Page ' + model.report.pageWidth + ' \u00d7 ' + model.report.pageHeight + ' px';
-    }
+    metaEl.textContent = `Page ${String(model.report.pageWidth)} \u00d7 ${String(model.report.pageHeight)} px`;
     applySelection(null, false);
     updatePendingUi();
     return;
@@ -406,17 +404,17 @@ function setBannerForWarnings(current: DesignModel): void {
 function updateMeta(current: DesignModel): void {
   const report = current.report;
   const columnText = report.columnCount === 1
-    ? 'column ' + report.columnWidth + ' px'
-    : report.columnCount + ' columns of ' + report.columnWidth + ' px';
+    ? `column ${String(report.columnWidth)} px`
+    : `${String(report.columnCount)} columns of ${String(report.columnWidth)} px`;
   metaEl.textContent =
-    'Page ' + report.pageWidth + ' \u00d7 ' + report.pageHeight + ' px \u00b7 ' +
-    columnText + ' \u00b7 ' + current.counts.bands + ' bands \u00b7 ' +
-    current.counts.elements + ' elements';
+    `Page ${String(report.pageWidth)} \u00d7 ${String(report.pageHeight)} px \u00b7 ` +
+    `${columnText} \u00b7 ${String(current.counts.bands)} bands \u00b7 ` +
+    `${String(current.counts.elements)} elements`;
   statusLeft.textContent = (editMode ? 'Editing' : 'Read-only') + ' \u00b7 ' + report.language;
 }
 
 function updateZoomLabel() {
-  zoomLabel.textContent = Math.round(scale * 100) + '%';
+  zoomLabel.textContent = `${String(Math.round(scale * 100))}%`;
 }
 
 // ── Selection, handles and inspector ────────────────────────────────────────
@@ -438,12 +436,12 @@ function contentLayerElement(): HTMLElement {
 
 function findElementNode(offset: number): Element | null {
   if (!contentLayer) return null;
-  return contentLayer.querySelector('.element[data-offset="' + Number(offset) + '"]');
+  return contentLayer.querySelector(`.element[data-offset="${String(offset)}"]`);
 }
 
 function findBandRow(offset: number): Element | null {
   if (!contentLayer) return null;
-  return contentLayer.querySelector('.band-row[data-offset="' + Number(offset) + '"]');
+  return contentLayer.querySelector(`.band-row[data-offset="${String(offset)}"]`);
 }
 
 function scrollTargetIntoView(node: Element | null): void {
@@ -523,7 +521,7 @@ function addHandles(node: Element): void {
 }
 
 function fontNameFromStack(stack: string | undefined): string {
-  const text = String(stack || '');
+  const text = (stack || '');
   const quoted = /^"([^"]+)"/.exec(text);
   if (quoted) return quoted[1];
   const first = text.split(',')[0].trim();
@@ -547,7 +545,7 @@ function setInspectorError(message: string): void {
 
 function renderInspector(element: DesignElement): void {
   const style = element.style || EMPTY_STYLE;
-  const kind  = String(element.kind || '').toLowerCase();
+  const kind  = (element.kind || '').toLowerCase();
   const content = element.content || null;
 
   hideCompletions();
@@ -555,8 +553,8 @@ function renderInspector(element: DesignElement): void {
   setInspectorError('');
 
   inspectKind.textContent = element.kind;
-  inspectPos.textContent = 'x ' + element.x + ' \u00b7 y ' + element.y +
-    ' \u00b7 ' + element.width + ' \u00d7 ' + element.height;
+  inspectPos.textContent = `x ${String(element.x)} \u00b7 y ${String(element.y)}` +
+    ` \u00b7 ${String(element.width)} \u00d7 ${String(element.height)}`;
 
   inputs.x.value = String(element.x);
   inputs.y.value = String(element.y);
@@ -586,10 +584,10 @@ function renderInspector(element: DesignElement): void {
 
   inputs.fontName.value = fontNameFromStack(style.fontFamily);
   inputs.fontSize.value = String(style.fontSize || '');
-  inputs.bold.checked = !!style.bold;
-  inputs.italic.checked = !!style.italic;
-  inputs.underline.checked = !!style.underline;
-  inputs.strike.checked = !!style.strikeThrough;
+  inputs.bold.checked = style.bold;
+  inputs.italic.checked = style.italic;
+  inputs.underline.checked = style.underline;
+  inputs.strike.checked = style.strikeThrough;
   inputs.hAlign.value = H_ALIGN_TO_XML[style.hAlign] || 'Left';
   inputs.vAlign.value = V_ALIGN_TO_XML[style.vAlign] || 'Top';
   inputs.rotation.value = rotationToXml(style.rotation);
@@ -621,16 +619,16 @@ function renderInspector(element: DesignElement): void {
   setSelect(inputs.evaluationTime, attrs.evaluationTime || '');
   inputs.printGroup.value = attrs.printWhenGroupChanges || '';
   inputs.evaluationGroup.value = attrs.evaluationGroup || '';
-  inputs.bookmarkLevel.value = attrs.bookmarkLevel !== undefined ? attrs.bookmarkLevel : '';
+  inputs.bookmarkLevel.value = attrs.bookmarkLevel;
   inputs.key.value = attrs.key || '';
-  inputs.printRepeated.checked = String(attrs.printRepeatedValues || '').toLowerCase() !== 'false';
+  inputs.printRepeated.checked = (attrs.printRepeatedValues || '').toLowerCase() !== 'false';
   inputs.removeLine.checked = isAttrTrue(attrs.removeLineWhenBlank);
   inputs.printFirstWhole.checked = isAttrTrue(attrs.printInFirstWholeBand);
   inputs.printDetail.checked = isAttrTrue(attrs.printWhenDetailOverflows);
 
   inputs.textAdjust.value = attrs.textAdjust || '';
   ensureSelectOption(inputs.textAdjust, attrs.textAdjust);
-  inputs.pattern.value = attrs.pattern !== undefined ? attrs.pattern : '';
+  inputs.pattern.value = attrs.pattern;
   inputs.blankNull.checked = isAttrTrue(attrs.blankWhenNull);
 
   inputs.scaleImage.value = attrs.scaleImage || '';
@@ -654,14 +652,14 @@ function renderInspector(element: DesignElement): void {
   ensureSelectOption(inputs.lineStyle, capitalizeWord(lineInfo.style || 'Solid'));
   inputs.lineColor.value = lineInfo.color || '';
 
-  inputs.radius.value = attrs.radius !== undefined ? attrs.radius : '';
+  inputs.radius.value = attrs.radius;
   inputs.breakType.value = attrs.type || '';
   ensureSelectOption(inputs.breakType, attrs.type);
   inputs.subreportCache.checked = isAttrTrue(attrs.usingCache);
   inputs.runToBottom.checked = isAttrTrue(attrs.runToBottom);
 
   const box = element.box || EMPTY_BOX;
-  inputs.boxBorder.checked = !!box.border;
+  inputs.boxBorder.checked = box.border;
   inputs.boxWidth.value = String(box.width || 1);
   inputs.boxStyle.value = capitalizeWord(box.lineStyle || 'Solid');
   ensureSelectOption(inputs.boxStyle, capitalizeWord(box.lineStyle || 'Solid'));
@@ -678,12 +676,12 @@ function renderInspector(element: DesignElement): void {
 }
 
 function capitalizeWord(value: string | undefined): string {
-  const text = String(value || '');
+  const text = (value || '');
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : '';
 }
 
 function isAttrTrue(value: string | undefined): boolean {
-  return String(value || '').toLowerCase() === 'true';
+  return (value || '').toLowerCase() === 'true';
 }
 
 function ensureSelectOption(select: HTMLSelectElement, value: string | undefined): void {
@@ -702,7 +700,7 @@ function setSelect(select: HTMLSelectElement, value: string): void {
 }
 
 function populateStyleSelect(current: string): void {
-  const names = (model && model.styles ? model.styles : []).map(style => style.name);
+  const names = (model ? model.styles : []).map(style => style.name);
   if (current && !names.includes(current)) names.push(current);
 
   inputs.style.replaceChildren();
@@ -776,7 +774,7 @@ function queueAttributeRemove(name: string): void {
 
 function applyOptionalProperty(name: string, value: string): void {
   if (!selectedElement || editPending) return;
-  const text = String(value || '').trim();
+  const text = (value || '').trim();
   if (!text) {
     queuePatch({ attributes: { remove: [name] } });
     return;
@@ -786,7 +784,7 @@ function applyOptionalProperty(name: string, value: string): void {
 
 function applyOptionalText(name: string, input: HTMLInputElement): void {
   if (!selectedElement || editPending) return;
-  const text = String(input.value || '').trim();
+  const text = (input.value || '').trim();
   if (!text) {
     queuePatch({ attributes: { remove: [name] } });
     input.value = '';
@@ -869,7 +867,7 @@ function renderPageBreaks(report: DesignReport, surfaceHeight: number): void {
   for (let y = report.pageHeight; y < surfaceHeight - 0.5; y += report.pageHeight) {
     const line = make('div', 'page-break');
     line.style.top = px(y * scale);
-    line.appendChild(make('span', 'page-break-label', 'Page ' + pageNumber));
+    line.appendChild(make('span', 'page-break-label', `Page ${String(pageNumber)}`));
     contentLayerElement().appendChild(line);
     pageNumber += 1;
   }
@@ -904,7 +902,7 @@ function renderColumns(report: DesignReport, surfaceHeight: number): void {
     guide.style.height = px(Math.max(0, surfaceHeight - report.topMargin - report.bottomMargin) * scale);
     contentLayerElement().appendChild(guide);
 
-    const label = make('div', 'column-label', 'Column ' + (column + 1));
+    const label = make('div', 'column-label', `Column ${String(column + 1)}`);
     label.style.left = px((x + 4) * scale);
     label.style.top = px((report.topMargin + 2) * scale);
     contentLayerElement().appendChild(label);
@@ -962,7 +960,7 @@ function renderElements(elements: DesignElement[], parent: Element): void {
 function renderElement(element: DesignElement): HTMLElement {
   const style = element.style || EMPTY_STYLE;
   const node  = make('div', 'element');
-  const kind  = String(element.kind || 'element').toLowerCase();
+  const kind  = (element.kind || 'element').toLowerCase();
 
   node.style.left = px(element.x * scale);
   node.style.top = px(element.y * scale);
@@ -977,7 +975,7 @@ function renderElement(element: DesignElement): HTMLElement {
     node.style.backgroundColor = style.backcolor;
   }
   if (style.rotation) {
-    node.style.transform = 'rotate(' + style.rotation + 'deg)';
+    node.style.transform = `rotate(${String(style.rotation)}deg)`;
     node.style.transformOrigin = 'center center';
   }
 
@@ -1011,7 +1009,7 @@ function renderText(node: HTMLElement, element: DesignElement, style: DesignStyl
   if (padding > 0) wrap.style.padding = px(padding * scale);
 
   const content = make('div', 'text-content');
-  const isTextField = String(element.kind).toLowerCase() === 'textfield';
+  const isTextField = element.kind.toLowerCase() === 'textfield';
   content.textContent = element.displayText || (isTextField ? '(no expression)' : '(empty)');
   if (!element.displayText) content.classList.add('empty-text');
   content.style.textAlign = style.hAlign || 'left';
@@ -1066,7 +1064,7 @@ function renderLine(node: HTMLElement, element: DesignElement): void {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', '100%');
-  svg.setAttribute('viewBox', '0 0 ' + viewWidth + ' ' + viewHeight);
+  svg.setAttribute('viewBox', `0 0 ${String(viewWidth)} ${String(viewHeight)}`);
   svg.setAttribute('preserveAspectRatio', 'none');
   svg.style.display = 'block';
   svg.style.overflow = 'visible';
@@ -1134,7 +1132,7 @@ function applyBox(node: HTMLElement, box: DesignBox | null, fallbackColor: strin
     ? box.lineStyle
     : 'solid';
   const color = box.color || fallbackColor || '#000000';
-  const width = Math.max(1, Math.round((box.width || 1) * scale)) + 'px';
+  const width = `${String(Math.max(1, Math.round((box.width || 1) * scale)))}px`;
   let drew = false;
 
   if (box.top)    { node.style.borderTop    = width + ' ' + borderStyle + ' ' + color; drew = true; }
@@ -1421,7 +1419,7 @@ function applyGeometryFromInspector() {
 function applyColorField(key: 'forecolor' | 'backcolor'): void {
   if (!selectedElement || editPending) return;
   const input = inputs[key];
-  const value = String(input.value || '').trim();
+  const value = (input.value || '').trim();
   if (!value) {
     input.value = key === 'backcolor' ? '' : (selectedElement.style?.forecolor || '');
     return;
@@ -1438,7 +1436,7 @@ function applyColorField(key: 'forecolor' | 'backcolor'): void {
 
 function applyFontName() {
   if (!selectedElement || editPending) return;
-  const name = String(inputs.fontName.value || '').trim();
+  const name = (inputs.fontName.value || '').trim();
   if (!name) {
     inputs.fontName.classList.add('invalid');
     setInspectorError('Font name cannot be empty.');
@@ -1541,12 +1539,12 @@ function requestCompletions() {
 }
 
 function filterCompletions(items: CompletionItem[]): CompletionItem[] {
-  const prefix = String(completionPrefix || '').toLowerCase();
+  const prefix = (completionPrefix || '').toLowerCase();
   if (!prefix) return items;
 
   return items.filter(function (item) {
-    const label = String(item.label || '');
-    const filter = String(item.filterText || label).toLowerCase();
+    const label = (item.label || '');
+    const filter = (item.filterText || label).toLowerCase();
     if (filter.startsWith(prefix)) return true;
     if (completionMode === 'general') {
       return label.toLowerCase().startsWith(prefix)
@@ -1567,8 +1565,8 @@ function showCompletions(result: CompletionResult | null, requestId: number): vo
     return;
   }
 
-  completionMode = String(result.mode || 'general');
-  completionPrefix = String(result.prefix || '');
+  completionMode = (result.mode || 'general');
+  completionPrefix = (result.prefix || '');
   completionReplace = result.replace || {
     start: completionSnapshot.offset,
     end:   completionSnapshot.offset,
@@ -1603,13 +1601,13 @@ function renderCompletions() {
       row.appendChild(make('span', 'completion-detail', item.detail));
     }
     if (item.documentation) {
-      row.title = String(item.documentation).slice(0, 800);
+      row.title = item.documentation.slice(0, 800);
     }
     fragment.appendChild(row);
   });
 
   completionList.appendChild(fragment);
-  completionHint.textContent = completionItems.length +
+  completionHint.textContent = String(completionItems.length) +
     (completionItems.length === 1 ? ' suggestion' : ' suggestions');
   completionPopup.hidden = false;
 
@@ -1626,8 +1624,9 @@ function moveCompletion(delta: number): void {
 
 function acceptCompletion() {
   if (!completionVisible || completionIndex < 0) return;
+  // The list is cleared when the popup hides, so the index can outlive it.
+  if (completionIndex >= completionItems.length) return;
   const item = completionItems[completionIndex];
-  if (!item) return;
 
   // Type hints are informational: accepting one must not delete typed text.
   if (item.kind === 'text') {
@@ -1652,7 +1651,7 @@ function acceptCompletion() {
     ? Math.max(start, Math.min(completionReplace.end, current.length))
     : fallback;
 
-  const insert = String(item.insertTextPlain !== undefined ? item.insertTextPlain : item.label);
+  const insert = (item.insertTextPlain !== undefined ? item.insertTextPlain : item.label);
   const next = current.slice(0, start) + insert + current.slice(end);
   inputs.text.value = next;
 
@@ -1737,7 +1736,7 @@ inputs.forecolor.addEventListener('change', function () { applyColorField('forec
 inputs.backcolor.addEventListener('change', function () { applyColorField('backcolor'); });
 
 function isHexColor(value: string | undefined): boolean {
-  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(value || '').trim());
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test((value || '').trim());
 }
 
 function applyLineFields() {
@@ -1750,7 +1749,7 @@ function applyLineFields() {
     return;
   }
   const style = inputs.lineStyle.value || 'Solid';
-  const color = String(inputs.lineColor.value || '').trim();
+  const color = (inputs.lineColor.value || '').trim();
   if (color && !isHexColor(color)) {
     inputs.lineColor.classList.add('invalid');
     setInspectorError('Line color must be #rgb, #rrggbb or #rrggbbaa.');
@@ -1767,9 +1766,9 @@ function applyBoxFields() {
   if (!selectedElement || editPending) return;
 
   const width = Number(inputs.boxWidth.value);
-  const paddingValue = String(inputs.boxPadding.value || '').trim();
+  const paddingValue = (inputs.boxPadding.value || '').trim();
   const padding = paddingValue === '' ? 0 : Number(paddingValue);
-  const color = String(inputs.boxColor.value || '').trim();
+  const color = (inputs.boxColor.value || '').trim();
 
   if (!Number.isFinite(width) || width <= 0) {
     inputs.boxWidth.classList.add('invalid');
@@ -1828,7 +1827,7 @@ inputs.key.addEventListener('change', function () {
 });
 inputs.bookmarkLevel.addEventListener('change', function () {
   if (!selectedElement || editPending) return;
-  const text = String(inputs.bookmarkLevel.value || '').trim();
+  const text = (inputs.bookmarkLevel.value || '').trim();
   if (!text) {
     queuePatch({ attributes: { remove: ['bookmarkLevel'] } });
     return;
@@ -1899,7 +1898,7 @@ inputs.lineColor.addEventListener('change', applyLineFields);
 
 inputs.radius.addEventListener('change', function () {
   if (!selectedElement || editPending) return;
-  const text = String(inputs.radius.value || '').trim();
+  const text = (inputs.radius.value || '').trim();
   if (!text) {
     queuePatch({ attributes: { remove: ['radius'] } });
     return;
@@ -1933,8 +1932,8 @@ inputs.boxPadding.addEventListener('change', applyBoxFields);
 
 inputs.addAttribute.addEventListener('click', function () {
   if (!selectedElement || editPending) return;
-  const name = String(inputs.newAttrName.value || '').trim();
-  const value = String(inputs.newAttrValue.value || '');
+  const name = (inputs.newAttrName.value || '').trim();
+  const value = (inputs.newAttrValue.value || '');
   if (!/^[A-Za-z_][A-Za-z0-9_.:-]*$/.test(name)) {
     setInspectorError('Attribute names must start with a letter or underscore.');
     return;

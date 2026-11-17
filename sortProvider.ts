@@ -36,7 +36,7 @@ function register(context: vscode.ExtensionContext): void {
                     `Sort elements: ${path.basename(document.fileName)}`
                 );
 
-                if (vscode.workspace.getConfiguration('jrxml').get('sort.confirm', true)) {
+                if (vscode.workspace.getConfiguration('jrxml').get<boolean>('sort.confirm', true)) {
                     const choice = await vscode.window.showInformationMessage(
                         'Apply the geometry sort?',
                         { modal: true },

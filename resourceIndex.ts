@@ -21,8 +21,8 @@ function resourcesForDocument(
     const bundle = attr || bundleAttribute(document.getText());
     if (!bundle) return null;
 
-    const roots = ((vscode.workspace && vscode.workspace.workspaceFolders) || [])
-        .map(folder => folder.uri && folder.uri.fsPath)
+    const roots = (vscode.workspace.workspaceFolders ?? [])
+        .map(folder => folder.uri.fsPath)
         .filter((root): root is string => Boolean(root));
 
     return loadResourceBundle(document.fileName, bundle.name, roots);

@@ -55,7 +55,7 @@ function coordinate(element: XmlNode, name: string, text: string, warnings: stri
     const value = attr ? attr.value.trim() : null;
 
     if (value === null || !/^[+-]?\d+$/.test(value)) {
-        warnings.push(`warning: missing or non-numeric ${name} on ${element.kind} (line ${lineOf(text, element.startTag)})`);
+        warnings.push(`warning: missing or non-numeric ${name} on ${element.kind} (line ${String(lineOf(text, element.startTag))})`);
         return 0;
     }
     return Number.parseInt(value, 10);
@@ -184,7 +184,7 @@ export function applyReorders(text: string, containers: readonly SortContainer[]
 }
 
 function describe(child: SortChild): string {
-    return `${child.kind}(${child.x},${child.y})`;
+    return `${child.kind}(${String(child.x)},${String(child.y)})`;
 }
 
 export function orderSummary(children: readonly SortChild[]): string {

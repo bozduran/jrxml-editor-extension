@@ -71,16 +71,16 @@ function withDefaults(enabled: EnabledSteps | null | undefined): Required<Enable
 // Single-pass entity decoding: the five named entities plus numeric references.
 // Unknown or malformed references are left verbatim, matching the hook.
 function decodeXml(value: string): string {
-    const text = String(value);
+    const text = value;
     if (!text.includes('&')) return text;
 
     let out = '';
     let i = 0;
     while (i < text.length) {
-        if (text[i] !== '&') { out += text[i]; i++; continue; }
+        if (text[i] !== '&') { out += text.charAt(i); i++; continue; }
 
         const semi = text.indexOf(';', i + 1);
-        if (semi < 0 || semi - i > 12) { out += text[i]; i++; continue; }
+        if (semi < 0 || semi - i > 12) { out += text.charAt(i); i++; continue; }
 
         const name = text.slice(i + 1, semi);
         let decoded: string | null = null;
@@ -99,7 +99,7 @@ function decodeXml(value: string): string {
                 decoded = String.fromCodePoint(code);
             }
         }
-        if (decoded === null) { out += text[i]; i++; continue; }
+        if (decoded === null) { out += text.charAt(i); i++; continue; }
 
         out += decoded;
         i = semi + 1;
@@ -109,7 +109,7 @@ function decodeXml(value: string): string {
 
 /** XML text encoding: the five entities. */
 function encodeXml(value: string): string {
-    return String(value)
+    return value
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')

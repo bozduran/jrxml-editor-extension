@@ -23,7 +23,7 @@ export interface ExpressionRegion {
 const REGION_TAGS: ReadonlySet<string> = new Set([...EXPRESSION_TAGS, 'query']);
 
 function stripExpressionContent(raw: string): string {
-    return String(raw ?? '')
+    return raw
         .replace(/^\s*<!\[CDATA\[/, '')
         .replace(/\]\]>\s*$/, '')
         .trim();

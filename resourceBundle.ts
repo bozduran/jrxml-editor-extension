@@ -176,7 +176,7 @@ function signatureOf(files: readonly BundleFile[]): string {
     return files.map(file => {
         try {
             const stat = fs.statSync(file.path);
-            return `${file.path}:${stat.mtimeMs}:${stat.size}`;
+            return `${file.path}:${String(stat.mtimeMs)}:${String(stat.size)}`;
         } catch {
             return `${file.path}:missing`;
         }

@@ -169,7 +169,7 @@ function normalizeOptions(options: BuilderOptions = {}): NormalizedOptions {
 
 /** Strip a Java package name; `java.lang.String` -> `String`. */
 export function shortClass(value: string | null | undefined): string {
-    const text = String(value == null ? '' : value).trim();
+    const text = (value == null ? '' : value).trim();
     if (!text) return 'Object';
     const last = text.split('.').pop();
     return last || text;
@@ -200,9 +200,9 @@ export function makeSchema({
     ): SchemaEntry[] => {
         const seen = new Set<string>();
         const out: SchemaEntry[] = [];
-        for (const item of [...(primary || []), ...(extra || [])]) {
-            if (!item || !item.name) continue;
-            const name = String(item.name);
+        for (const item of [...primary, ...extra]) {
+            if (!item.name) continue;
+            const name = item.name;
             if (seen.has(name)) continue;
             seen.add(name);
             out.push({ name, cls: shortClass(item.type != null ? item.type : item.cls) });
@@ -221,7 +221,7 @@ export function makeSchema({
 
 /** Escape a Java string literal (quotes, backslashes, newlines). */
 export function escapeJavaString(value: string | null | undefined): string {
-    return '"' + String(value == null ? '' : value)
+    return '"' + (value == null ? '' : value)
         .replace(/\\/g, '\\\\')
         .replace(/"/g, '\\"')
         .replace(/\r/g, '\\r')
@@ -231,7 +231,7 @@ export function escapeJavaString(value: string | null | undefined): string {
 
 /** True for `$F{x}` / `$P{x}` / `$V{x}`. */
 export function isReference(value: string | null | undefined): boolean {
-    return /^\$[FPV]\{[^}]+\}$/.test(String(value == null ? '' : value).trim());
+    return /^\$[FPV]\{[^}]+\}$/.test((value == null ? '' : value).trim());
 }
 
 function referenceText(condition: Condition): string {
@@ -240,7 +240,7 @@ function referenceText(condition: Condition): string {
 
 /** The right-hand side of a comparison: reference, Java string or number. */
 function rhs(condition: Condition): string {
-    const value = String(condition.val == null ? '' : condition.val);
+    const value = condition.val;
     if (isReference(value)) return value.trim();
     if (condition.type === 'String') return escapeJavaString(value);
     return value.trim() || '0';
@@ -250,7 +250,7 @@ function rhs(condition: Condition): string {
 export function conditionText(condition: Condition, options: BuilderOptions = {}): string {
     const opts = normalizeOptions(options);
     if (condition.type === 'Custom') {
-        return String(condition.val == null ? '' : condition.val).trim() || 'true';
+        return condition.val.trim() || 'true';
     }
 
     const ref = referenceText(condition);
@@ -306,7 +306,7 @@ export function conditionText(condition: Condition, options: BuilderOptions = {}
 
 /** The text of one branch's result. */
 function resultText(result: BranchResult | null | undefined): string {
-    const value = result && result.val != null ? String(result.val) : '';
+    const value = result ? result.val : '';
     if (!result || result.kind === 'null') return 'null';
     if (result.kind === 'text') return escapeJavaString(value);
     if (result.kind === 'number') return value.trim() || '0';
@@ -321,7 +321,7 @@ function wrapJoin(text: string): string {
 /** The text of a branch condition (conditions joined by AND/OR as chosen). */
 export function branchCondition(branch: Branch, options: BuilderOptions = {}): string {
     const opts = normalizeOptions(options);
-    const parts = (branch.conds || []).map(condition => conditionText(condition, opts));
+    const parts = branch.conds.map(condition => conditionText(condition, opts));
     const [only] = parts;
     if (parts.length === 1 && only !== undefined) return only;
 
@@ -366,7 +366,7 @@ export function buildExpression(
 ): string {
     const opts = normalizeOptions(options);
     const branches: readonly Branch[] = state && Array.isArray(state.branches) ? state.branches : [];
-    const els: BranchResult = state && state.els ? state.els : { kind: 'text', val: '' };
+    const els: BranchResult = state ? state.els : { kind: 'text', val: '' };
     if (branches.length === 0) return resultText(els);
     return buildBranch(branches, els, 0, '', opts);
 }
@@ -511,7 +511,7 @@ type AstNodeInit = WithoutSource<AstNode>;
  * substring it was parsed from (without enclosing parentheses).
  */
 export function parseExpression(text: string): AstNode {
-    const source = String(text == null ? '' : text).trim();
+    const source = text.trim();
     if (!source) throw new Error('Paste an expression first.');
 
     const tokens = tokenize(source);
@@ -790,7 +790,7 @@ function toCondition(node: AstNode, context: ConversionContext): Condition {
 
     // 4. Calls: JasperReports helpers and Java methods.
     if (node.t === 'call') {
-        const args = node.args || [];
+        const args = node.args;
         const argument = args[0];
         const valueOf = (valueNode: AstNode): string =>
             (valueNode.t === 'str' ? valueNode.v : valueNode.src);
@@ -892,7 +892,7 @@ function skipLiteral(text: string, index: number): number {
         if (text[i] === quote) return i + 1;
         i += 1;
     }
-    throw new Error('Expected ' + quote);
+    throw new Error(`Expected ${String(quote)}`);
 }
 
 /** The character at `index`; past the end of the text this is ''. */
@@ -1005,7 +1005,7 @@ function splitTopLevel(text: string, separator: string): string[] {
 
 /** Remove parentheses that enclose the whole value (`(a ? b : c)`). */
 function stripOuterParens(value: string | null | undefined): string {
-    let text = String(value == null ? '' : value).trim();
+    let text = (value == null ? '' : value).trim();
     while (text[0] === '(') {
         const close = matchBracket(text, 0);
         if (close !== text.length - 1) break;
@@ -1107,7 +1107,7 @@ function parseStringLiteral(raw: string): string {
     let out = '';
 
     for (let i = 0; i < body.length; i += 1) {
-        const ch = body[i];
+        const ch = body.charAt(i);
         if (ch !== '\\') { out += ch; continue; }
 
         const next = body[i + 1];
@@ -1140,7 +1140,7 @@ function parseStringLiteral(raw: string): string {
  * The raw source is kept for expressions so nothing is normalised away.
  */
 function resultFromText(text: string | null | undefined): BranchResult {
-    const raw = String(text == null ? '' : text).trim();
+    const raw = (text == null ? '' : text).trim();
     const literal = stripOuterParens(raw);
 
     if (literal === 'null') return { kind: 'null', val: '' };
@@ -1158,7 +1158,7 @@ function conditionGroupFromText(
     text: string | null | undefined,
     context: ConversionContext
 ): ConditionGroup {
-    const value = String(text == null ? '' : text).trim();
+    const value = (text == null ? '' : text).trim();
     try {
         return toConditionGroup(parseExpression(value), context);
     } catch {
@@ -1186,7 +1186,7 @@ export interface FromExpressionResult {
  * @throws {Error} with a readable message when the expression cannot be parsed
  */
 export function fromExpression(text: string | null | undefined): FromExpressionResult {
-    const source = String(text == null ? '' : text).trim();
+    const source = (text == null ? '' : text).trim();
     if (!source) throw new Error('Paste an expression first.');
 
     const context: ConversionContext = { nullSafe: false };
@@ -1194,7 +1194,7 @@ export function fromExpression(text: string | null | undefined): FromExpressionR
     let detectedStyle: BuilderStyle | null = null;
     let rest = source;
 
-    while (true) {
+    for (;;) {
         const part = parseConditional(rest);
         if (!part) break;
 

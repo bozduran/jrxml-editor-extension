@@ -85,7 +85,7 @@ export function buildIfElsePanelHtml({
         schema: schema || null,
         expression: expression || null,
         targetTagName: targetTagName || null,
-        canApply: !!canApply,
+        canApply: canApply,
         schemaError: schemaError || null,
         options: {
             nullSafe: options.nullSafe !== false,
@@ -106,9 +106,9 @@ export function buildIfElsePanelHtml({
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${source} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${source} data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${source} 'nonce-${String(nonce)}'; script-src 'nonce-${String(nonce)}'; img-src ${source} data:;">
 <title>${safeTitle}</title>
-<style nonce="${nonce}">
+<style nonce="${String(nonce)}">
   :root {
     --bg:          var(--vscode-editor-background, #1e1e1e);
     --card:        var(--vscode-sideBar-background, var(--vscode-editorWidget-background, #252526));
@@ -326,7 +326,7 @@ export function buildIfElsePanelHtml({
     </aside>
   </div>
 </main>
-<script nonce="${nonce}">
+<script nonce="${String(nonce)}">
 ${coreScript}
 const vscode = acquireVsCodeApi();
 const INITIAL = ${initialJson};

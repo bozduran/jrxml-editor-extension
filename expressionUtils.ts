@@ -112,7 +112,7 @@ function hasCdata(rawInner: string): boolean {
 }
 
 function escapeRegExp(text: string): string {
-    return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** The declaration fields the offset lookup reads. */
@@ -159,7 +159,7 @@ function findDeclarationAtOffset<D extends DeclarationNameSpan>(
 
     for (const [sigil, list] of groups) {
         for (const declaration of list) {
-            if (!declaration || !declaration.name) continue;
+            if (!declaration.name) continue;
             if (typeof declaration.nameOffset !== 'number') continue;
             if (offset >= declaration.nameOffset &&
                 offset <= declaration.nameOffset + declaration.name.length) {

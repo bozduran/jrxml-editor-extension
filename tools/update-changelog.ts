@@ -42,7 +42,7 @@ function insertVersionHeading(text: string, version: string, date: string): stri
         if (line.trim() === UNRELEASED) unreleased.push(index);
     });
     if (unreleased.length !== 1) {
-        throw new Error(`CHANGELOG.md must contain exactly one "${UNRELEASED}" heading (found ${unreleased.length})`);
+        throw new Error(`CHANGELOG.md must contain exactly one "${UNRELEASED}" heading (found ${String(unreleased.length)})`);
     }
 
     const existing = `## [${version}]`;

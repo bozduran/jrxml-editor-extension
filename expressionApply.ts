@@ -31,7 +31,7 @@ async function applyExpressionToEditor(
     expressionResult: ExpressionTarget | null | undefined,
     newExpression: string
 ): Promise<ApplyExpressionResult> {
-    if (!editor || !editor.document || editor.document.isClosed) {
+    if (!editor || editor.document.isClosed) {
         return { ok: false, severity: 'warning', reason: 'Source editor is no longer open.' };
     }
     if (!expressionResult || !expressionResult.tagName) {

@@ -70,7 +70,7 @@ function checkColumns(root: XmlNode, page: PageMetrics, findings: LayoutFinding[
 
     findings.push(finding(
         'jrxml.layout.columns',
-        `Report columns (${page.columnCount} × ${page.columnWidth}px) plus margins need ${used}px, but the page is ${page.pageWidth}px wide.`,
+        `Report columns (${String(page.columnCount)} × ${String(page.columnWidth)}px) plus margins need ${String(used)}px, but the page is ${String(page.pageWidth)}px wide.`,
         root
     ));
 }
@@ -89,7 +89,7 @@ function checkBandHeights(root: XmlNode, page: PageMetrics, findings: LayoutFind
 
     findings.push(finding(
         'jrxml.layout.bandHeight',
-        `Band heights need ${sum}px but only ${available}px fit between the margins (page ${page.pageHeight}px, margins ${page.topMargin}+${page.bottomMargin}).`,
+        `Band heights need ${String(sum)}px but only ${String(available)}px fit between the margins (page ${String(page.pageHeight)}px, margins ${String(page.topMargin)}+${String(page.bottomMargin)}).`,
         root
     ));
 }
@@ -142,7 +142,7 @@ function checkElementBounds(doc: XmlDocument, findings: LayoutFinding[]): void {
 
         findings.push(finding(
             'jrxml.layout.elementOutsideBand',
-            `Element ends at ${y + height}px but its ${container.label} is only ${container.height}px tall.`,
+            `Element ends at ${String(y + height)}px but its ${container.label} is only ${String(container.height)}px tall.`,
             node
         ));
     }

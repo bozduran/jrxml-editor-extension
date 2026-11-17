@@ -33,7 +33,7 @@ export interface IncludeTreeNode {
 const QUOTED = /"([^"]*)"/g;
 
 export function normalizePath(value: string): string {
-    return String(value).replace(/\\/g, '/');
+    return value.replace(/\\/g, '/');
 }
 
 /** File name without its extension. */

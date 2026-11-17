@@ -23,7 +23,7 @@ export function textSource(
 ): ReportSource {
     return {
         text: typeof text === 'string' ? text : '',
-        id: String(id ?? ''),
+        id,
         version,
     };
 }

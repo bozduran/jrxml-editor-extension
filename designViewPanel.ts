@@ -92,7 +92,7 @@ function isJrxmlDocument(document: vscode.TextDocument | null | undefined): docu
 }
 
 function baseName(fileName: string): string {
-    return path.basename(String(fileName || ''));
+    return path.basename((fileName || ''));
 }
 
 function errorModel(message: string): ErrorDesignModel {
@@ -168,7 +168,7 @@ function buildCompletionsForDocument(
  */
 async function applyDesignPatch(
     document: vscode.TextDocument | null,
-    message: DesignPatchMessage
+    message: DesignPatchMessage | null | undefined
 ): Promise<DesignPatchResult> {
     if (!document) {
         return { ok: false, reason: 'No report is open.' };
@@ -242,9 +242,9 @@ class DesignViewPanel {
 
         this._renderInitial();
 
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
+        this._panel.onDidDispose(() => { this.dispose(); }, null, this._disposables);
         this._panel.webview.onDidReceiveMessage(
-            (message: DesignMessage) => this._handleMessage(message),
+            (message: DesignMessage) => { this._handleMessage(message); },
             null,
             this._disposables
         );
@@ -259,22 +259,22 @@ class DesignViewPanel {
         );
 
         vscode.window.onDidChangeActiveTextEditor(
-            active => this._onActiveEditor(active),
+            active => { this._onActiveEditor(active); },
             null,
             this._disposables
         );
         vscode.window.onDidChangeTextEditorSelection(
-            event => this._onSelectionChanged(event),
+            event => { this._onSelectionChanged(event); },
             null,
             this._disposables
         );
         vscode.workspace.onDidChangeTextDocument(
-            event => this._onDocumentChanged(event),
+            event => { this._onDocumentChanged(event); },
             null,
             this._disposables
         );
         vscode.workspace.onDidCloseTextDocument(
-            document => this._onDocumentClosed(document),
+            document => { this._onDocumentClosed(document); },
             null,
             this._disposables
         );
@@ -324,9 +324,10 @@ class DesignViewPanel {
 
     /** The tracked document, falling back to the active .jrxml editor. */
     private _document(): vscode.TextDocument | null {
-        if (this._uri) {
+        const trackedUri = this._uri;
+        if (trackedUri) {
             const tracked = vscode.workspace.textDocuments.find(
-                document => document.uri.toString() === this._uri!.toString()
+                document => document.uri.toString() === trackedUri.toString()
             );
             if (tracked) return tracked;
         }
@@ -382,8 +383,6 @@ class DesignViewPanel {
     }
 
     private _refresh(force = false): void {
-        if (!this._panel) return;
-
         const document = this._document();
         if (!document) {
             this._cache = { uri: '', version: -1, model: null };
@@ -428,7 +427,7 @@ class DesignViewPanel {
 
     private _scheduleRefresh(): void {
         clearTimeout(this._timer);
-        this._timer = setTimeout(() => this._refresh(false), DEBOUNCE_MS);
+        this._timer = setTimeout(() => { this._refresh(false); }, DEBOUNCE_MS);
     }
 
     // ── Source selection sync ───────────────────────────────────────────────
@@ -440,7 +439,7 @@ class DesignViewPanel {
 
         clearTimeout(this._selectionTimer);
         this._selectionTimer = setTimeout(
-            () => this._syncSelection(event.textEditor),
+            () => { this._syncSelection(event.textEditor); },
             SELECTION_DEBOUNCE_MS
         );
     }
@@ -500,7 +499,7 @@ class DesignViewPanel {
     private _sendCompletions(message: DesignMessage): void {
         if (!this._webviewReady) return;
 
-        const requestId = message && message.requestId;
+        const requestId = message.requestId;
         let result = EMPTY_COMPLETIONS;
 
         try {
@@ -578,9 +577,10 @@ class DesignViewPanel {
 
     // ── Webview messages ────────────────────────────────────────────────────
 
-    private _handleMessage(message: DesignMessage): void {
+    private _handleMessage(message: DesignMessage | null | undefined): void {
+        if (!message) return;
         try {
-            switch (message && message.command) {
+            switch (message.command) {
                 case 'ready':
                     this._webviewReady = true;
                     // The initial HTML already carries this model; resending it
@@ -597,11 +597,11 @@ class DesignViewPanel {
                     break;
 
                 case 'reveal':
-                    this._reveal(message).catch(err => this._postError(err));
+                    this._reveal(message).catch((err: unknown) => { this._postError(err); });
                     break;
 
                 case 'applyEdit':
-                    this._applyEdit(message).catch(err => this._rejectEdit(errorMessage(err)));
+                    this._applyEdit(message).catch((err: unknown) => { this._rejectEdit(errorMessage(err)); });
                     break;
 
                 case 'complete':
@@ -628,7 +628,7 @@ class DesignViewPanel {
         const stop  = Math.max(start, Math.min(end, textLength));
 
         await vscode.window.showTextDocument(document, {
-            viewColumn: this._sourceColumn || vscode.ViewColumn.Beside,
+            viewColumn: this._sourceColumn,
             preserveFocus: false,
             preview: false,
         });

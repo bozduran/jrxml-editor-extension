@@ -85,7 +85,7 @@ function scopeKey(scope: DeclarationScope | null): string | null {
 }
 
 function buildIndex(parsed: ParseResult): ReportIndex {
-    const references: IndexReference[] = (parsed.references || []).map(reference => ({
+    const references: IndexReference[] = parsed.references.map(reference => ({
         ...reference,
         role: reference.role || 'token',
     }));
@@ -93,7 +93,7 @@ function buildIndex(parsed: ParseResult): ReportIndex {
     const index: ReportIndex = {
         parsed,
         references,
-        resourceReferences: parsed.resourceReferences || [],
+        resourceReferences: parsed.resourceReferences,
 
         referenceAt(offset: number): IndexReference | null {
             for (const reference of references) {
@@ -152,12 +152,12 @@ function buildIndex(parsed: ParseResult): ReportIndex {
             const sigil = token.sigil;
 
             const scope = resolveDeclarationScope(parsed, at.offset);
-            const visible = declaration || (scope[LIST_BY_SIGIL[sigil]] || [])
+            const visible = declaration || scope[LIST_BY_SIGIL[sigil]]
                 .find(candidate => candidate.name === token.name) || null;
             const builtin = visible ? null : builtinFor(sigil, token.name);
             declaration = visible || builtin;
             const reportDeclaration = (!visible && origin === 'reference' && scope.kind === 'dataset')
-                ? (parsed[LIST_BY_SIGIL[sigil]] || [])
+                ? parsed[LIST_BY_SIGIL[sigil]]
                     .find(candidate => candidate.name === token.name) || null
                 : null;
 
@@ -174,7 +174,7 @@ function buildIndex(parsed: ParseResult): ReportIndex {
         },
 
         occurrences(symbol: ReportSymbol | null): IndexReference[] {
-            if (!symbol || !symbol.token) return [];
+            if (!symbol) return [];
             const token = symbol.token;
             if (token.sigil === 'R') return [];
             const key = scopeKey(symbol.scope);
@@ -203,7 +203,7 @@ function buildIndex(parsed: ParseResult): ReportIndex {
 
         declarationInAnyScope(token: Pick<ReferenceToken, 'sigil' | 'name'> | null): Declaration | null {
             if (!token || token.sigil === 'R') return null;
-            return (parsed[LIST_BY_SIGIL[token.sigil]] || [])
+            return parsed[LIST_BY_SIGIL[token.sigil]]
                 .find(candidate => candidate.name === token.name) || null;
         },
     };
