@@ -12,7 +12,8 @@ import { parseDeclarations } from './jrxmlParser';
 import type { ParseResult } from './jrxmlParser';
 import { buildExpressionSuggestions, suggestionOptions } from './expressionSuggestions';
 import type { CustomMethod, ExpressionSuggestion, SuggestionKind } from './expressionSuggestions';
-import { getJavaProjectIndex, clearJavaProjectIndex } from './javaProjectIndex';
+import { getJavaProjectIndex } from './javaProjectIndex';
+import { javaSourcePaths } from './javaSettings';
 import { reportLanguage } from './reportLanguage';
 import { resourceEntriesForDocument } from './resourceIndex';
 import { visibleDeclarations } from './reportSymbols';
@@ -21,28 +22,13 @@ import { visibleDeclarations } from './reportSymbols';
 // The scan itself and its cache live in javaProjectIndex so lint reads exactly
 // the same class table as completion.
 
-/** Drop the cached Java scan (call when .java files or workspace folders change). */
-function clearCustomJavaCache(): void {
-    clearJavaProjectIndex();
-}
-
-/** `jrxml.java.sourcePaths`, ignoring malformed values. */
-function configuredJavaSourcePaths(): string[] {
-    const configured = vscode.workspace
-        .getConfiguration('jrxml')
-        .get<unknown>('java.sourcePaths', []);
-
-    if (!Array.isArray(configured)) return [];
-    return configured.filter((entry): entry is string => typeof entry === 'string');
-}
-
 function getCustomJavaMethods(): CustomMethod[] {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) return [];
 
     return getJavaProjectIndex(
         workspaceFolders.map(folder => folder.uri.fsPath),
-        { extraPaths: configuredJavaSourcePaths() }
+        { extraPaths: javaSourcePaths(vscode.workspace.getConfiguration('jrxml')) }
     ).methods;
 }
 
@@ -152,6 +138,5 @@ const provider = vscode.languages.registerCompletionItemProvider(
 
 export {
     provider,
-    clearCustomJavaCache,
     getCustomJavaMethods,
 };

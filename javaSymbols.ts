@@ -1,5 +1,8 @@
 // javaSymbols.ts
 // Lint for the Java names a report expression mentions: imports, declaration
+//
+// This module is vscode-free: the editor, the workspace validator and the
+// tests run the same checks.
 // classes, static helper calls and typed receiver calls.
 //
 // The project index (javaProjectIndex) supplies the workspace's own classes;
@@ -11,6 +14,7 @@
 // null-dereference rule uses, so AST spans map back to the document.
 
 import { getMembers, isIndexed, normalizeTypeKey } from './jdkMemberIndex';
+import type { MemberLookup } from './jdkMemberIndex';
 import { resolveExpression, arityMatches } from './memberResolver';
 import type { Resolution } from './memberResolver';
 import { classBySimpleName } from './javaProjectIndex';
@@ -19,10 +23,19 @@ import type { JavaClass, JavaMethod } from './javaSourceScan';
 import { parseExpression, childExpressions } from './javaParser';
 import type { JavaExpressionNode, MethodCallNode } from './javaParser';
 import { maskReferences } from './expressionMask';
+import { suggestName } from './textDistance';
 import { regions } from './expressionRegions';
 import { EXPRESSION_TAGS } from './expressionTags';
 import type { Declaration, ImportDeclaration, ParseResult } from './jrxmlParser';
 import type { XmlScanResult } from './xmlspan';
+
+/** Elements whose content is a Java expression for lint purposes. */
+const JAVA_EXPRESSION_TAGS: ReadonlySet<string> = new Set([
+    ...EXPRESSION_TAGS,
+    'propertyExpression',
+    'subreportParameterExpression',
+    'datasetParameterExpression',
+]);
 
 /** Packages the report compiler imports implicitly (plus java.lang). */
 const IMPLICIT_PACKAGES: readonly string[] = [
@@ -80,26 +93,6 @@ function isProjectPackage(fqn: string, index: JavaProjectIndex): boolean {
     return dot !== -1 && index.packages.has(fqn.slice(0, dot));
 }
 
-/** Bounded edit distance, for "this looks like a typo of a project class". */
-function editDistance(a: string, b: string): number {
-    if (a === b) return 0;
-    if (Math.abs(a.length - b.length) > 2) return 9;
-
-    const previous = new Array<number>(b.length + 1);
-    const current = new Array<number>(b.length + 1);
-    for (let j = 0; j <= b.length; j++) previous[j] = j;
-
-    for (let i = 1; i <= a.length; i++) {
-        current[0] = i;
-        for (let j = 1; j <= b.length; j++) {
-            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-            current[j] = Math.min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + cost);
-        }
-        for (let j = 0; j <= b.length; j++) previous[j] = current[j];
-    }
-    return previous[b.length];
-}
-
 /**
  * The project class this name most likely misspells, or null.
  *
@@ -115,21 +108,52 @@ function closeProjectClass(fqn: string, index: JavaProjectIndex): string | null 
     const simple = fqn.slice(dot + 1);
     if (!isProjectPackage(fqn, index)) return null;
 
-    let best: string | null = null;
-    let bestDistance = 3;
-    for (const javaClass of index.classes) {
-        if (javaClass.packageName !== packageName) continue;
-        const distance = editDistance(simple, javaClass.className);
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            best = javaClass.className;
-        }
-    }
-    return bestDistance <= 2 ? best : null;
+    const candidates = index.classes
+        .filter(javaClass => javaClass.packageName === packageName)
+        .map(javaClass => javaClass.className);
+    return suggestName(simple, candidates);
 }
 
 function isIndexedType(fqn: string): boolean {
     return isIndexed(fqn);
+}
+
+/** The workspace class a type key names, or null. */
+function projectClassFor(typeKey: string, index: JavaProjectIndex): JavaClass | null {
+    const direct = index.byQualified.get(typeKey);
+    if (direct) return direct;
+    return typeKey.includes('.') ? null : classBySimpleName(index, typeKey);
+}
+
+/** A MemberLookup view over a scanned project class. */
+function projectMemberLookup(javaClass: JavaClass): MemberLookup {
+    return {
+        typeKey: javaClass.qualifiedName,
+        resolved: true,
+        kind: 'class',
+        methods: javaClass.methods.map(method => ({
+            name: method.name,
+            params: method.parameters.map(parameter => parameter.type),
+            returns: method.returnType,
+            static: method.static,
+            varargs: method.varargs,
+            since: 8,
+            declaringType: javaClass.qualifiedName,
+        })),
+        fields: [],
+        ambiguous: false,
+    };
+}
+
+/** Resolve a receiver type against the project first, then the member table. */
+function typeLookup(index: JavaProjectIndex, baseline: number) {
+    return (typeKey: string | null): MemberLookup => {
+        if (typeKey) {
+            const project = projectClassFor(typeKey, index);
+            if (project) return projectMemberLookup(project);
+        }
+        return getMembers(typeKey, { baseline });
+    };
 }
 
 /** Resolve a written class name against imports, the project and the index. */
@@ -205,8 +229,7 @@ function flattenName(node: JavaExpressionNode | null): string | null {
 }
 
 function expressionTexts(scan: XmlScanResult, text: string): { expression: string; contentStart: number; tag: string }[] {
-    return regions(scan, text)
-        .filter(region => EXPRESSION_TAGS.includes(region.tag))
+    return regions(scan, text, JAVA_EXPRESSION_TAGS)
         .map(region => ({ expression: region.expression, contentStart: region.contentStart, tag: region.tag }))
         .filter(region => region.expression.length > 0);
 }
@@ -222,7 +245,6 @@ function checkImports(
     if (imports.length === 0) return findings;
 
     const allExpressions = expressions.map(region => region.expression).join('\n');
-    const checkUnused = expressions.length > 0;
 
     for (const entry of imports) {
         if (entry.value.endsWith('.*')) continue; // package wildcards cannot be verified
@@ -230,17 +252,15 @@ function checkImports(
         const resolved = resolveType(entry.value, [], index);
         if (resolved.origin === 'unresolved') {
             const hint = closeProjectClass(entry.value, index);
-            if (hint) {
-                findings.push(finding(
-                    entry.valueOffset, entry.valueLength,
-                    `Import '${entry.value}' does not exist in this workspace${hint ? `; did you mean '${hint}'?` : '.'}`,
-                    'jrxml.unknownImport'
-                ));
-            }
+            if (!hint && !isProjectPackage(entry.value, index)) continue;
+            findings.push(finding(
+                entry.valueOffset, entry.valueLength,
+                `Import '${entry.value}' does not exist in this workspace${hint ? `; did you mean '${hint}'?` : '.'}`,
+                'jrxml.unknownImport'
+            ));
             continue;
         }
 
-        if (!checkUnused) continue;
         const simple = entry.value.slice(entry.value.lastIndexOf('.') + 1);
         const used = new RegExp(`\\b${simple.replace(/[$]/g, '\\$')}\\b`).test(allExpressions);
         if (!used) {
@@ -271,11 +291,11 @@ function checkDeclarationClasses(
         if (resolved.origin !== 'unresolved') continue;
 
         const hint = closeProjectClass(name, index);
-        if (!hint) continue;
+        if (!hint && !isProjectPackage(name, index)) continue;
 
         findings.push(finding(
             declaration.nameOffset, declaration.name.length,
-            `Class '${name}' does not exist in this workspace; did you mean '${hint}'?`,
+            `Class '${name}' does not exist in this workspace${hint ? `; did you mean '${hint}'?` : '.'}`,
             'jrxml.unknownClass'
         ));
     }
@@ -308,14 +328,13 @@ function checkStaticCall(
         // Only a near-miss of a project class is evidence; a dependency class
         // the extension has never seen is not.
         const hint = closeProjectClass(className, index);
-        if (hint) {
-            return finding(
-                base + call.start, call.end - call.start,
-                `Class '${className}' does not exist in this workspace; did you mean '${hint}'?`,
-                'jrxml.unknownClass'
-            );
-        }
-        return null;
+        if (!hint && !isProjectPackage(className, index)) return null;
+
+        return finding(
+            base + call.start, call.end - call.start,
+            `Class '${className}' does not exist in this workspace${hint ? `; did you mean '${hint}'?` : '.'}`,
+            'jrxml.unknownClass'
+        );
     }
 
     const projectClass = resolved.projectClass;
@@ -369,6 +388,7 @@ function checkProjectMethod(call: MethodCallNode, projectClass: JavaClass, base:
                 'jrxml.unknownJavaHelper'
             );
         }
+        if (projectClass.superClass) return null; // inherited statics are not scanned
         return finding(
             base + call.start, call.end - call.start,
             `Class '${projectClass.qualifiedName}' has no method named '${call.name}'.`,
@@ -396,16 +416,37 @@ function memberCallFinding(
     call: MethodCallNode,
     callText: string,
     resolution: Resolution,
-    base: number
+    base: number,
+    index: JavaProjectIndex,
+    lookup: (typeKey: string | null) => MemberLookup
 ): JavaSymbolFinding | null {
     if (resolution.reason !== 'unknown-method') return null;
     if (resolution.methodName !== call.name) return null;
-    if (!resolution.typeKey || !isIndexedType(resolution.typeKey)) return null;
+    if (!resolution.typeKey) return null;
+
+    const members = lookup(resolution.typeKey);
+    if (!members || !members.resolved) return null;
+
+    const named = members.methods.filter(method => method.name === call.name);
+    if (named.length === 0) {
+        // An inherited method is not scanned, so silence is the honest answer.
+        const project = projectClassFor(resolution.typeKey, index);
+        if (project?.superClass) return null;
+    }
 
     const open = callText.indexOf('(');
     const head = open === -1 ? callText : callText.slice(0, open + 1);
     const nameIndex = head.lastIndexOf(call.name);
     const offset = base + call.start + (nameIndex >= 0 ? nameIndex : 0);
+
+    if (named.length > 0) {
+        return finding(
+            offset, call.name.length,
+            `No overload of '${resolution.typeKey}.${call.name}' takes ${call.args.length} argument(s).`,
+            'jrxml.javaMemberArity'
+        );
+    }
+
     return finding(
         offset, call.name.length,
         `Type '${resolution.typeKey}' has no method '${call.name}' for this call.`,
@@ -445,10 +486,8 @@ export function checkJavaSymbols(input: JavaSymbolInput): JavaSymbolFinding[] {
         parameters: parsed.allParameters,
         variables: parsed.allVariables,
     };
-    const resolverContext = {
-        declarations,
-        lookup: (typeKey: string | null) => getMembers(typeKey, { baseline }),
-    };
+    const lookup = typeLookup(index, baseline);
+    const resolverContext = { declarations, lookup };
 
     for (const region of expressions) {
         if (region.tag === 'printWhenExpression' && isLiteralExpression(region.expression)) {
@@ -477,7 +516,7 @@ export function checkJavaSymbols(input: JavaSymbolInput): JavaSymbolFinding[] {
             // A receiver call on a declared value, e.g. $F{name}.trim().
             const callText = region.expression.slice(call.start, call.end);
             const resolution = resolveExpression(callText, resolverContext, 0);
-            push(memberCallFinding(call, callText, resolution, region.contentStart));
+            push(memberCallFinding(call, callText, resolution, region.contentStart, index, lookup));
         });
     }
 
@@ -488,6 +527,7 @@ export function checkJavaSymbols(input: JavaSymbolInput): JavaSymbolFinding[] {
 function isLiteralExpression(expression: string): boolean {
     const text = expression.trim();
     if (!text) return false;
+    if (text === 'null') return true;
     if (/^"(?:[^"\\]|\\.)*"$/.test(text)) return true;
     if (/^'(?:[^'\\]|\\.)*'$/.test(text)) return true;
     return /^[+-]?(?:\d|\.\d)/.test(text) && !/\$[FPV]\{/.test(text);

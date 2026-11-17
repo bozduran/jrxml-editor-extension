@@ -3,8 +3,6 @@
 
 const test   = require('node:test');
 const assert = require('node:assert');
-const fs     = require('node:fs');
-const path   = require('node:path');
 
 const { scanXml } = require('../out/xmlspan');
 const { checkSchema } = require('../out/schemaChecks');
@@ -152,20 +150,68 @@ test('malformed XML yields no schema findings', () => {
     assert.deepStrictEqual(findings('<jasperReport name="R"><field name="F">'), []);
 });
 
-// ── Real files must stay clean ──────────────────────────────────────────────
+// ── Required attributes and values added after the review ───────────────────
 
-const ROOT = path.join(__dirname, '..');
+test('required attributes cover the declaration vocabulary', () => {
+    const text = `<jasperReport name="R">
+  <reportFont fontName="Arial"/>
+  <scriptlet class="com.acme.Scriptlet"/>
+  <sortField/>
+  <detail><band height="20"><datasetRun/></band></detail>
+</jasperReport>`;
+    const missing = findings(text)
+        .filter(finding => finding.code === 'jrxml.schema.missingAttribute')
+        .map(finding => finding.message)
+        .sort();
 
-test('every repo fixture passes the schema checks', () => {
-    for (const dir of ['integration/workspace', 'test/fixtures']) {
-        for (const file of fs.readdirSync(path.join(ROOT, dir))) {
-            if (!file.endsWith('.jrxml')) continue;
-            const text = fs.readFileSync(path.join(ROOT, dir, file), 'utf8');
-            assert.deepStrictEqual(
-                checkSchema(scanXml(text)),
-                [],
-                `${dir}/${file} has schema findings`
-            );
-        }
-    }
+    assert.deepStrictEqual(missing, [
+        'Element <datasetRun> requires the "subDataset" attribute.',
+        'Element <reportFont> requires the "name" attribute.',
+        'Element <scriptlet> requires the "name" attribute.',
+        'Element <sortField> requires the "name" attribute.',
+    ]);
+});
+
+test('sortField type and boolean attributes are validated', () => {
+    const text = `<jasperReport name="R">
+  <style name="S" bold="maybe"/>
+  <sortField name="F" type="Direction"/>
+  <field name="F" class="java.lang.String"/>
+</jasperReport>`;
+    const invalid = findings(text)
+        .filter(finding => finding.code === 'jrxml.schema.invalidValue')
+        .map(finding => finding.message)
+        .sort();
+
+    assert.strictEqual(invalid.length, 2);
+    assert.ok(invalid.some(message => message.includes('"maybe"')));
+    assert.ok(invalid.some(message => message.includes('"Direction"')));
+});
+
+test('the 6.x vocabulary stays open where reports legitimately vary', () => {
+    const text = `<jasperReport name="R">
+  <parameter name="P" class="java.lang.String" nestedType="java.lang.String" evaluationTime="Late"/>
+  <detail><band height="100">
+    <frame>
+      <reportElement x="0" y="0" width="10" height="10"><styleExpression/></reportElement>
+      <staticText>
+        <reportElement x="0" y="0" width="5" height="5"/>
+        <text>x</text>
+      </staticText>
+    </frame>
+    <image>
+      <reportElement x="0" y="20" width="10" height="10"/>
+      <imageExpression>"x"</imageExpression>
+      <bookmarkLevelExpression/>
+    </image>
+    <subreport>
+      <reportElement x="0" y="40" width="10" height="10"/>
+      <parametersMapExpression/>
+      <subreportExpression>"x"</subreportExpression>
+    </subreport>
+    <style name="S"><conditionalStyle><style fontName="Arial"/></conditionalStyle></style>
+  </band></detail>
+</jasperReport>`;
+
+    assert.deepStrictEqual(findings(text), []);
 });

@@ -1,6 +1,8 @@
 // schemaChecks.ts
 // Structural JRXML checks driven by the curated vocabulary in jrxmlSchema.
 //
+// This module is vscode-free: diagnostics and the CI validator share it.
+//
 // Conservative by construction:
 //   * unknown children are reported only under parents whose vocabulary is
 //     fully known, and an unknown element's subtree is not checked further;
@@ -9,6 +11,8 @@
 //   * namespaced tags are never reported, so `jr:`/`c:` extensions are safe;
 //   * malformed XML yields no findings.
 
+import { localName } from './xmlName';
+import { suggestName } from './textDistance';
 import { ELEMENT_RULES, REPORT_LEVEL_ORDER, TAG_ALIASES, UNIVERSAL_ATTRIBUTES } from './jrxmlSchema';
 import type { AttributeRule, ElementRule } from './jrxmlSchema';
 import type { XmlNode, XmlScanResult } from './xmlspan';
@@ -18,11 +22,6 @@ export interface SchemaFinding {
     length: number;
     message: string;
     code: string;
-}
-
-function localName(tag: string): string {
-    const colon = tag.indexOf(':');
-    return colon === -1 ? tag : tag.slice(colon + 1);
 }
 
 function canonical(tag: string): string {
@@ -38,43 +37,6 @@ function ruleFor(tag: string): ElementRule | undefined {
     return ELEMENT_RULES[canonical(tag)];
 }
 
-/** Bounded Levenshtein distance; enough for a "did you mean" hint. */
-function editDistance(a: string, b: string): number {
-    if (a === b) return 0;
-    if (Math.abs(a.length - b.length) > 2) return 3;
-
-    const previous = new Array<number>(b.length + 1);
-    const current = new Array<number>(b.length + 1);
-    for (let j = 0; j <= b.length; j++) previous[j] = j;
-
-    for (let i = 1; i <= a.length; i++) {
-        current[0] = i;
-        for (let j = 1; j <= b.length; j++) {
-            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-            current[j] = Math.min(
-                previous[j] + 1,
-                current[j - 1] + 1,
-                previous[j - 1] + cost
-            );
-        }
-        for (let j = 0; j <= b.length; j++) previous[j] = current[j];
-    }
-    return previous[b.length];
-}
-
-function suggest(name: string, candidates: readonly string[]): string | null {
-    let best: string | null = null;
-    let bestDistance = 3;
-    for (const candidate of candidates) {
-        const distance = editDistance(name, candidate);
-        if (distance < bestDistance) {
-            bestDistance = distance;
-            best = candidate;
-        }
-    }
-    return bestDistance <= 2 ? best : null;
-}
-
 function findAttributeRule(rule: ElementRule, name: string): AttributeRule | undefined {
     return rule.attrs ? rule.attrs[name] : undefined;
 }
@@ -88,7 +50,7 @@ function checkAttributes(node: XmlNode, rule: ElementRule, push: (finding: Schem
             if (UNIVERSAL_ATTRIBUTES.has(attr.name) || isNamespaced(attr.name)) continue;
             if (findAttributeRule(rule, attr.name)) continue;
 
-            const hint = suggest(attr.name, [...known, ...UNIVERSAL_ATTRIBUTES]);
+            const hint = suggestName(attr.name, [...known, ...UNIVERSAL_ATTRIBUTES]);
             push({
                 offset: attr.nameStart,
                 length: attr.name.length,
@@ -174,7 +136,7 @@ export function checkSchema(scan: XmlScanResult | null): SchemaFinding[] {
         // Unknown child under a parent whose vocabulary is fully known.
         if (!namespaced && parent && parentRule && parentRule.children
             && !parentRule.children.includes(tag)) {
-            const hint = suggest(tag, parentRule.children);
+            const hint = suggestName(tag, parentRule.children);
             push({
                 offset: node.startTag + 1,
                 length: tag.length,

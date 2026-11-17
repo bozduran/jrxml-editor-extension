@@ -6,8 +6,6 @@
 	<template><![CDATA["/NEW_STYLE.jrtx"]]></template>
 	<style name="Title" fontName="Arial" fontSize="26.0" bold="true"/>
 	<style name="SubTitle" forecolor="#666666" fontName="Arial" fontSize="18.0"/>
-	<style name="Column header" forecolor="#FFFFFF" fontName="Arial" fontSize="12.0" bold="true"/>
-	<style name="Detail" fontName="Arial" fontSize="12.0"/>
 	<dataset name="addons" uuid="b9b1a97e-81de-41e8-97d9-baa17ee4d49e">
 		<property name="com.jaspersoft.studio.data.defaultdataadapter" value="jsonql-querry-list/jsonqlquerryDataAdapter.jrdax"/>
 		<property name="net.sf.jasperreports.data.adapter" value="jsonqlquerryDataAdapter.jrdax"/>
@@ -49,16 +47,16 @@ $P{FIL_PARAMETER}]]></filterExpression>
 						</parameter>
 					</datasetRun>
 					<contents height="50" width="475">
-						<element kind="textField" uuid="2988860b-8ef5-47ec-b0f0-fdc885c91005" x="0" y="0" width="475" height="25" removeLineWhenBlank="true" style="Eyebrow">
+						<element kind="textField" uuid="2988860b-8ef5-47ec-b0f0-fdc885c91005" x="0" y="0" width="475" height="25" removeLineWhenBlank="true" style="Title">
 							<printWhenExpression><![CDATA[$V{COLUMN_COUNT}==1]]></printWhenExpression>
 							<expression><![CDATA["Text Field"]]></expression>
 						</element>
-						<element kind="textField" uuid="a0729fb9-a256-41e3-89f9-a711ac5de1ae" positionType="Float" x="0" y="25" width="475" height="25" textAdjust="StretchHeight" style="Subtitle">
+						<element kind="textField" uuid="a0729fb9-a256-41e3-89f9-a711ac5de1ae" positionType="Float" x="0" y="25" width="475" height="25" textAdjust="StretchHeight" style="SubTitle">
 							<expression><![CDATA[$F{CompanyName}+ " " +$V{COLUMN_NUMBER}+ $P{FIL_PARAMETER}]]></expression>
 							<property name="com.jaspersoft.studio.unit.height" value="px"/>
 							<property name="com.jaspersoft.studio.unit.width" value="px"/>
 							<property name="com.jaspersoft.studio.unit.y" value="px"/>
-							<box style="Subtitle">
+							<box style="SubTitle">
 								<bottomPen lineWidth="1.0" lineStyle="Solid"/>
 							</box>
 						</element>

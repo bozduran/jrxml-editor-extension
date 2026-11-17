@@ -29,15 +29,24 @@ function stripExpressionContent(raw: string): string {
         .trim();
 }
 
-/** Every expression-bearing element in document order. */
-export function regions(scan: XmlScanResult | null, text: string = ''): ExpressionRegion[] {
+/**
+ * Every expression-bearing element in document order.
+ * `tags` defaults to the formatter's expression vocabulary; callers that need a
+ * wider set (the Java symbol lint also covers property and parameter
+ * expressions) pass their own.
+ */
+export function regions(
+    scan: XmlScanResult | null,
+    text: string = '',
+    tags: ReadonlySet<string> = REGION_TAGS
+): ExpressionRegion[] {
     if (!scan || scan.error || !scan.doc) return [];
 
     const source = typeof text === 'string' ? text : '';
     const found: ExpressionRegion[] = [];
 
     for (const node of scan.doc.walk()) {
-        if (!REGION_TAGS.has(node.tag)) continue;
+        if (!tags.has(node.tag)) continue;
 
         const start      = node.startTag;
         const end        = node.end;

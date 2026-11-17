@@ -1,5 +1,7 @@
 // unusedResources.ts
 // Report-local declarations that nothing references: named styles and
+//
+// This module is vscode-free: diagnostics and the CI validator share it.
 // subdatasets, plus the opt-in resource-bundle key summary.
 //
 // A style is used when any `style` attribute names it (including another
@@ -11,6 +13,7 @@
 // (its bands are its use) and a sort field is consumed by the query, so neither
 // has a reference that can legitimately be absent.
 
+import { localName } from './xmlName';
 import type { XmlNode, XmlScanResult } from './xmlspan';
 import type { ParseResult } from './jrxmlParser';
 import type { BundleIndex } from './resourceBundle';
@@ -27,13 +30,12 @@ export interface UnusedResourceInput {
     parsed: ParseResult;
     /** Resolved resource bundle for the report, when one was found. */
     bundle?: BundleIndex | null;
-    /** Report keys the report never references; off by default. */
+    /** Check named styles (jrxml.lint.unusedResources). */
+    includeStyles?: boolean;
+    /** Check subdatasets (jrxml.lint.unusedResources). */
+    includeSubDatasets?: boolean;
+    /** Report keys the report never references (jrxml.lint.unusedResourceKeys). */
     includeResourceKeys?: boolean;
-}
-
-function localName(tag: string): string {
-    const colon = tag.indexOf(':');
-    return colon === -1 ? tag : tag.slice(colon + 1);
 }
 
 function attributeSpan(node: XmlNode, name: string): { offset: number; length: number } {
@@ -143,8 +145,8 @@ export function checkUnusedResources(input: UnusedResourceInput): UnusedResource
     if (!scan || scan.error || !scan.doc) return [];
 
     const findings: UnusedResourceFinding[] = [
-        ...checkStyles(scan),
-        ...checkSubDatasets(scan),
+        ...(input.includeStyles === false ? [] : checkStyles(scan)),
+        ...(input.includeSubDatasets === false ? [] : checkSubDatasets(scan)),
     ];
 
     if (input.includeResourceKeys) {

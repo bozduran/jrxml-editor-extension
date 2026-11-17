@@ -112,7 +112,7 @@ export function discoverJavaSourceRoots(
 // ── Method extraction ────────────────────────────────────────────────────────
 
 const PACKAGE_PATTERN = /^\s*package\s+([\w.]+)\s*;/m;
-const TYPE_PATTERN = /\bpublic\s+(?:(?:final|abstract|sealed|non-sealed)\s+)*(?:class|interface|enum|record)\s+(\w+)/;
+const TYPE_PATTERN = /\bpublic\s+(?:(?:final|abstract|sealed|non-sealed)\s+)*(?:class|interface|enum|record)\s+(\w+)(?:\s+extends\s+([\w.$<>]+))?/;
 
 // A public method in any modifier order. The return type may be qualified,
 // generic or an array; `static` is recorded rather than required, so a call to
@@ -178,6 +178,8 @@ export interface JavaClass {
     readonly packageName: string;
     readonly className: string;
     readonly qualifiedName: string;
+    /** Simple superclass name when the declaration extends one. */
+    readonly superClass: string | null;
     readonly methods: readonly JavaMethod[];
 }
 
@@ -248,6 +250,7 @@ export function extractJavaClass(source: string): JavaClass | null {
         packageName,
         className,
         qualifiedName: packageName ? `${packageName}.${className}` : className,
+        superClass: typeMatch[2] ?? null,
         methods,
     };
 }
@@ -267,26 +270,6 @@ function customMethodOf(javaClass: JavaClass, method: JavaMethod): CustomMethod 
         doc: `**Class:** \`${javaClass.qualifiedName}\`\n\nReturns: \`${method.returnType}\``,
         snippet: `${javaClass.qualifiedName}.${method.name}(${snippetArgs})`,
     };
-}
-
-/**
- * The static methods of one source, as completion entries. Kept for the
- * completion provider and its existing tests; lint uses `extractJavaClass`.
- */
-export function extractStaticMethods(source: string): CustomMethod[] {
-    const javaClass = extractJavaClass(source);
-    if (!javaClass) return [];
-
-    const methods: CustomMethod[] = [];
-    const seen = new Set<string>();
-    for (const method of javaClass.methods) {
-        if (!method.static) continue;
-        const custom = customMethodOf(javaClass, method);
-        if (seen.has(custom.snippet)) continue;
-        seen.add(custom.snippet);
-        methods.push(custom);
-    }
-    return methods;
 }
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
@@ -373,14 +356,6 @@ export function staticMethodsOf(classes: readonly JavaClass[]): CustomMethod[] {
     return methods;
 }
 
-/** Read every `.java` file below the given roots and return static methods. */
-export function scanJavaMethods(
-    roots: readonly string[],
-    options: JavaScanOptions = {}
-): CustomMethod[] {
-    return staticMethodsOf(scanJavaClasses(roots, options));
-}
-
 /** Discover every module and scan it in one step. */
 export function collectJavaClasses(
     workspaceRoots: readonly string[],
@@ -398,15 +373,4 @@ export function collectJavaClasses(
     }
 
     return scanJavaClasses(roots, options);
-}
-
-/**
- * Discover and scan in one step. `workspaceRoots` are the folder paths, in the
- * order the workspace lists them.
- */
-export function collectJavaMethods(
-    workspaceRoots: readonly string[],
-    options: JavaScanOptions = {}
-): CustomMethod[] {
-    return staticMethodsOf(collectJavaClasses(workspaceRoots, options));
 }

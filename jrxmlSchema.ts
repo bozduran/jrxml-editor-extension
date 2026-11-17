@@ -1,6 +1,8 @@
 // jrxmlSchema.ts
 // The curated JRXML vocabulary the schema checks validate against.
 //
+// This module is vscode-free data: the schema checks are pure functions over it.
+//
 // Source of truth: the official JasperReports 6.x `jasperreport.xsd` plus the
 // real files under `integration/workspace` and `test/fixtures`. The extension
 // ships no XSD engine, so this table is deliberately version-tolerant:
@@ -64,7 +66,7 @@ export const ELEMENT_KINDS: readonly string[] = [
     'table', 'crosstab', 'list', 'pagination', 'generic', 'component',
 ];
 
-function bool(): AttributeRule { return {}; }
+function booleanAttribute(): AttributeRule { return { enum: ['true', 'false'] }; }
 
 /** Attributes shared by 6.x `reportElement` and 7.x `element`. */
 /** A band, or a classic section that is itself a band. */
@@ -82,11 +84,11 @@ const REPORT_ELEMENT_ATTRS: Record<string, AttributeRule> = {
     style: {},
     positionType: { enum: PROPERTY_SPECS.positionType.values },
     stretchType: { enum: PROPERTY_SPECS.stretchType.values },
-    isPrintRepeatedValues: bool(),
-    isRemoveLineWhenBlank: bool(),
-    removeLineWhenBlank: bool(),
-    isPrintInFirstWholeBand: bool(),
-    isPrintWhenDetailOverflows: bool(),
+    isPrintRepeatedValues: booleanAttribute(),
+    isRemoveLineWhenBlank: booleanAttribute(),
+    removeLineWhenBlank: booleanAttribute(),
+    isPrintInFirstWholeBand: booleanAttribute(),
+    isPrintWhenDetailOverflows: booleanAttribute(),
     printWhenGroupChanges: {},
     mode: { enum: PROPERTY_SPECS.mode.values },
     forecolor: {},
@@ -95,14 +97,14 @@ const REPORT_ELEMENT_ATTRS: Record<string, AttributeRule> = {
 
 /** Font, box and paragraph attributes 7.x merges into `<element>`. */
 const ELEMENT_STYLE_ATTRS: Record<string, AttributeRule> = {
-    fontName: {}, fontSize: {}, pdfFontName: {}, pdfEncoding: {}, isPdfEmbedded: bool(),
-    bold: bool(), isBold: bool(),
-    italic: bool(), isItalic: bool(),
-    underline: bool(), isUnderline: bool(),
-    strikeThrough: bool(), isStrikeThrough: bool(),
+    fontName: {}, fontSize: {}, pdfFontName: {}, pdfEncoding: {}, isPdfEmbedded: booleanAttribute(),
+    bold: booleanAttribute(), isBold: booleanAttribute(),
+    italic: booleanAttribute(), isItalic: booleanAttribute(),
+    underline: booleanAttribute(), isUnderline: booleanAttribute(),
+    strikeThrough: booleanAttribute(), isStrikeThrough: booleanAttribute(),
     rotation: { enum: PROPERTY_SPECS.rotation.values },
     markup: { enum: PROPERTY_SPECS.markup.values },
-    pattern: {}, blankWhenNull: bool(), textAdjust: { enum: PROPERTY_SPECS.textAdjust.values },
+    pattern: {}, blankWhenNull: booleanAttribute(), textAdjust: { enum: PROPERTY_SPECS.textAdjust.values },
     hTextAlign: { enum: PROPERTY_SPECS.hTextAlign.values },
     vTextAlign: { enum: PROPERTY_SPECS.vTextAlign.values },
     hAlign: { enum: PROPERTY_SPECS.hTextAlign.values },
@@ -113,7 +115,7 @@ const ELEMENT_STYLE_ATTRS: Record<string, AttributeRule> = {
     radius: {}, direction: { enum: PROPERTY_SPECS.direction.values },
     scaleImage: { enum: PROPERTY_SPECS.scaleImage.values },
     onErrorType: { enum: PROPERTY_SPECS.onErrorType.values },
-    usingCache: bool(), lazy: bool(), runToBottom: bool(), type: { enum: PROPERTY_SPECS.type.values },
+    usingCache: booleanAttribute(), lazy: booleanAttribute(), runToBottom: booleanAttribute(), type: { enum: PROPERTY_SPECS.type.values },
     evaluationTime: { enum: EVALUATION_TIME }, evaluationGroup: {},
     bookmarkLevel: {}, hyperlinkType: { enum: PROPERTY_SPECS.linkType.values },
     hyperlinkTarget: {}, hyperlinkReference: {}, hyperlinkAnchor: {}, hyperlinkPage: {},
@@ -140,14 +142,14 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
             sectionType: { enum: SECTION_TYPE },
             columnWidth: {}, columnSpacing: {},
             leftMargin: {}, rightMargin: {}, topMargin: {}, bottomMargin: {},
-            isTitleNewPage: bool(),
-            isSummaryNewPage: bool(),
-            isSummaryWithPageHeaderAndFooter: bool(),
-            isFloatColumnFooter: bool(),
+            isTitleNewPage: booleanAttribute(),
+            isSummaryNewPage: booleanAttribute(),
+            isSummaryWithPageHeaderAndFooter: booleanAttribute(),
+            isFloatColumnFooter: booleanAttribute(),
             scriptletClass: {},
             resourceBundle: {},
             whenResourceMissingType: { enum: WHEN_RESOURCE_MISSING },
-            isIgnorePagination: bool(),
+            isIgnorePagination: booleanAttribute(),
             formatFactoryClass: {},
         },
         children: [
@@ -169,11 +171,11 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     },
     import: { attrs: { value: { required: true } } },
     template: { attrs: { class: {} } },
-    reportFont: { attrs: {}, openAttributes: true },
-    scriptlet: { attrs: { name: {}, class: {} }, openAttributes: true },
+    reportFont: { attrs: { name: { required: true } }, openAttributes: true },
+    scriptlet: { attrs: { name: { required: true }, class: { required: true } }, openAttributes: true },
     style: {
         attrs: {
-            name: {}, default: bool(), isDefault: bool(), style: {},
+            name: {}, default: booleanAttribute(), isDefault: booleanAttribute(), style: {},
             mode: { enum: PROPERTY_SPECS.mode.values },
             markup: { enum: PROPERTY_SPECS.markup.values },
             ...ELEMENT_STYLE_ATTRS,
@@ -184,7 +186,7 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     conditionalStyle: {
         attrs: { ...ELEMENT_STYLE_ATTRS },
         openAttributes: true,
-        children: ['conditionExpression', 'pen', 'box', 'paragraph'],
+        children: ['conditionExpression', 'style', 'pen', 'box', 'paragraph'],
     },
     subDataset: {
         attrs: { name: { required: true }, language: {} },
@@ -194,7 +196,9 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
         attrs: { name: { required: true }, language: {} },
         openAttributes: true,
     },
-    parameter: { attrs: declarationAttrs({ isForPrompting: bool(), uuid: {} }) },
+    parameter: {
+        attrs: declarationAttrs({ isForPrompting: booleanAttribute(), uuid: {}, nestedType: {}, evaluationTime: {} }),
+    },
     field: { attrs: declarationAttrs({ uuid: {} }) },
     variable: {
         attrs: declarationAttrs({
@@ -206,7 +210,7 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
         }),
     },
     sortField: {
-        attrs: { name: {}, order: { enum: ORDER }, class: {}, type: {} },
+        attrs: { name: { required: true }, order: { enum: ORDER }, type: { enum: ['Field', 'Variable'] } },
         openAttributes: true,
     },
     query: { attrs: { language: {}, uuid: {} }, openAttributes: true },
@@ -228,7 +232,7 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     noData: SECTION_RULE,
     band: SECTION_RULE,
     group: {
-        attrs: { name: { required: true }, minHeightToStartNewPage: {}, keepTogether: bool(), uuid: {} },
+        attrs: { name: { required: true }, minHeightToStartNewPage: {}, keepTogether: booleanAttribute(), uuid: {} },
         openAttributes: true,
     },
     groupHeader: SECTION_RULE,
@@ -238,7 +242,7 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     // ── 6.x elements ────────────────────────────────────────────────────────
     reportElement: {
         attrs: REPORT_ELEMENT_ATTRS,
-        children: ['property', 'propertyExpression', 'printWhenExpression'],
+        children: ['property', 'propertyExpression', 'styleExpression', 'printWhenExpression'],
     },
     textElement: {
         attrs: { ...ELEMENT_STYLE_ATTRS },
@@ -251,7 +255,7 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
             textAdjust: { enum: PROPERTY_SPECS.textAdjust.values },
             pattern: {},
             isBlankWhenNull: { deprecatedBy: 'blankWhenNull' },
-            blankWhenNull: bool(),
+            blankWhenNull: booleanAttribute(),
             bookmarkLevel: {},
             evaluationTime: { enum: EVALUATION_TIME },
             evaluationGroup: {},
@@ -272,23 +276,25 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
             'anchorNameExpression', 'hyperlinkReferenceExpression',
             'hyperlinkWhenExpression', 'hyperlinkAnchorExpression',
             'hyperlinkPageExpression', 'hyperlinkTooltipExpression',
-            'hyperlinkParameter', 'property', 'propertyExpression',
+            'bookmarkLevelExpression', 'hyperlinkParameter', 'property',
+            'propertyExpression',
         ],
     },
     line: { attrs: { direction: { enum: PROPERTY_SPECS.direction.values } }, children: ['reportElement', 'graphicElement'] },
     rectangle: { attrs: { radius: {} }, children: ['reportElement', 'graphicElement'] },
     ellipse: { attrs: {}, children: ['reportElement', 'graphicElement'] },
+    // A frame holds arbitrary report elements, so its vocabulary stays open.
     frame: {
         attrs: {},
         openAttributes: true,
-        children: ['reportElement', 'box', 'property', 'propertyExpression'],
     },
     subreport: {
-        attrs: { isUsingCache: bool(), runToBottom: bool() },
+        attrs: { isUsingCache: booleanAttribute(), runToBottom: booleanAttribute() },
         openAttributes: true,
         children: [
             'reportElement', 'subreportExpression', 'connectionExpression',
             'dataSourceExpression', 'datasetRun', 'subreportParameter', 'returnValue',
+            'parametersMapExpression',
             'property', 'propertyExpression',
         ],
     },
@@ -296,7 +302,7 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     component: { attrs: { kind: {} }, openAttributes: true },
     componentElement: { attrs: {}, openAttributes: true },
     datasetRun: {
-        attrs: { subDataset: {}, uuid: {}, dataSourceExpression: {} },
+        attrs: { subDataset: { required: true }, uuid: {}, dataSourceExpression: {} },
         openAttributes: true,
         children: ['datasetParameter', 'parameter', 'connectionExpression', 'dataSourceExpression'],
     },
@@ -318,9 +324,9 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     rightPen: { attrs: { lineWidth: {}, lineStyle: {}, lineColor: {} }, openAttributes: true },
     font: {
         attrs: {
-            fontName: {}, size: {}, isBold: bool(), isItalic: bool(),
-            isUnderline: bool(), isStrikeThrough: bool(),
-            pdfFontName: {}, pdfEncoding: {}, isPdfEmbedded: bool(),
+            fontName: {}, size: {}, isBold: booleanAttribute(), isItalic: booleanAttribute(),
+            isUnderline: booleanAttribute(), isStrikeThrough: booleanAttribute(),
+            pdfFontName: {}, pdfEncoding: {}, isPdfEmbedded: booleanAttribute(),
         },
         openAttributes: true,
     },

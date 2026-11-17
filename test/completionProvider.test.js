@@ -70,7 +70,8 @@ Module._load = function (request, ...rest) {
 
 // The module exports the registration disposable; the provider object itself is
 // what the stub captured.
-const { clearCustomJavaCache } = require('../out/completionProvider');
+const { clearJavaProjectIndex } = require('../out/javaProjectIndex');
+require('../out/completionProvider');
 const provider = registered;
 
 let seq = 0;
@@ -435,13 +436,13 @@ function javaWorkspace() {
 function useWorkspace(dir) {
     workspaceFolders = [{ uri: { fsPath: dir } }];
     settings = {};
-    clearCustomJavaCache();
+    clearJavaProjectIndex();
 }
 
 function releaseWorkspace(dir) {
     workspaceFolders = null;
     settings = {};
-    clearCustomJavaCache();
+    clearJavaProjectIndex();
     fs.rmSync(dir, { recursive: true, force: true });
 }
 
@@ -493,7 +494,7 @@ test('clearing the Java cache picks up modules added later', () => {
 
         write('late/src/main/java/com/acme/Late.java',
             'package com.acme; public final class Late { public static String now() { return "now"; } }');
-        clearCustomJavaCache();
+        clearJavaProjectIndex();
 
         const late = find(completeExpression('La'), 'Late.now');
         assert.ok(late, 'a newly added module is picked up after invalidation');

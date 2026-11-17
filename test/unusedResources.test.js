@@ -11,11 +11,16 @@ const { checkUnusedResources } = require('../out/unusedResources');
 
 let seq = 0;
 
-function run(text, { bundle = null, includeResourceKeys = false } = {}) {
+function run(text, {
+    bundle = null,
+    includeStyles = true,
+    includeSubDatasets = true,
+    includeResourceKeys = false,
+} = {}) {
     const scan = scanXml(text);
     seq += 1;
     const parsed = parseReport(textSource(text, `unused-${seq}.jrxml`, seq), scan);
-    return checkUnusedResources({ scan, parsed, bundle, includeResourceKeys });
+    return checkUnusedResources({ scan, parsed, bundle, includeStyles, includeSubDatasets, includeResourceKeys });
 }
 
 function codes(findings) {
@@ -109,6 +114,15 @@ test('a fully used bundle produces nothing', () => {
         codes(run(text, { bundle: bundleOf(['title']), includeResourceKeys: true })),
         []
     );
+});
+
+test('each family switch is independent', () => {
+    const withStyle = '<jasperReport name="R"><style name="S"/><detail><band height="20"/></detail></jasperReport>';
+    assert.deepStrictEqual(codes(run(withStyle, { includeStyles: false })), []);
+    assert.deepStrictEqual(codes(run(withStyle, { includeStyles: true })), ['jrxml.unusedStyle']);
+
+    const withDataset = '<jasperReport name="R"><subDataset name="D"/><detail><band height="20"/></detail></jasperReport>';
+    assert.deepStrictEqual(codes(run(withDataset, { includeSubDatasets: false })), []);
 });
 
 test('malformed XML yields no unused-resource findings', () => {

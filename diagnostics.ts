@@ -400,6 +400,8 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [], j
             scan: context.scan,
             parsed,
             bundle,
+            includeStyles: enabled.unusedResources,
+            includeSubDatasets: enabled.unusedResources,
             includeResourceKeys: enabled.unusedResourceKeys,
         }), 'warning');
     }

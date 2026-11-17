@@ -7,6 +7,7 @@
 // document itself is rendered by the vscode-free designViewHtml module.
 
 import * as vscode from 'vscode';
+import { errorMessage } from './errors';
 import * as path from 'path';
 
 import { buildDesignModel, findSelectionTarget } from './designModel';
@@ -92,15 +93,6 @@ function isJrxmlDocument(document: vscode.TextDocument | null | undefined): docu
 
 function baseName(fileName: string): string {
     return path.basename(String(fileName || ''));
-}
-
-/** The message a thrown value carries, or its string form. */
-function errorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'message' in err) {
-        const message = (err as { message?: unknown }).message;
-        if (message) return String(message);
-    }
-    return String(err);
 }
 
 function errorModel(message: string): ErrorDesignModel {

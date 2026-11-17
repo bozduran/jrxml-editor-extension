@@ -3,6 +3,7 @@
 // view and by code actions, plus the internal commands those actions invoke.
 
 import * as vscode from 'vscode';
+import { errorMessage } from './errors';
 import { findExpressionAtCursor } from './expressionUtils';
 import { formatExpression } from './expressionFormatter';
 import { applyExpressionToEditor } from './expressionApply';
@@ -137,15 +138,6 @@ async function formatExpressionAtCursor(): Promise<void> {
     }
 
     vscode.window.setStatusBarMessage('Expression formatted.', 2500);
-}
-
-/** The message a thrown value carries, or its string form. */
-function errorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'message' in err) {
-        const message = (err as { message?: unknown }).message;
-        if (message) return String(message);
-    }
-    return String(err);
 }
 
 function register(context: vscode.ExtensionContext): void {
