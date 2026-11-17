@@ -115,7 +115,7 @@ export const DOCUMENTED_SETTING_GROUPS: readonly DocumentedSettingGroup[] = [
     { id: 'editor', summary: 'Indent size, auto-open, auto-format, typed completion and the target Java version.' },
     { id: 'java', summary: 'Extra folders scanned for Java helper methods beyond every module’s src/main/java.' },
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
-    { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, subreport targets and parameter maps, layout bounds, query literals, expression validation, Java imports/classes/helper calls, JRXML schema vocabulary, unused styles and subdatasets, structural lint rules and the Boolean-comparison style rule.' },
+    { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, subreport targets and parameter maps, layout bounds, query literals, expression validation, Java imports (used and known), classes/helper calls, JRXML schema vocabulary, unused styles and subdatasets, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
     { id: 'clear', summary: 'The SQL migration target language and whether to confirm clear fixes.' },
     { id: 'sort', summary: 'Whether the geometry sort asks for confirmation (the diff preview always opens).' },

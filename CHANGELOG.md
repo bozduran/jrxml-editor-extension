@@ -10,6 +10,27 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- Java symbol lint reads `<propertyExpression>` and the dataset/subreport
+  parameter expressions too, so an import used only there is no longer
+  reported unused, and a missing class in a package the workspace contains is
+  reported even when no scanned name is a near miss.
+- `unusedResources` and `unusedResourceKeys` are independent switches: turning
+  the former off no longer leaves style/subdataset findings on.
+- A `null` literal in `<printWhenExpression>` is flagged like any other
+  non-Boolean literal, and a receiver call with the wrong number of arguments is
+  reported as an arity finding instead of "no such method". Receivers typed as
+  a project class are resolved instead of skipped.
+- The JRXML schema model accepts `<frame>` children, a `<style>` inside
+  `<conditionalStyle>`, `<styleExpression>`, `<bookmarkLevelExpression>`,
+  `<parametersMapExpression>` and `parameter/@nestedType`/`@evaluationTime`;
+  `reportFont`, `scriptlet`, `sortField` and `datasetRun` now enforce their
+  required attributes, and `sortField/@type` is validated.
+- Internal: shared `localName`, `editDistance`/`suggestName`, `errorMessage`,
+  Java settings and suggestion helpers; the fixture gate now covers schema,
+  unused resources and Java symbols; the test-only scanner wrappers and the
+  duplicate Java invalidation listener are gone.
+
 ## [1.3.0] - 2026-11-17
 
 ### Added
