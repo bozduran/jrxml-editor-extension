@@ -10,6 +10,17 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Changed
+- Internal: the TypeScript strictness ladder is complete. Every strict compiler
+  switch is on (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+  `noPropertyAccessFromIndexSignature`, `noImplicitOverride`,
+  `noImplicitReturns`, `noFallthroughCasesInSwitch`, unreachable code
+  rejected), ESLint runs `typescript-eslint` `strictTypeChecked`, and the JSON
+  data boundaries (`data/jdk-members.json`, `data/extra-types.json`, the
+  `package.json` slice the tutorial reads) are shape-checked instead of cast.
+  Duplicate `Declaration`/`Declarations` shapes were merged into
+  `declarationView.ts`. No user-facing behaviour changes.
+
 ## [1.3.1] - 2026-11-17
 
 ### Fixed
