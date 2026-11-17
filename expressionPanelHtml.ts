@@ -7,9 +7,11 @@
 
 import * as crypto from 'crypto';
 
+import { textOf } from './textValue';
+
 /** Escape a string for HTML text or quoted-attribute context. */
 export function escapeHtmlText(value: unknown): string {
-    return String(value ?? '')
+    return textOf(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')

@@ -611,7 +611,11 @@ export function parseExpression(text: string): AstNode {
         if (token.k === 1) {
             let value: string;
             try {
-                value = JSON.parse(token.v) as string;
+                // The token is JSON-encoded; anything that is not a string is
+                // treated like an unparseable literal and falls back to the raw
+                // slice, exactly as the catch branch does.
+                const parsed: unknown = JSON.parse(token.v);
+                value = typeof parsed === 'string' ? parsed : token.v.slice(1, -1);
             } catch {
                 value = token.v.slice(1, -1);
             }

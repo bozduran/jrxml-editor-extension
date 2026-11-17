@@ -4,7 +4,10 @@ import tseslint from "typescript-eslint";
 // typescript-eslint's base and recommended blocks have no `files` filter, so
 // scope them to TypeScript: the repository also carries CommonJS tests and
 // scripts where `require()` is correct.
-const typescriptRecommended = tseslint.configs.recommended.map(config => ({
+//
+// recommendedTypeChecked is the correctness tier: it adds the rules that need
+// the compiler's project graph (unsafe-* access, floating promises, …).
+const typescriptRecommended = tseslint.configs.recommendedTypeChecked.map(config => ({
     ...config,
     files: config.files ?? ["**/*.ts"],
 }));

@@ -8,6 +8,7 @@
 
 import type { MemberLookup } from './jdkMemberIndex';
 import type { Resolution } from './memberResolver';
+import { textOf } from './textValue';
 
 export type PopularityTable = Readonly<Record<string, readonly string[]>>;
 
@@ -124,12 +125,12 @@ export interface TypeHint {
  * attribute must not be able to close a code span or start a new markdown block.
  */
 export function mdCode(text: unknown): string {
-    return String(text ?? '').replace(/[`\r\n]/g, ' ').trim();
+    return textOf(text).replace(/[`\r\n]/g, ' ').trim();
 }
 
 /** Plain-text display value for labels: no control characters. */
 export function mdText(text: unknown): string {
-    return String(text ?? '').replace(/[\r\n\t]/g, ' ').trim();
+    return textOf(text).replace(/[\r\n\t]/g, ' ').trim();
 }
 
 /** `java.lang.String` → `String`, `java.util.Map$Entry` → `Map.Entry`. */

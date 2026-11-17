@@ -63,7 +63,10 @@ function toCompletionItem(suggestion: ExpressionSuggestion): vscode.CompletionIt
         ? {
             label:       suggestion.label,
             detail:      suggestion.labelDetail,
-            description: suggestion.labelDescription,
+            // Omitted rather than set to `undefined`: exactOptionalPropertyTypes.
+            ...(suggestion.labelDescription !== undefined
+                ? { description: suggestion.labelDescription }
+                : {}),
         }
         : suggestion.label;
 

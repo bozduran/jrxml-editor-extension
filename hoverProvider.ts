@@ -9,6 +9,7 @@ import { bundleAttribute } from './resourceBundle';
 import { findReferenceToken } from './expressionUtils';
 import type { ReferenceToken } from './referenceTokens';
 import { resolveSymbol } from './reportSymbols';
+import { textOf } from './textValue';
 
 /**
  * Sanitize file-derived text before appending it to a MarkdownString.
@@ -16,7 +17,7 @@ import { resolveSymbol } from './reportSymbols';
  * `<description>` cannot inject links, code spans, tables or raw HTML.
  */
 function mdSafe(text: unknown): string {
-    return String(text ?? '')
+    return textOf(text)
         .replace(/\\/g, '\\\\')
         .replace(/([`*_{}\[\]()#|<>])/g, '\\$1')
         .replace(/\r?\n+/g, ' ')
@@ -25,7 +26,7 @@ function mdSafe(text: unknown): string {
 
 /** Escape text that will be placed inside a markdown code span. */
 function mdCode(text: unknown): string {
-    return String(text ?? '').replace(/`/g, '\\`');
+    return textOf(text).replace(/`/g, '\\`');
 }
 
 /** Hover for a `$R{key}` resource-bundle reference. */

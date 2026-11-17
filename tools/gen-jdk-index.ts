@@ -175,12 +175,21 @@ const CLASSES = [
     'java.text.DateFormat',
 ];
 
+/**
+ * A record with no prototype. Java member names are arbitrary (`toString`,
+ * `constructor`, `valueOf`), so a lookup table must not fall through to
+ * Object.prototype when such a name is used as a key.
+ */
+function nullRecord<T>(entries: Record<string, T> = {}): Record<string, T> {
+    return Object.assign(Object.create(null) as Record<string, T>, entries);
+}
+
 // Members whose `since` is not Java 8. Keys are `<fqn>#<member>` (all overloads),
 // `<fqn>#<member>/<arity>` (one overload by arity) or
 // `<fqn>#<member>|<param,param>` (one overload by parameter types) — the last
 // form is the only safe one when an old overload shares a name and arity with a
 // newer one, as `toArray(T[])` / `toArray(IntFunction)` does.
-const SINCE_OVERRIDES: Record<string, number> = Object.assign(Object.create(null), {
+const SINCE_OVERRIDES: Record<string, number> = nullRecord({
     // java.lang.String / CharSequence
     'java.lang.String#isBlank': 11,
     'java.lang.String#lines': 11,
@@ -268,14 +277,14 @@ const SINCE_OVERRIDES: Record<string, number> = Object.assign(Object.create(null
 // Members whose name alone dates them: the constant-descriptor pair only exists
 // on classes that implement Constable/ConstantDesc (Java 12+). Null-prototype so
 // a member named `toString` or `constructor` cannot resolve to Object.prototype.
-const SINCE_BY_NAME: Record<string, number> = Object.assign(Object.create(null), {
+const SINCE_BY_NAME: Record<string, number> = nullRecord({
     describeConstable: 12,
     resolveConstantDesc: 12,
 });
 
 // Overloads that share a name and arity with an older method, so only the exact
 // parameter types can identify them.
-const SINCE_BY_SIGNATURE: Record<string, number> = Object.assign(Object.create(null), {
+const SINCE_BY_SIGNATURE: Record<string, number> = nullRecord({
     'java.util.Collection#toArray|java.util.function.IntFunction': 11,
     'java.util.List#toArray|java.util.function.IntFunction': 11,
     'java.util.Set#toArray|java.util.function.IntFunction': 11,
@@ -548,7 +557,7 @@ function headerOf(fqn: string, javapBin: string): Header | null {
  * inherited-member walk would stop before reaching `Collection`.
  */
 function collectSuperEdges(rootClasses: readonly string[], javapBin: string): SuperEdgeResult {
-    const edges: SuperEdges = Object.create(null);
+    const edges: SuperEdges = nullRecord();
     const failures: string[] = [];
     const queue = [...rootClasses];
 

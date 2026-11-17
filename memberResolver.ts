@@ -10,6 +10,7 @@
 // from an injected `lookup` so this module stays vscode-free and testable.
 
 import type { Ambiguity, MemberLookup } from './jdkMemberIndex';
+import type { Declarations } from './declarationView';
 
 export const MAX_DEPTH = 8;
 
@@ -33,12 +34,15 @@ export interface Resolution {
     reason: ResolutionReason;
     typeKey: string | null;
     declaredType: string | null;
-    sigil?: ReferenceSigil;
-    name?: string;
-    reference?: string;
-    methodName?: string;
-    ambiguity?: Ambiguity | null;
-    chain?: string[];
+    // The optional fields carry `undefined` explicitly: an outcome spreads a
+    // receiver's fields, and a receiver that is not a reference has nothing to
+    // contribute. `exactOptionalPropertyTypes` makes that visible.
+    sigil?: ReferenceSigil | undefined;
+    name?: string | undefined;
+    reference?: string | undefined;
+    methodName?: string | undefined;
+    ambiguity?: Ambiguity | null | undefined;
+    chain?: string[] | undefined;
 }
 
 export interface TrailingReference {
@@ -48,18 +52,9 @@ export interface TrailingReference {
     reference: string;
 }
 
-export interface Declaration {
-    readonly name: string;
-    readonly type?: string;
-    readonly fullType?: string;
-    readonly typeSource?: string;
-}
-
-export interface Declarations {
-    readonly fields?: readonly Declaration[];
-    readonly parameters?: readonly Declaration[];
-    readonly variables?: readonly Declaration[];
-}
+// Re-exported so the resolver's public shape stays one name per concept; the
+// definition is shared with booleanEqualsRule (see declarationView.ts).
+export type { Declaration, Declarations } from './declarationView';
 
 export interface MethodSignature {
     readonly name: string;

@@ -209,10 +209,10 @@ function px(value: number): string {
   return String(value) + 'px';
 }
 
-function make(tag: string, className?: string, text?: unknown): HTMLElement {
+function make(tag: string, className?: string, text?: string): HTMLElement {
   const node = document.createElement(tag);
   if (className) node.className = className;
-  if (text !== undefined && text !== null) node.textContent = String(text);
+  if (text !== undefined && text !== null) node.textContent = text;
   return node;
 }
 
@@ -1996,12 +1996,20 @@ page.addEventListener('click', function (event) {
 
 // ── Host messages ───────────────────────────────────────────────────────────
 
-window.addEventListener('message', function (event) {
-  const message = event.data || {};
+// The extension host is the only sender (designViewPanel.ts posts the shapes
+// declared in webview/client-types.d.ts). The message event itself is untyped,
+// so the payload is narrowed here, once, instead of `any` flowing through the
+// handler below.
+function asHostMessage(data: unknown): HostMessage {
+  return typeof data === 'object' && data !== null ? data : {};
+}
+
+window.addEventListener('message', function (event: MessageEvent<unknown>) {
+  const message = asHostMessage(event.data);
 
   if (message.command === 'update') {
     if (drag) cancelDrag(false);
-    setModel(message.model, message.fileName, message.version);
+    setModel(message.model ?? null, message.fileName, message.version);
     editPending = false;
     updatePendingUi();
     render();
@@ -2009,14 +2017,14 @@ window.addEventListener('message', function (event) {
     lastSourceSelection = message.target || null;
     if (followCursor && !drag) applySelection(lastSourceSelection, true);
   } else if (message.command === 'completions') {
-    showCompletions(message.result, message.requestId);
+    showCompletions(message.result ?? null, message.requestId ?? 0);
   } else if (message.command === 'editRejected') {
     editPending = false;
     updatePendingUi();
     render();
-    setBanner('error', String(message.reason || 'The edit was not applied.'));
+    setBanner('error', message.reason || 'The edit was not applied.');
   } else if (message.command === 'error') {
-    setBanner('error', String(message.message || 'The design view hit an error.'));
+    setBanner('error', message.message || 'The design view hit an error.');
   }
 });
 

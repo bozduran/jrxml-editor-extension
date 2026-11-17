@@ -8,6 +8,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { errorMessage } from './errors';
+import { textOf } from './textValue';
 
 import { parseDeclarations } from './jrxmlParser';
 import { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } from './jasperBuiltins';
@@ -26,9 +27,9 @@ const SCHEMA_DEBOUNCE_MS = 300;
 
 /** The source editor and expression a panel is attached to. */
 export interface IfElsePanelOpenOptions {
-    sourceEditor?: vscode.TextEditor | null;
-    expressionResult?: ExpressionTarget | null;
-    initialExpression?: string | null;
+    sourceEditor?: vscode.TextEditor | null | undefined;
+    expressionResult?: ExpressionTarget | null | undefined;
+    initialExpression?: string | null | undefined;
 }
 
 /** One message posted by the if / else webview. */
@@ -398,7 +399,7 @@ class IfElsePanel {
                     break;
 
                 case 'copyExpression':
-                    await vscode.env.clipboard.writeText(String(message.text == null ? '' : message.text));
+                    await vscode.env.clipboard.writeText(textOf(message.text));
                     vscode.window.showInformationMessage('Expression copied to clipboard.');
                     break;
 
@@ -424,7 +425,7 @@ class IfElsePanel {
         const applied = await applyExpressionToEditor(
             this._sourceEditor ?? undefined,
             this._expressionResult,
-            String(text == null ? '' : text)
+            textOf(text)
         );
 
         if (!applied.ok) {
@@ -455,7 +456,7 @@ class IfElsePanel {
         }
         IfElsePanel.currentPanel = undefined;
         this._panel.dispose();
-        this._disposables.forEach(disposable => disposable.dispose());
+        this._disposables.forEach(disposable => { disposable.dispose(); });
         this._disposables = [];
     }
 }

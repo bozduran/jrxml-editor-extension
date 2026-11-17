@@ -213,14 +213,19 @@ export function tokenize(code: string): Token[] {
 
 // ── Structure helpers ─────────────────────────────────────────────────────────
 
-// Null-prototype map: a token named `valueOf`/`constructor` must not resolve to
-// Object.prototype members when used as a key.
-const OPENERS: Record<string, string> = Object.assign(Object.create(null), { '(': ')', '[': ']', '{': '}' });
+// A Map, not an object: a token named `valueOf`/`constructor` must not resolve
+// to an Object.prototype member when used as a key.
+const OPENERS = new Map<string, string>([
+    ['(', ')'],
+    ['[', ']'],
+    ['{', '}'],
+]);
 
 export function bracketsBalanced(sig: readonly Token[]): boolean {
     const stack: string[] = [];
     for (const t of sig) {
-        if (OPENERS[t.value]) stack.push(OPENERS[t.value]);
+        const closer = OPENERS.get(t.value);
+        if (closer !== undefined) stack.push(closer);
         else if (t.value === ')' || t.value === ']' || t.value === '}') {
             if (stack.pop() !== t.value) return false;
         }

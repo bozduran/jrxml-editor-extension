@@ -104,7 +104,7 @@ function register(context: vscode.ExtensionContext): void {
                 .map(g => `${g.label} (${g.fixes.filter(f => f.edit).length})`)
                 .join(', ');
 
-            const proposed = await proposedText(document, fixes);
+            const proposed = proposedText(document, fixes);
             const applied = await previewThenApply(
                 document,
                 version,
@@ -132,7 +132,8 @@ function register(context: vscode.ExtensionContext): void {
 
             const expression = await vscode.window.showInputBox({
                 prompt: `${targetLanguage} expression to replace the SQL query`,
-                placeHolder: targetLanguage === 'jsonql' ? 'e.g. { "select": [...] }' : undefined,
+                // Omitted rather than set to `undefined`: exactOptionalPropertyTypes.
+                ...(targetLanguage === 'jsonql' ? { placeHolder: 'e.g. { "select": [...] }' } : {}),
                 ignoreFocusOut: true,
             });
             // An empty answer applies nothing (matches the hook).
@@ -144,7 +145,7 @@ function register(context: vscode.ExtensionContext): void {
                 return;
             }
 
-            const proposed = await proposedText(document, edits);
+            const proposed = proposedText(document, edits);
             const applied = await previewThenApply(
                 document,
                 version,
@@ -159,7 +160,7 @@ function register(context: vscode.ExtensionContext): void {
 }
 
 /** Apply edits in memory so the preview shows the exact result. */
-async function proposedText(document: vscode.TextDocument, edits: readonly Edit[]): Promise<string> {
+function proposedText(document: vscode.TextDocument, edits: readonly Edit[]): string {
     return applyTextEdits(document.getText(), edits);
 }
 

@@ -56,7 +56,7 @@ class TutorialPanel {
     dispose(): void {
         TutorialPanel.currentPanel = undefined;
         this._panel.dispose();
-        this._disposables.forEach(disposable => disposable.dispose());
+        this._disposables.forEach(disposable => { disposable.dispose(); });
         this._disposables = [];
     }
 }
