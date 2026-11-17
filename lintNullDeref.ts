@@ -15,13 +15,11 @@
 // offsets map back to the raw expression. Anything that is not parseable Java
 // (or a reference name that is not an identifier) is skipped, never guessed at.
 
-import { literalEnd } from './javaExpr';
+import { maskReferences } from './expressionMask';
 import { parseExpression, childExpressions } from './javaParser';
 import type { BinaryNode, JavaExpressionNode, MethodCallNode } from './javaParser';
 
 export type NullDerefSigil = 'F' | 'P' | 'V';
-
-const KINDS: ReadonlySet<string> = new Set(['F', 'P', 'V']);
 
 function isSigil(value: string): value is NullDerefSigil {
     return value === 'F' || value === 'P' || value === 'V';
@@ -40,58 +38,6 @@ export interface NullDerefWarning {
     offset: number;
     length: number;
     message: string;
-}
-
-// ── Masking ───────────────────────────────────────────────────────────────────
-
-/**
- * Replace `$F{name}` / `$P{name}` / `$V{name}` with `$F_name_` (same length) so
- * the text parses as Java. Literals are copied unchanged, so a reference inside
- * a string or char literal is never masked.
- */
-function maskReferences(code: string): string {
-    let out = '';
-    let i = 0;
-    const n = code.length;
-
-    while (i < n) {
-        const end = literalEnd(code, i);
-        if (end > i) {
-            out += code.slice(i, end);
-            i = end;
-            continue;
-        }
-
-        const c = code[i];
-        if (c === '$' && i + 2 < n) {
-            const kind = code[i + 1];
-            if (KINDS.has(kind) && code[i + 2] === '{') {
-                const close = code.indexOf('}', i + 3);
-                if (close > i + 3) {
-                    const name = code.slice(i + 3, close);
-                    const masked = `$${kind}_${name}_`;
-                    if (masked.length === close + 1 - i && isIdentifier(name)) {
-                        out += masked;
-                        i = close + 1;
-                        continue;
-                    }
-                }
-            }
-        }
-
-        out += c;
-        i++;
-    }
-
-    return out;
-}
-
-function isIdentifier(name: string): boolean {
-    if (!name || !/[A-Za-z_]/.test(name[0])) return false;
-    for (let i = 1; i < name.length; i++) {
-        if (!/[A-Za-z0-9_]/.test(name[i])) return false;
-    }
-    return true;
 }
 
 // ── Reference recognition ─────────────────────────────────────────────────────

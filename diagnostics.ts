@@ -25,6 +25,11 @@ import { checkLayout } from './layoutRules';
 import { checkQueries } from './queryChecks';
 import { loadResourceBundle } from './resourceBundle';
 import { analyseSubreports } from './subreportIndex';
+import { checkJavaSymbols } from './javaSymbols';
+import { checkSchema } from './schemaChecks';
+import { checkUnusedResources } from './unusedResources';
+import { EMPTY_JAVA_PROJECT_INDEX } from './javaProjectIndex';
+import type { JavaProjectIndex } from './javaProjectIndex';
 import {
     CODE as BOOLEAN_EQUALS_CODE,
     MESSAGE as BOOLEAN_EQUALS_MESSAGE,
@@ -57,6 +62,11 @@ export interface FindingSettings {
     layout: boolean;
     queries: boolean;
     textcheck: boolean;
+    javaSymbols: boolean;
+    schema: boolean;
+    unusedResources: boolean;
+    unusedResourceKeys: boolean;
+    javaBaseline: number;
 }
 
 /** One document to analyse, with the settings and roots the checks read. */
@@ -67,6 +77,8 @@ export interface CollectFindingsInput {
     settings?: Partial<FindingSettings>;
     /** For bundle/subreport resolution. */
     workspaceRoots?: readonly string[];
+    /** Prebuilt Java index; omitted for callers that do not lint symbols. */
+    javaIndex?: JavaProjectIndex;
 }
 
 const DEFAULT_SETTINGS: FindingSettings = {
@@ -81,6 +93,11 @@ const DEFAULT_SETTINGS: FindingSettings = {
     layout: true,
     queries: true,
     textcheck: true,
+    javaSymbols: true,
+    schema: true,
+    unusedResources: true,
+    unusedResourceKeys: false,
+    javaBaseline: 8,
 };
 
 function normalizeSettings(settings?: Partial<FindingSettings>): FindingSettings {
@@ -95,14 +112,14 @@ function emptyParseResult(): ParseResult {
         language: { language: 'java', declared: false, offset: -1, length: 0 },
         allFields: [], allParameters: [], allVariables: [],
         groups: [], styles: [], references: [], resourceReferences: [],
-        resourceBundle: null, datasets: [], scopeRanges: [], outline: [],
+        resourceBundle: null, imports: [], datasets: [], scopeRanges: [], outline: [],
     };
 }
 
 /**
  * Run every static check over one JRXML document.
  */
-function collectFindings({ text, fileName = '', settings, workspaceRoots = [] }: CollectFindingsInput): Finding[] {
+function collectFindings({ text, fileName = '', settings, workspaceRoots = [], javaIndex }: CollectFindingsInput): Finding[] {
     const enabled = normalizeSettings(settings);
     const findings: Finding[] = [];
     const add = (
@@ -357,6 +374,35 @@ function collectFindings({ text, fileName = '', settings, workspaceRoots = [] }:
 
     // ── 5. Text check ────────────────────────────────────────────────────────
     if (enabled.textcheck) runRule(() => collectTextCheckIssues(text, context.scan), 'warning');
+
+    // ── 6. JRXML schema vocabulary ──────────────────────────────────────────
+    if (enabled.schema) runRule(() => checkSchema(context.scan), 'warning');
+
+    // ── 7. Java imports, classes and calls ──────────────────────────────────
+    if (enabled.javaSymbols && (parsed.language?.language ?? 'java') === 'java') {
+        const index = javaIndex ?? EMPTY_JAVA_PROJECT_INDEX;
+        runRule(() => checkJavaSymbols({
+            text,
+            scan: context.scan,
+            parsed,
+            index,
+            baseline: enabled.javaBaseline,
+            javaLanguage: true,
+        }), 'warning');
+    }
+
+    // ── 8. Unused styles, subdatasets and (opt-in) resource keys ────────────
+    if (enabled.unusedResources || enabled.unusedResourceKeys) {
+        const bundle = parsed.resourceBundle && fileName
+            ? loadResourceBundle(fileName, parsed.resourceBundle.name, workspaceRoots)
+            : null;
+        runRule(() => checkUnusedResources({
+            scan: context.scan,
+            parsed,
+            bundle,
+            includeResourceKeys: enabled.unusedResourceKeys,
+        }), 'warning');
+    }
 
     return findings;
 }

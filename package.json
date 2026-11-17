@@ -524,6 +524,26 @@
           "default": true,
           "description": "Warn about an unclosed string literal or block comment inside <query> content."
         },
+        "jrxml.lint.javaSymbols": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn about unknown imports, declaration classes, static helper calls and typed receiver calls in expressions."
+        },
+        "jrxml.lint.schema": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn about unknown elements or attributes, invalid enum values, missing required attributes and report-level element order."
+        },
+        "jrxml.lint.unusedResources": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn about named styles and subdatasets that nothing in the report references."
+        },
+        "jrxml.lint.unusedResourceKeys": {
+          "type": "boolean",
+          "default": false,
+          "description": "Report resource bundle keys this report never uses. Off by default because bundles are often shared between reports."
+        },
         "jrxml.build.command": {
           "type": "string",
           "default": "mvn -q -DskipTests jasperreports:compile",
