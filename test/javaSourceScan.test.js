@@ -12,6 +12,7 @@ const path   = require('node:path');
 const {
     discoverJavaSourceRoots,
     extractStaticMethods,
+    scanJavaClasses,
     scanJavaMethods,
     collectJavaMethods,
 } = require('../out/javaSourceScan');
@@ -205,4 +206,54 @@ test('the file cap stops the scan early', () => {
 test('unreadable roots do not throw', () => {
     assert.deepStrictEqual(scanJavaMethods(['/definitely/not/here']), []);
     assert.deepStrictEqual(collectJavaMethods([], {}), []);
+});
+
+// ── Class/method model ──────────────────────────────────────────────────────
+
+test('extractJavaClass records static, instance and varargs methods', () => {
+    const { extractJavaClass } = require('../out/javaSourceScan');
+    const parsed = extractJavaClass(`package com.acme;
+public final class Helpers {
+    public static String join(String... parts) { return ""; }
+    public String instanceOnly() { return ""; }
+    public static int sum(final int a, int b) { return a + b; }
+}`);
+
+    assert.strictEqual(parsed.qualifiedName, 'com.acme.Helpers');
+    assert.deepStrictEqual(parsed.methods.map(method => [method.name, method.static, method.varargs]), [
+        ['join', true, true],
+        ['instanceOnly', false, false],
+        ['sum', true, false],
+    ]);
+
+    const join = parsed.methods[0];
+    assert.deepStrictEqual(join.parameters, [{ type: 'String[]', name: 'parts' }]);
+    assert.deepStrictEqual(parsed.methods[2].parameters, [
+        { type: 'int', name: 'a' },
+        { type: 'int', name: 'b' },
+    ]);
+});
+
+test('extractJavaClass returns null without a public top-level type', () => {
+    const { extractJavaClass } = require('../out/javaSourceScan');
+    assert.strictEqual(extractJavaClass('class PackagePrivate {}'), null);
+    assert.strictEqual(extractJavaClass('public class Outer { public class Inner {} }').className, 'Outer');
+});
+
+test('scanJavaClasses scans each file once', () => {
+    const root = project();
+    write(root, 'a/src/main/java/com/acme/One.java',
+        'package com.acme; public class One { public static void go() {} }');
+    write(root, 'b/src/main/java/com/acme/Two.java',
+        'package com.acme; public class Two { public void stop() {} }');
+
+    const classes = scanJavaClasses([
+        path.join(root, 'a/src/main/java'),
+        path.join(root, 'b/src/main/java'),
+        path.join(root, 'a/src/main/java'),
+    ]);
+    assert.deepStrictEqual(classes.map(javaClass => javaClass.qualifiedName).sort(), [
+        'com.acme.One',
+        'com.acme.Two',
+    ]);
 });
