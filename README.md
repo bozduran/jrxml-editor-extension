@@ -143,7 +143,7 @@ Two destructive steps are opt-in commands. Each always opens a diff preview and,
   with it; missing coordinates and overlaps are reported as warnings.
 
 ### 8. Smart autocomplete
-Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under `src/main/java`. The Java scan is cached and re-runs when `.java` files or workspace folders change.
+Context-aware completion for fields, parameters and variables, JasperReports built-ins, common Java statics, and **user-defined `public static` helper methods** discovered under every `src/main/java` in the workspace — including the modules of a multi-module Maven or Gradle project, at any depth. Build outputs (`target/`, `build/`), dependency folders (`node_modules/`) and dot-directories are skipped. Helpers are inserted fully qualified (`com.acme.util.Helpers.upper(${1:name})`), so a report does not need an `<import>` for the class. The scan is cached and re-runs when `.java` files, workspace folders or the `jrxml.java.sourcePaths` setting change; folders outside the Maven/Gradle layout can be added with that setting.
 
 **Typed member completion.** Typing `.` after a field, parameter or variable completes the *Java members of its declared `class`*:
 
@@ -307,6 +307,7 @@ extension are a fast pre-check, not a replacement.
 | `jrxml.indentSize` | `4` | Spaces per indent level when formatting expressions |
 | `jrxml.autoOpenEditor` | `false` | Auto-open the editor when the cursor enters an expression |
 | `jrxml.expressionEditor.autoFormat` | `false` | Remember the Expression Editor's Auto-format on change setting |
+| `jrxml.java.sourcePaths` | `[]` | Extra folders scanned for Java helper methods, in addition to every `<module>/src/main/java` |
 | `jrxml.ifElse.nullSafe` | `true` | Start the If / Else builder with null-safe guards |
 | `jrxml.ifElse.multiline` | `true` | Start the If / Else builder with multi-line output |
 | `jrxml.ifElse.style` | `ternary` | Default If / Else output style (`ternary` or `functions`) |

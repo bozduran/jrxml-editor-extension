@@ -2,7 +2,7 @@
   "name": "jrxml-editor-extension",
   "displayName": "JRXML Editor",
   "description": "JasperReports JRXML authoring: expressions, diagnostics, design view, resource bundles, queries and workspace validation.",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -460,6 +460,14 @@
           ],
           "default": "8",
           "description": "Java version the reports are compiled against. Members added later (String.isBlank, List.getFirst, ...) are not suggested."
+        },
+        "jrxml.java.sourcePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Extra folders to scan for Java helper methods, relative to each workspace folder. Every `<module>/src/main/java` is always scanned, including modules nested below the workspace root; use this for layouts Maven and Gradle do not use."
         },
         "jrxml.showUnusedWarnings": {
           "type": "boolean",

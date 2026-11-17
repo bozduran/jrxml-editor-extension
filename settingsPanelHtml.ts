@@ -261,6 +261,20 @@ function buildControl(setting, value) {
     return { wrap, id };
   }
 
+  if (setting.type === 'array') {
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.id = id;
+    inp.value = Array.isArray(value) ? value.join(', ') : '';
+    inp.placeholder = 'path/to/java/source, other/src';
+    inp.addEventListener('change', () => send(
+      setting.key,
+      inp.value.split(',').map(part => part.trim()).filter(Boolean)
+    ));
+    wrap.appendChild(inp);
+    return { wrap, id };
+  }
+
   const list = text('div', 'chips', '');
   const items = Array.isArray(value) ? value : [];
   if (items.length === 0) {

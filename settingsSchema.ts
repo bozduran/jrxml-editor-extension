@@ -66,6 +66,18 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
         ],
     },
     {
+        id: 'java',
+        title: 'Java helpers',
+        description: 'Static helper methods offered in expressions',
+        settings: [
+            {
+                key: 'java.sourcePaths', type: 'array', default: [],
+                label: 'Extra source folders',
+                description: 'Folders scanned for public static helper methods in addition to every <module>/src/main/java. Paths are relative to each workspace folder.',
+            },
+        ],
+    },
+    {
         id: 'ifElse',
         title: 'If / Else builder',
         description: 'Defaults when the If / Else builder opens',

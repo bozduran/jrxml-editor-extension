@@ -1,0 +1,208 @@
+// test/javaSourceScan.test.js
+// The Java helper scan must work for multi-module Maven/Gradle workspaces:
+// every <module>/src/main/java at any depth, without wandering into build
+// outputs, and with fully-qualified snippets so reports need no <import>.
+
+const test   = require('node:test');
+const assert = require('node:assert');
+const fs     = require('node:fs');
+const os     = require('node:os');
+const path   = require('node:path');
+
+const {
+    discoverJavaSourceRoots,
+    extractStaticMethods,
+    scanJavaMethods,
+    collectJavaMethods,
+} = require('../out/javaSourceScan');
+
+const tempRoots = [];
+
+function project() {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-java-'));
+    tempRoots.push(root);
+    return root;
+}
+
+function write(root, relative, content) {
+    const file = path.join(root, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, content);
+}
+
+function relativeRoots(root, roots) {
+    return roots.map(item => path.relative(root, item).split(path.sep).join('/')).sort();
+}
+
+test.after(() => {
+    for (const root of tempRoots) fs.rmSync(root, { recursive: true, force: true });
+});
+
+const HELPERS = `package com.acme.util;
+
+public final class Helpers {
+    public static String upper(String name) { return name; }
+    public static java.util.List<String> names(String prefix) { return null; }
+    public static <T> T identity(T value) { return value; }
+    public static int sum(int a, int b) { return a + b; }
+    public static void put(java.util.Map<String, Integer> values, String key) {}
+    private static void hidden() {}
+    public String instance() { return ""; }
+}
+`;
+
+// ── Discovery ────────────────────────────────────────────────────────────────
+
+test('finds src/main/java in modules nested at any depth', () => {
+    const root = project();
+    write(root, 'core/src/main/java/com/acme/core/A.java', 'public class A {}');
+    write(root, 'services/api/src/main/java/com/acme/api/B.java', 'public class B {}');
+    write(root, 'services/api/target/generated-sources/src/main/java/C.java', 'public class C {}');
+    write(root, 'node_modules/pkg/src/main/java/D.java', 'public class D {}');
+    write(root, '.hidden/src/main/java/E.java', 'public class E {}');
+    write(root, 'docs/readme.md', '# docs');
+
+    const roots = discoverJavaSourceRoots(root);
+
+    assert.deepStrictEqual(relativeRoots(root, roots), [
+        'core/src/main/java',
+        'services/api/src/main/java',
+    ]);
+});
+
+test('finds the workspace root module too', () => {
+    const root = project();
+    write(root, 'src/main/java/com/acme/Only.java', 'public class Only {}');
+
+    assert.deepStrictEqual(relativeRoots(root, discoverJavaSourceRoots(root)), ['src/main/java']);
+});
+
+test('extra paths are scanned and de-duplicated', () => {
+    const root = project();
+    write(root, 'src/main/java/com/acme/Only.java', 'public class Only {}');
+    write(root, 'generated/java/com/acme/Made.java', 'public class Made {}');
+
+    const roots = discoverJavaSourceRoots(root, {
+        extraPaths: ['generated/java', './src/main/java', 'missing/path'],
+    });
+
+    assert.deepStrictEqual(relativeRoots(root, roots), [
+        'generated/java',
+        'src/main/java',
+    ]);
+});
+
+test('discovery respects the depth bound', () => {
+    const root = project();
+    write(root, 'a/b/c/d/e/src/main/java/com/acme/Deep.java', 'public class Deep {}');
+
+    assert.deepStrictEqual(discoverJavaSourceRoots(root, { maxDepth: 0 }), []);
+    assert.deepStrictEqual(
+        relativeRoots(root, discoverJavaSourceRoots(root, { maxDepth: 6 })),
+        ['a/b/c/d/e/src/main/java']
+    );
+});
+
+// ── Extraction ───────────────────────────────────────────────────────────────
+
+test('extracts public static methods with fully qualified snippets', () => {
+    const methods = extractStaticMethods(HELPERS);
+    const byLabel = new Map(methods.map(method => [method.label, method]));
+
+    assert.deepStrictEqual([...byLabel.keys()], [
+        'Helpers.upper',
+        'Helpers.names',
+        'Helpers.identity',
+        'Helpers.sum',
+        'Helpers.put',
+    ]);
+
+    assert.strictEqual(byLabel.get('Helpers.upper').snippet, 'com.acme.util.Helpers.upper(${1:name})');
+    assert.strictEqual(byLabel.get('Helpers.upper').detail, 'com.acme.util.Helpers.upper(String name) : String');
+    assert.match(byLabel.get('Helpers.upper').doc, /com\.acme\.util\.Helpers/);
+});
+
+test('handles qualified and generic return types and generic parameters', () => {
+    const byLabel = new Map(extractStaticMethods(HELPERS).map(method => [method.label, method]));
+
+    assert.strictEqual(byLabel.get('Helpers.names').snippet, 'com.acme.util.Helpers.names(${1:prefix})');
+    assert.match(byLabel.get('Helpers.names').detail, /java\.util\.List<String>/);
+    assert.match(byLabel.get('Helpers.identity').detail, /: T$/);
+    assert.strictEqual(
+        byLabel.get('Helpers.put').snippet,
+        'com.acme.util.Helpers.put(${1:values}, ${2:key})',
+        'a comma inside Map<String, Integer> is not a parameter separator'
+    );
+});
+
+test('skips instance methods, private methods and non-public classes', () => {
+    const labels = extractStaticMethods(HELPERS).map(method => method.label);
+    assert.ok(!labels.includes('Helpers.hidden'), 'private static is not callable');
+    assert.ok(!labels.includes('Helpers.instance'), 'instance methods are not callable');
+
+    assert.deepStrictEqual(
+        extractStaticMethods('package x;\nclass PackagePrivate { public static void run() {} }'),
+        []
+    );
+});
+
+test('a class without a package is inserted unqualified', () => {
+    const [method] = extractStaticMethods('public class Util {\n public static int one() { return 1; }\n}');
+    assert.strictEqual(method.snippet, 'Util.one()');
+    assert.strictEqual(method.detail, 'Util.one() : int');
+});
+
+test('enums and interfaces expose their public static methods', () => {
+    const labels = extractStaticMethods(`package x;
+public enum Mode { A, B; public static Mode parse(String raw) { return A; } }
+`).map(method => method.label);
+    assert.deepStrictEqual(labels, ['Mode.parse']);
+});
+
+// ── Full scan ────────────────────────────────────────────────────────────────
+
+test('collects helpers from every module and de-duplicates files', () => {
+    const root = project();
+    write(root, 'core/src/main/java/com/acme/core/Core.java',
+        'package com.acme.core; public final class Core { public static String tag() { return "core"; } }');
+    write(root, 'web/src/main/java/com/acme/web/Web.java',
+        'package com.acme.web; public final class Web { public static String tag() { return "web"; } }');
+
+    const methods = collectJavaMethods([root]);
+    const snippets = methods.map(method => method.snippet).sort();
+
+    assert.deepStrictEqual(snippets, [
+        'com.acme.core.Core.tag()',
+        'com.acme.web.Web.tag()',
+    ]);
+
+    // Scanning overlapping roots must not duplicate entries.
+    const again = collectJavaMethods([root], { extraPaths: ['core/src/main/java'] });
+    assert.strictEqual(again.length, 2);
+});
+
+test('the file cap stops the scan early', () => {
+    const root = project();
+    for (let i = 0; i < 3; i += 1) {
+        write(root, `mod${i}/src/main/java/com/acme/M${i}.java`,
+            `package com.acme; public class M${i} { public static int v() { return ${i}; } }`);
+    }
+
+    const warned = [];
+    const original = console.warn;
+    console.warn = message => warned.push(String(message));
+    try {
+        const methods = scanJavaMethods([path.join(root, 'mod0/src/main/java'),
+            path.join(root, 'mod1/src/main/java'),
+            path.join(root, 'mod2/src/main/java')], { maxFiles: 1 });
+        assert.strictEqual(methods.length, 1);
+        assert.match(warned.join('\n'), /stopped after 1 files/);
+    } finally {
+        console.warn = original;
+    }
+});
+
+test('unreadable roots do not throw', () => {
+    assert.deepStrictEqual(scanJavaMethods(['/definitely/not/here']), []);
+    assert.deepStrictEqual(collectJavaMethods([], {}), []);
+});

@@ -135,6 +135,9 @@ function activate(context: vscode.ExtensionContext): void {
             if (e.files.some(f => f.newUri.fsPath.endsWith('.java') || f.oldUri.fsPath.endsWith('.java'))) {
                 clearCustomJavaCache();
             }
+        }),
+        vscode.workspace.onDidChangeConfiguration(e => {
+            if (e.affectsConfiguration('jrxml.java.sourcePaths')) clearCustomJavaCache();
         })
     );
 

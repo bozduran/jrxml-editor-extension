@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-17
+
 ### Added
 - Format Document, null-dereference lint and text-check now cover every
   expression element, including `filterExpression`, `labelExpression`, chart
@@ -17,8 +19,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   instead of a ten-element subset.
 - Go to Definition and Find All References work from a `<sortField name="...">`
   attribute; it still counts as a use of the declaration.
+- Java helper completion now scans every `<module>/src/main/java` in the
+  workspace, so the helper classes of a multi-module Maven or Gradle project are
+  offered; build outputs, dependency folders and dot-directories are skipped,
+  and the walk is depth- and file-capped.
+- `jrxml.java.sourcePaths` adds folders for source layouts Maven and Gradle do
+  not use; changing it drops the cached Java scan.
 
 ### Fixed
+- Helper scanning understands qualified and generic return types, generic
+  methods, and parameter lists whose generic arguments contain commas.
 - The Boolean comparison rule sees dashed names (`$F{my-flag}`) and uses the
   declaration scope at the expression, so a dataset declaration shadows a
   report declaration with the same name instead of producing a false positive.
@@ -29,6 +39,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Internal: the extension sources are TypeScript compiled to `out/`; the
   editor and CI run the same compiled modules. No user-facing behaviour change
   beyond the fixes above.
+- Helper methods are inserted fully qualified
+  (`com.acme.util.Helpers.upper(${1:name})`), so a report no longer needs an
+  `<import>` for the helper class.
 - Internal: one report index now owns declaration scope, references and usage
   for diagnostics, navigation and the clear pass.
 

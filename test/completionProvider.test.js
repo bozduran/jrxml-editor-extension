@@ -12,6 +12,7 @@ const path   = require('node:path');
 const Module = require('node:module');
 
 let settings = {};
+let workspaceFolders = null;
 
 class FakeCompletionItem {
     constructor(label, kind) {
@@ -55,7 +56,7 @@ Module._load = function (request, ...rest) {
             },
             workspace: {
                 getConfiguration: () => ({ get: (key, fallback) => (key in settings ? settings[key] : fallback) }),
-                workspaceFolders: null,
+                get workspaceFolders() { return workspaceFolders; },
                 onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
                 onDidSaveTextDocument: () => ({ dispose() {} }),
                 onDidCreateFiles: () => ({ dispose() {} }),
@@ -69,7 +70,7 @@ Module._load = function (request, ...rest) {
 
 // The module exports the registration disposable; the provider object itself is
 // what the stub captured.
-require('../out/completionProvider');
+const { clearCustomJavaCache } = require('../out/completionProvider');
 const provider = registered;
 
 let seq = 0;
@@ -417,4 +418,87 @@ test('$P!{ completes parameters inside a <query>', () => {
     const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
 
     assert.ok(labels(items).includes('Clause'));
+});
+
+// ── Workspace Java helpers ───────────────────────────────────────────────────
+
+function javaWorkspace() {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-java-ws-'));
+    const write = (relative, content) => {
+        const file = path.join(dir, relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+    };
+    return { dir, write };
+}
+
+function useWorkspace(dir) {
+    workspaceFolders = [{ uri: { fsPath: dir } }];
+    settings = {};
+    clearCustomJavaCache();
+}
+
+function releaseWorkspace(dir) {
+    workspaceFolders = null;
+    settings = {};
+    clearCustomJavaCache();
+    fs.rmSync(dir, { recursive: true, force: true });
+}
+
+test('helpers from nested Maven modules complete fully qualified', () => {
+    const { dir, write } = javaWorkspace();
+    write('core/src/main/java/com/acme/core/Helpers.java',
+        'package com.acme.core;\npublic final class Helpers {\n  public static String upper(String name) { return name; }\n}');
+    write('services/api/src/main/java/com/acme/api/Codec.java',
+        'package com.acme.api;\npublic final class Codec {\n  public static String encode(byte[] bytes) { return ""; }\n}');
+    write('services/api/target/generated-sources/com/acme/Generated.java',
+        'package com.acme; public class Generated { public static void nope() {} }');
+
+    useWorkspace(dir);
+    try {
+        const items = completeExpression('Co');
+        const encode = find(items, 'Codec.encode');
+
+        assert.ok(encode, `expected Codec.encode, got ${labels(items).join(', ').slice(0, 200)}`);
+        assert.strictEqual(encode.insertText.value, 'com.acme.api.Codec.encode(${1:bytes})');
+        assert.match(encode.detail, /com\.acme\.api\.Codec\.encode/);
+        assert.ok(!find(items, 'Generated.nope'), 'build output must not be scanned');
+    } finally {
+        releaseWorkspace(dir);
+    }
+});
+
+test('jrxml.java.sourcePaths adds non-standard source folders', () => {
+    const { dir, write } = javaWorkspace();
+    write('lib/java/com/acme/Extra.java',
+        'package com.acme; public final class Extra { public static int seven() { return 7; } }');
+
+    useWorkspace(dir);
+    try {
+        const items = completeExpression('Ex', { settings: { 'java.sourcePaths': ['lib/java'] } });
+        const extra = find(items, 'Extra.seven');
+        assert.ok(extra, 'the configured folder is scanned');
+        assert.strictEqual(extra.insertText.value, 'com.acme.Extra.seven()');
+    } finally {
+        releaseWorkspace(dir);
+    }
+});
+
+test('clearing the Java cache picks up modules added later', () => {
+    const { dir, write } = javaWorkspace();
+
+    useWorkspace(dir);
+    try {
+        assert.ok(!find(completeExpression('La'), 'Late.now'), 'nothing to scan yet');
+
+        write('late/src/main/java/com/acme/Late.java',
+            'package com.acme; public final class Late { public static String now() { return "now"; } }');
+        clearCustomJavaCache();
+
+        const late = find(completeExpression('La'), 'Late.now');
+        assert.ok(late, 'a newly added module is picked up after invalidation');
+        assert.strictEqual(late.insertText.value, 'com.acme.Late.now()');
+    } finally {
+        releaseWorkspace(dir);
+    }
 });
