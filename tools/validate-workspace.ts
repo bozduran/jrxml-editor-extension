@@ -89,7 +89,7 @@ function summarise(results: readonly ValidationResult[]): Totals {
 
 function positionOf(text: string, offset: number): { line: number; column: number } {
     const before = text.slice(0, offset).split('\n');
-    return { line: before.length, column: before[before.length - 1].length + 1 };
+    return { line: before.length, column: (before[before.length - 1] ?? '').length + 1 };
 }
 
 function formatText(results: readonly ValidationResult[]): string {

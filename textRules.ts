@@ -245,7 +245,10 @@ export function transformExpression(
             : transformLiteral(literal, findings, changes);
         // Literal-relative change offsets become content-relative.
         if (changes) {
-            for (let k = before; k < changes.length; k++) changes[k].offset += innerStart;
+            for (let k = before; k < changes.length; k++) {
+                const change = changes[k];
+                if (change) change.offset += innerStart;
+            }
         }
 
         out += content.slice(innerEnd, end);

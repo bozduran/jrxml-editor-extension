@@ -474,7 +474,7 @@ function planAttributeRemoval(node: XmlNode, name: string, text: string, edits: 
     if (!attr) return;
 
     let start = attr.nameStart;
-    while (start > 0 && /\s/.test(text[start - 1])) start--;
+    while (start > 0 && /\s/.test(text.charAt(start - 1))) start--;
     edits.push({ start, end: attr.valueEnd, replacement: '' });
 }
 

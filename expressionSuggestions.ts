@@ -278,8 +278,8 @@ export function buildExpressionSuggestions({
 
     const brace = /\$([FPVRX])(!?)\{([^}]*)$/.exec(linePrefix);
     if (brace) {
-        const sigil  = brace[1];
-        const prefix = brace[3];
+        const sigil  = brace[1] ?? '';
+        const prefix = brace[3] ?? '';
 
         if (sigil === 'X') {
             const items = clauseItems();

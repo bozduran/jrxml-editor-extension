@@ -139,7 +139,12 @@ function register(context: vscode.ExtensionContext): void {
             // An empty answer applies nothing (matches the hook).
             if (!expression) return;
 
-            const edits = queryMigrationEdits(migration.fixes[0].query, expression, targetLanguage);
+            const fix = migration.fixes[0];
+            if (!fix) {
+                vscode.window.showInformationMessage('No SQL <query> to migrate.');
+                return;
+            }
+            const edits = queryMigrationEdits(fix.query, expression, targetLanguage);
             if (edits.length === 0) {
                 vscode.window.showWarningMessage('Nothing to migrate in this query.');
                 return;

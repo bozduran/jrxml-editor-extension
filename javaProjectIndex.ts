@@ -60,7 +60,7 @@ export function buildJavaProjectIndex(classes: readonly JavaClass[]): JavaProjec
 /** One class for an exact simple name, or null when unknown/ambiguous. */
 export function classBySimpleName(index: JavaProjectIndex, simpleName: string): JavaClass | null {
     const candidates = index.bySimpleName.get(simpleName);
-    return candidates && candidates.length === 1 ? candidates[0] : null;
+    return candidates && candidates.length === 1 ? candidates[0] ?? null : null;
 }
 
 // ── Cache ────────────────────────────────────────────────────────────────────

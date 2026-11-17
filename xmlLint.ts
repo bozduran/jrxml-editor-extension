@@ -178,7 +178,8 @@ function firstMarkupTag(java: string): string | null {
         const match = literal.raw.match(MARKUP_TAG_RE);
         if (match) {
             const name = match[0].match(/^<\/?([A-Za-z][A-Za-z0-9]*)/);
-            if (name) return name[1];
+            const tag = name?.[1];
+            if (tag) return tag;
         }
     }
     return null;

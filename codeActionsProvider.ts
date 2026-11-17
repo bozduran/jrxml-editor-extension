@@ -154,8 +154,9 @@ const provider = vscode.languages.registerCodeActionsProvider(
 
                     const sigil    = tokenMatch[1];
                     const name     = tokenMatch[2];
+                    if (name === undefined) continue;
                     const kindMap: Record<string, string> = { F: 'field', P: 'parameter', V: 'variable' };
-                    const kind     = kindMap[sigil];
+                    const kind     = (sigil !== undefined ? kindMap[sigil] : undefined) ?? 'variable';
                     const tagName  = kind === 'field' ? 'field' : kind === 'parameter' ? 'parameter' : 'variable';
 
                     const addAction = new vscode.CodeAction(

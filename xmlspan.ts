@@ -111,7 +111,10 @@ export class XmlNode {
             const node = stack.pop();
             if (!node) break;
             yield node;
-            for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]);
+            for (let i = node.children.length - 1; i >= 0; i--) {
+                const child = node.children[i];
+                if (child) stack.push(child);
+            }
         }
     }
 }
@@ -156,7 +159,7 @@ export function scanXml(text: string): XmlScanResult {
         if (lt > i) {
             const raw = text.slice(i, lt);
             if (raw.trim() !== '') {
-                stack[stack.length - 1].textNodes.push({ text: raw, start: i, end: lt, cdata: false });
+                stack[stack.length - 1]?.textNodes.push({ text: raw, start: i, end: lt, cdata: false });
             }
         }
 
@@ -172,7 +175,7 @@ export function scanXml(text: string): XmlScanResult {
         if (text.startsWith('<![CDATA[', lt)) {
             const end = text.indexOf(']]>', lt + 9);
             if (end === -1) return { doc: null, error: 'unterminated CDATA section' };
-            stack[stack.length - 1].textNodes.push({
+            stack[stack.length - 1]?.textNodes.push({
                 text: text.slice(lt + 9, end), start: lt + 9, end, cdata: true,
             });
             i = end + 3;
@@ -211,7 +214,7 @@ export function scanXml(text: string): XmlScanResult {
             if (gt === -1) return { doc: null, error: 'unterminated closing tag' };
             const name = text.slice(lt + 2, gt).trim();
             const node = stack[stack.length - 1];
-            if (node === documentNode) return { doc: null, error: `unexpected </${name}>` };
+            if (!node || node === documentNode) return { doc: null, error: `unexpected </${name}>` };
             if (node.tag !== name) return { doc: null, error: `mismatched </${name}> for <${node.tag}>` };
             stack.pop();
             node.endTag = lt;
@@ -231,6 +234,7 @@ export function scanXml(text: string): XmlScanResult {
         node.end         = parsed.startTagEnd;
 
         const parent = stack[stack.length - 1];
+        if (!parent) return { doc: null, error: `unexpected <${parsed.tag}>` };
         // The synthetic #document holder is not part of the element tree.
         node.parent = parent === documentNode ? null : parent;
         parent.children.push(node);
@@ -240,13 +244,15 @@ export function scanXml(text: string): XmlScanResult {
     }
 
     if (stack.length !== 1) {
-        return { doc: null, error: `unclosed <${stack[stack.length - 1].tag}>` };
+        return { doc: null, error: `unclosed <${stack[stack.length - 1]?.tag ?? '#document'}>` };
     }
     if (documentNode.children.length !== 1) {
         return { doc: null, error: 'expected exactly one root element' };
     }
     documentNode.end = text.length;
-    return { doc: new XmlDocument(documentNode.children[0]), error: null };
+    const root = documentNode.children[0];
+    if (!root) return { doc: null, error: 'expected exactly one root element' };
+    return { doc: new XmlDocument(root), error: null };
 }
 
 /**
@@ -290,13 +296,18 @@ interface StartTagError {
     error: string;
 }
 
+/** The character at `index`; past the end of the text this is ''. */
+function at(text: string, index: number): string {
+    return text[index] ?? '';
+}
+
 /** Parse a start tag beginning at `lt`. */
 function parseStartTag(text: string, lt: number): ParsedStartTag | StartTagError {
     const len = text.length;
     let i = lt + 1;
 
     const nameStart = i;
-    while (i < len && !/[\s/>]/.test(text[i])) i++;
+    while (i < len && !/[\s/>]/.test(at(text, i))) i++;
     const tag = text.slice(nameStart, i);
     if (!tag) return { error: 'empty element name' };
 
@@ -304,7 +315,7 @@ function parseStartTag(text: string, lt: number): ParsedStartTag | StartTagError
     const attrList: XmlAttr[] = [];
 
     while (i < len) {
-        while (i < len && /\s/.test(text[i])) i++;
+        while (i < len && /\s/.test(at(text, i))) i++;
         if (i >= len) return { error: `unterminated <${tag}>` };
 
         if (text[i] === '/') {
@@ -318,17 +329,17 @@ function parseStartTag(text: string, lt: number): ParsedStartTag | StartTagError
         }
 
         const attrNameStart = i;
-        while (i < len && !/[\s=/>]/.test(text[i])) i++;
+        while (i < len && !/[\s=/>]/.test(at(text, i))) i++;
         const name = text.slice(attrNameStart, i);
         if (!name) return { error: `malformed attribute in <${tag}>` };
 
-        while (i < len && /\s/.test(text[i])) i++;
+        while (i < len && /\s/.test(at(text, i))) i++;
 
         let value = '', valueStart = i, valueEnd = i;
         if (text[i] === '=') {
             i++;
-            while (i < len && /\s/.test(text[i])) i++;
-            const quote = text[i];
+            while (i < len && /\s/.test(at(text, i))) i++;
+            const quote = at(text, i);
             if (quote !== '"' && quote !== "'") {
                 return { error: `unquoted value for attribute ${name} in <${tag}>` };
             }

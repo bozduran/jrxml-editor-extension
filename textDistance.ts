@@ -12,8 +12,10 @@ export function editDistance(a: string, b: string, limit = 2): number {
     if (a === b) return 0;
     if (Math.abs(a.length - b.length) > limit) return limit + 1;
 
-    const previous = new Array<number>(b.length + 1);
-    const current = new Array<number>(b.length + 1);
+    // Both rows are filled before they are read; `?? 0` only satisfies the
+    // compiler, which cannot know that.
+    const previous = new Array<number>(b.length + 1).fill(0);
+    const current = new Array<number>(b.length + 1).fill(0);
     for (let j = 0; j <= b.length; j++) previous[j] = j;
 
     for (let i = 1; i <= a.length; i++) {
@@ -21,14 +23,14 @@ export function editDistance(a: string, b: string, limit = 2): number {
         for (let j = 1; j <= b.length; j++) {
             const cost = a[i - 1] === b[j - 1] ? 0 : 1;
             current[j] = Math.min(
-                previous[j] + 1,
-                current[j - 1] + 1,
-                previous[j - 1] + cost
+                (previous[j] ?? 0) + 1,
+                (current[j - 1] ?? 0) + 1,
+                (previous[j - 1] ?? 0) + cost
             );
         }
-        for (let j = 0; j <= b.length; j++) previous[j] = current[j];
+        for (let j = 0; j <= b.length; j++) previous[j] = current[j] ?? 0;
     }
-    return previous[b.length];
+    return previous[b.length] ?? 0;
 }
 
 /** The closest candidate within `limit`, or null when none is close enough. */

@@ -212,7 +212,12 @@ function findTagReplacement(
         const distance = Math.abs(match.index - originalOffset);
         if (distance < bestDistance) {
             bestDistance = distance;
-            best = { index: match.index, openTag: match[1], innerOld: match[2], closeTag: match[3] };
+            best = {
+                index:    match.index,
+                openTag:  match[1] ?? '',
+                innerOld: match[2] ?? '',
+                closeTag: match[3] ?? '',
+            };
         }
     }
 

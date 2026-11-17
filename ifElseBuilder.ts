@@ -322,7 +322,8 @@ function wrapJoin(text: string): string {
 export function branchCondition(branch: Branch, options: BuilderOptions = {}): string {
     const opts = normalizeOptions(options);
     const parts = (branch.conds || []).map(condition => conditionText(condition, opts));
-    if (parts.length === 1) return parts[0];
+    const [only] = parts;
+    if (parts.length === 1 && only !== undefined) return only;
 
     const isOr = branch.join === '||';
     if (opts.style === STYLE_FUNCTIONS) {
@@ -341,6 +342,7 @@ function buildBranch(
     if (index >= branches.length) return resultText(els);
 
     const branch = branches[index];
+    if (!branch) return resultText(els);
     const condition = branchCondition(branch, options);
     const result = resultText(branch.res);
 
@@ -391,8 +393,11 @@ export function tokenize(text: string): ExpressionToken[] {
         if (!match) throw new Error('Cannot read near: ' + text.slice(index, index + 14).trim());
 
         // The regex has one alternation per slot, so exactly one group is set.
-        const kind = [1, 2, 3, 4, 5].find(slot => match[slot] !== undefined) as number;
-        const value = match[kind];
+        const kind = [1, 2, 3, 4, 5].find(slot => match[slot] !== undefined);
+        const value = kind === undefined ? undefined : match[kind];
+        if (kind === undefined || value === undefined) {
+            throw new Error('Cannot read near: ' + text.slice(index, index + 14).trim());
+        }
         tokens.push({
             k: kind,
             v: value,
@@ -512,8 +517,10 @@ export function parseExpression(text: string): AstNode {
     const tokens = tokenize(source);
     let index = 0;
 
-    const is = (value: string): boolean =>
-        tokens[index] && tokens[index].k >= 4 && tokens[index].v === value;
+    const is = (value: string): boolean => {
+        const token = tokens[index];
+        return token !== undefined && token.k >= 4 && token.v === value;
+    };
 
     const need = (value: string): void => {
         if (!is(value)) throw new Error('Expected ' + value);
@@ -521,7 +528,13 @@ export function parseExpression(text: string): AstNode {
     };
 
     const mark = (node: AstNodeInit, startIndex: number): AstNode => {
-        node.src = source.slice(tokens[startIndex].s, tokens[index - 1].e);
+        const first = tokens[startIndex];
+        const last = tokens[index - 1];
+        if (first !== undefined && last !== undefined) {
+            node.src = source.slice(first.s, last.e);
+        } else if (node.src === undefined) {
+            node.src = '';
+        }
         return node as AstNode; // every parser path records src before returning
     };
 
@@ -549,7 +562,10 @@ export function parseExpression(text: string): AstNode {
             index++;
             items.push(parseItem());
         }
-        return items.length > 1 ? mark({ t: type, l: items }, start) : items[0];
+        if (items.length > 1) return mark({ t: type, l: items }, start);
+        const only = items[0];
+        if (only === undefined) throw new Error('Empty expression');
+        return only;
     };
 
     const comparison = (): AstNode => {
@@ -591,7 +607,10 @@ export function parseExpression(text: string): AstNode {
         let node = primary();
         while (is('.')) {
             index++;
-            const name = tokens[index++].v;
+            const nameToken = tokens[index];
+            index++;
+            if (!nameToken) throw new Error('Unexpected end of expression');
+            const name = nameToken.v;
             if (is('(')) {
                 index++;
                 node = mark({ t: 'call', o: node, n: name, args: argumentsList() }, start);
@@ -622,7 +641,11 @@ export function parseExpression(text: string): AstNode {
             return mark({ t: 'str', v: value }, start);
         }
         if (token.k === 2) {
-            return mark({ t: 'ref', r: token.v[1] as ReferenceSigil, n: token.v.slice(3, -1) }, start);
+            const sigil = token.v[1];
+            if (sigil !== 'F' && sigil !== 'P' && sigil !== 'V') {
+                throw new Error('Unexpected reference ' + token.v);
+            }
+            return mark({ t: 'ref', r: sigil, n: token.v.slice(3, -1) }, start);
         }
         if (token.k === 3) return mark({ t: 'num' }, start);
         if (token.v === '(') {
@@ -635,11 +658,15 @@ export function parseExpression(text: string): AstNode {
                 index++;
                 const args = argumentsList();
                 if (token.v === 'IF' && args.length === 3) {
-                    return mark({ t: 'tern', c: args[0], a: args[1], b: args[2], fn: 1 }, start);
+                    const [c, a, b] = args;
+                    if (c && a && b) return mark({ t: 'tern', c, a, b, fn: 1 }, start);
                 }
                 if (token.v === 'AND') return mark({ t: 'and', l: args }, start);
                 if (token.v === 'OR') return mark({ t: 'or', l: args }, start);
-                if (token.v === 'NOT' && args.length === 1) return mark({ t: 'not', x: args[0] }, start);
+                if (token.v === 'NOT' && args.length === 1) {
+                    const [x] = args;
+                    if (x) return mark({ t: 'not', x }, start);
+                }
                 return mark({ t: 'call', o: null, n: token.v, args }, start);
             }
             if (token.v === 'null') return mark({ t: 'null' }, start);
@@ -655,7 +682,8 @@ export function parseExpression(text: string): AstNode {
     const or = list(and, '||', 'or');
 
     const root = expression();
-    if (index < tokens.length) throw new Error('Unexpected ' + tokens[index].v);
+    const extra = tokens[index];
+    if (extra !== undefined) throw new Error('Unexpected ' + extra.v);
     return root;
 }
 
@@ -709,14 +737,20 @@ function toCondition(node: AstNode, context: ConversionContext): Condition {
     // 1. Null guards.
     let guardedResult: Condition | null = null;
     if (node.t === 'and' && node.l.length === 2) {
-        const reference = nullComparison(node.l[0], '!=');
-        if (reference && node.l[1].src.includes(reference) &&
-            (guardedResult = guarded(node.l[1], andOps))) return guardedResult;
+        const [guard, rest] = node.l;
+        if (guard && rest) {
+            const reference = nullComparison(guard, '!=');
+            if (reference && rest.src.includes(reference) &&
+                (guardedResult = guarded(rest, andOps))) return guardedResult;
+        }
     }
     if (node.t === 'or' && node.l.length === 2) {
-        const reference = nullComparison(node.l[0], '==');
-        if (reference && node.l[1].src.includes(reference) &&
-            (guardedResult = guarded(node.l[1], orOps))) return guardedResult;
+        const [guard, rest] = node.l;
+        if (guard && rest) {
+            const reference = nullComparison(guard, '==');
+            if (reference && rest.src.includes(reference) &&
+                (guardedResult = guarded(rest, orOps))) return guardedResult;
+        }
     }
     if (node.t === 'tern') {
         if (nullComparison(node.c, '!=') && node.b.t === 'bool' && !node.b.v &&
@@ -763,31 +797,33 @@ function toCondition(node: AstNode, context: ConversionContext): Condition {
 
         if (!node.o && node.n === 'EQUALS' && args.length === 2) {
             const [left, right] = args;
-            if (left.t === 'ref' && right.t === 'bool') {
-                context.nullSafe = true;
-                return fromRef(left, 'Boolean', right.v ? 'isTrue' : 'isFalse');
-            }
-            if (right.t === 'ref' && left.t === 'bool') {
-                context.nullSafe = true;
-                return fromRef(right, 'Boolean', left.v ? 'isTrue' : 'isFalse');
-            }
-            if (left.t === 'ref' && right.t === 'null') {
-                return fromRef(left, 'String', 'isNull');
-            }
-            if (right.t === 'ref' && left.t === 'null') {
-                return fromRef(right, 'String', 'isNull');
-            }
-            if (left.t === 'ref' && right.t === 'num') {
-                return fromRef(left, 'Number', '==', right.src);
-            }
-            if (right.t === 'ref' && left.t === 'num') {
-                return fromRef(right, 'Number', '==', left.src);
-            }
-            if (left.t === 'ref' && (right.t === 'str' || right.t === 'ref')) {
-                return fromRef(left, 'String', 'equals', valueOf(right));
-            }
-            if (right.t === 'ref' && left.t === 'str') {
-                return fromRef(right, 'String', 'equals', left.v);
+            if (left && right) {
+                if (left.t === 'ref' && right.t === 'bool') {
+                    context.nullSafe = true;
+                    return fromRef(left, 'Boolean', right.v ? 'isTrue' : 'isFalse');
+                }
+                if (right.t === 'ref' && left.t === 'bool') {
+                    context.nullSafe = true;
+                    return fromRef(right, 'Boolean', left.v ? 'isTrue' : 'isFalse');
+                }
+                if (left.t === 'ref' && right.t === 'null') {
+                    return fromRef(left, 'String', 'isNull');
+                }
+                if (right.t === 'ref' && left.t === 'null') {
+                    return fromRef(right, 'String', 'isNull');
+                }
+                if (left.t === 'ref' && right.t === 'num') {
+                    return fromRef(left, 'Number', '==', right.src);
+                }
+                if (right.t === 'ref' && left.t === 'num') {
+                    return fromRef(right, 'Number', '==', left.src);
+                }
+                if (left.t === 'ref' && (right.t === 'str' || right.t === 'ref')) {
+                    return fromRef(left, 'String', 'equals', valueOf(right));
+                }
+                if (right.t === 'ref' && left.t === 'str') {
+                    return fromRef(right, 'String', 'equals', left.v);
+                }
             }
         }
 
@@ -859,14 +895,19 @@ function skipLiteral(text: string, index: number): number {
     throw new Error('Expected ' + quote);
 }
 
+/** The character at `index`; past the end of the text this is ''. */
+function at(text: string, index: number): string {
+    return text[index] ?? '';
+}
+
 /** Index just past a comment starting at `index`, or -1 when there is none. */
 function skipComment(text: string, index: number): number {
-    if (text[index] !== '/') return -1;
-    if (text[index + 1] === '/') {
+    if (at(text, index) !== '/') return -1;
+    if (at(text, index + 1) === '/') {
         const end = text.indexOf('\n', index + 2);
         return end === -1 ? text.length : end;
     }
-    if (text[index + 1] === '*') {
+    if (at(text, index + 1) === '*') {
         const end = text.indexOf('*/', index + 2);
         if (end === -1) throw new Error('Expected */');
         return end + 2;
@@ -877,11 +918,12 @@ function skipComment(text: string, index: number): number {
 /** Index of the bracket that closes the one at `openIndex`. */
 function matchBracket(text: string, openIndex: number): number {
     const open = text[openIndex];
-    const close = CLOSE_FOR[open];
+    const close = open === undefined ? undefined : CLOSE_FOR[open];
+    if (open === undefined || close === undefined) throw new Error('Expected a bracket');
     let depth = 0;
 
     for (let i = openIndex; i < text.length;) {
-        const ch = text[i];
+        const ch = at(text, i);
         if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
 
         const commentEnd = skipComment(text, i);
@@ -904,11 +946,11 @@ function matchBracket(text: string, openIndex: number): number {
  */
 function isGenericWildcard(text: string, start: number, index: number): boolean {
     let before = index - 1;
-    while (before >= start && /\s/.test(text[before])) before -= 1;
+    while (before >= start && /\s/.test(at(text, before))) before -= 1;
     if (before >= start && text[before] !== '<' && text[before] !== ',') return false;
 
     let after = index + 1;
-    while (after < text.length && /\s/.test(text[after])) after += 1;
+    while (after < text.length && /\s/.test(at(text, after))) after += 1;
     const rest = text.slice(after);
     return rest === '' || rest[0] === '>' || rest[0] === ',' || /^(extends|super)\b/.test(rest);
 }
@@ -919,11 +961,11 @@ function isGenericWildcard(text: string, start: number, index: number): boolean 
  * `?` is a wildcard — neither may split or open a conditional.
  */
 function genericEnd(text: string, index: number): number {
-    if (text[index] !== '<') return -1;
+    if (at(text, index) !== '<') return -1;
 
     let depth = 0;
     for (let i = index; i < text.length; i += 1) {
-        const ch = text[i];
+        const ch = at(text, i);
         if (ch === '<') { depth += 1; continue; }
         if (ch === '>') {
             depth -= 1;
@@ -943,7 +985,7 @@ function splitTopLevel(text: string, separator: string): string[] {
     let start = 0;
 
     for (let i = 0; i < text.length;) {
-        const ch = text[i];
+        const ch = at(text, i);
         if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
 
         const commentEnd = skipComment(text, i);
@@ -975,7 +1017,7 @@ function stripOuterParens(value: string | null | undefined): string {
 /** Index of the first `?` outside strings, comments and brackets, or -1. */
 function findTopLevelQuestion(text: string): number {
     for (let i = 0; i < text.length;) {
-        const ch = text[i];
+        const ch = at(text, i);
         if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
 
         const commentEnd = skipComment(text, i);
@@ -997,7 +1039,7 @@ function findTernaryColon(text: string, start: number): number {
     let nested = 0;
 
     for (let i = start; i < text.length;) {
-        const ch = text[i];
+        const ch = at(text, i);
         if (ch === '"' || ch === "'") { i = skipLiteral(text, i); continue; }
 
         const commentEnd = skipComment(text, i);
@@ -1010,7 +1052,7 @@ function findTernaryColon(text: string, start: number): number {
 
         if (ch === '?') { nested += 1; i += 1; continue; }
         if (ch === ':') {
-            if (text[i + 1] === ':') { i += 2; continue; } // method reference
+            if (at(text, i + 1) === ':') { i += 2; continue; } // method reference
             if (nested === 0) return i;
             nested -= 1;
         }
@@ -1039,13 +1081,9 @@ function parseConditional(value: string | null | undefined): ParsedConditional |
         const open = call[0].lastIndexOf('(');
         if (matchBracket(text, open) === text.length - 1 && call[1] === 'IF') {
             const args = splitTopLevel(text.slice(open + 1, -1), ',');
-            if (args.length === 3) {
-                return {
-                    style: STYLE_FUNCTIONS,
-                    cond: args[0],
-                    then: args[1],
-                    els:  args[2],
-                };
+            const [cond, then, els] = args;
+            if (args.length === 3 && cond !== undefined && then !== undefined && els !== undefined) {
+                return { style: STYLE_FUNCTIONS, cond, then, els };
             }
         }
     }

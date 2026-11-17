@@ -846,9 +846,11 @@ function extractOutline(
 
     // ── Datasets ─────────────────────────────────────────────────────────────
     const datasets = root.children.filter(child => child.tag === 'dataset' || child.tag === 'subDataset');
-    if (datasets.length > 0) {
+    const firstDataset = datasets[0];
+    const lastDataset = datasets[datasets.length - 1];
+    if (firstDataset && lastDataset) {
         reportNode.children.push(container('group', 'Datasets',
-            datasets.map(datasetNode), datasets[0].startTag, datasets[datasets.length - 1].end));
+            datasets.map(datasetNode), firstDataset.startTag, lastDataset.end));
     }
 
     // ── Groups ───────────────────────────────────────────────────────────────
@@ -873,10 +875,12 @@ function extractOutline(
 
     // ── Styles ───────────────────────────────────────────────────────────────
     const styles = root.children.filter(child => child.tag === 'style' && child.attrValue('name'));
-    if (styles.length > 0) {
+    const firstStyle = styles[0];
+    const lastStyle = styles[styles.length - 1];
+    if (firstStyle && lastStyle) {
         reportNode.children.push(container('group', 'Styles',
             styles.map(style => leaf('style', `Style: ${style.attrValue('name')}`, nodeSpan(style))),
-            styles[0].startTag, styles[styles.length - 1].end));
+            firstStyle.startTag, lastStyle.end));
     }
 
     return [reportNode];
@@ -1020,7 +1024,7 @@ function matchAttr(attrs: string, attrName: string): { value: string; valueOffse
     const re = new RegExp(`(?:^|\\s)${escapeRegExp(attrName)}\\s*=\\s*(["'])([^"']*)\\1`);
     const m  = re.exec(attrs);
     if (!m) return null;
-    const value = m[2];
+    const value = m[2] ?? '';
     return { value, valueOffset: m.index + m[0].length - value.length - 1 };
 }
 
@@ -1043,13 +1047,13 @@ function readName(
 function extractTagContent(inner: string, tagName: string): string {
     const re = new RegExp(`<${escapeRegExp(tagName)}[^>]*>([\\s\\S]*?)<\\/${escapeRegExp(tagName)}>`);
     const m  = re.exec(inner);
-    return m ? m[1] : '';
+    return m ? m[1] ?? '' : '';
 }
 
 function shortType(fullType: string): string {
     if (!fullType) return 'Object';
     const parts = fullType.split('.');
-    const last = parts[parts.length - 1];
+    const last = parts[parts.length - 1] ?? fullType;
     return COMMON_TYPES.has(last) ? last : fullType;
 }
 

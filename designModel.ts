@@ -408,16 +408,19 @@ function collectBandDescriptors(root: XmlNode): BandDescriptor[] {
         for (const node of sectionBands(detail)) detailBands.push(node);
     }
     for (let i = 0; i < detailBands.length; i++) {
+        const band = detailBands[i];
+        if (!band) continue;
         out.push({
             key:   'detail',
             label: detailBands.length > 1 ? `Detail (${i + 1})` : 'Detail',
             group: '',
-            node:  detailBands[i],
+            node:  band,
         });
     }
 
     for (let i = groups.length - 1; i >= 0; i--) {
         const group = groups[i];
+        if (!group) continue;
         const name  = String(attrValue(group, 'name') || 'Group');
         const footer = directChild(group, 'groupFooter');
         if (!footer) continue;
@@ -440,7 +443,7 @@ function pushSectionRows(out: BandDescriptor[], root: XmlNode, tag: string): voi
     for (const section of directChildren(root, tag)) {
         const nodes = sectionBands(section);
         for (const node of nodes) {
-            out.push({ key: tag, label: SECTION_LABELS[tag], group: '', node });
+            out.push({ key: tag, label: SECTION_LABELS[tag] ?? tag, group: '', node });
         }
     }
 }
@@ -945,7 +948,7 @@ function placeholderLabel(expression: string, kind: string): string {
 function unwrapLiteral(expression: string): string | null {
     const match = /^"((?:\\.|[^"\\])*)"$/.exec(String(expression ?? '').trim());
     if (!match) return null;
-    return match[1].replace(/\\(["\\])/g, '$1');
+    return (match[1] ?? '').replace(/\\(["\\])/g, '$1');
 }
 
 function nestedComponentKind(node: XmlNode): string {

@@ -50,7 +50,7 @@ function refName(node: JavaExpressionNode): NullDerefReference | null {
     const id = e.name;
     if (id.length < 5 || id[0] !== '$' || id[2] !== '_' || id[id.length - 1] !== '_') return null;
 
-    const kind = id[1];
+    const kind = id.charAt(1);
     if (!isSigil(kind)) return null;
 
     const name = id.slice(3, id.length - 1);
@@ -93,17 +93,21 @@ function isObjects(scope: JavaExpressionNode | null): boolean {
 function refWithNullArgument(args: readonly JavaExpressionNode[]): NullDerefReference | null {
     if (args.length !== 2) return null;
 
-    const first = refName(args[0]);
-    if (first && unwrap(args[1]).kind === 'null') return first;
+    const [left, right] = args;
+    if (left === undefined || right === undefined) return null;
 
-    const second = refName(args[1]);
-    if (second && unwrap(args[0]).kind === 'null') return second;
+    const first = refName(left);
+    if (first && unwrap(right).kind === 'null') return first;
+
+    const second = refName(right);
+    if (second && unwrap(left).kind === 'null') return second;
 
     return null;
 }
 
 function oneRefArgument(args: readonly JavaExpressionNode[]): NullDerefReference | null {
-    return args.length === 1 ? refName(args[0]) : null;
+    const [only] = args;
+    return only === undefined ? null : refName(only);
 }
 
 /** True when the call asserts the reference is null. */

@@ -216,9 +216,9 @@ export function extractJavaClass(source: string): JavaClass | null {
     const typeMatch = TYPE_PATTERN.exec(source);
     if (!typeMatch) return null;
 
-    const className = typeMatch[1];
+    const className = typeMatch[1] ?? '';
     const packageMatch = PACKAGE_PATTERN.exec(source);
-    const packageName = packageMatch ? packageMatch[1] : '';
+    const packageName = (packageMatch ? packageMatch[1] : '') ?? '';
 
     const methods: JavaMethod[] = [];
     const seen = new Set<string>();
@@ -246,6 +246,7 @@ export function extractJavaClass(source: string): JavaClass | null {
         });
     }
 
+    if (!className) return null;
     return {
         packageName,
         className,

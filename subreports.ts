@@ -88,10 +88,11 @@ export function parseStringLiteral(raw: string): StringLiteral | null {
     const match = /^\s*"((?:[^"\\]|\\.)*)"\s*$/.exec(raw);
     if (!match) return null;
 
+    const literal = match[1] ?? '';
     return {
-        value: unescapeJava(match[1]),
+        value: unescapeJava(literal),
         index: raw.indexOf('"') + 1,
-        rawLength: match[1].length,
+        rawLength: literal.length,
     };
 }
 

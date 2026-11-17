@@ -195,9 +195,10 @@ class IncludeChainProvider implements vscode.TreeDataProvider<IncludeTreeItem> {
         );
         uriByPath.set(target, document.uri);
 
-        if (tree.length === 1 && tree[0].current && tree[0].children.length === 0) {
+        const single = tree.length === 1 ? tree[0] : undefined;
+        if (single && single.current && single.children.length === 0) {
             // Nothing calls the open file: show it with the hook's placeholder.
-            const item = fileItem(tree[0], uriByPath);
+            const item = fileItem(single, uriByPath);
             item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
             item.childItems = [messageItem('(not referenced)')];
             return [item];

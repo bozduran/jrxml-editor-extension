@@ -29,7 +29,7 @@ export function findReferenceToken(lineText: string, character: number): Referen
         if (match.index <= character && character <= match.index + match[0].length) {
             return {
                 sigil: match[1] as ReferenceSigil,
-                name: match[3].trim(),
+                name: (match[3] ?? '').trim(),
                 bang: match[2] === '!',
                 start: match.index,
                 end: match.index + match[0].length,
@@ -56,7 +56,7 @@ export function forEachReferenceToken(
     while ((match = re.exec(text)) !== null) {
         callback({
             sigil: match[1] as ReferenceSigil,
-            name: match[3].trim(),
+            name: (match[3] ?? '').trim(),
             bang: match[2] === '!',
             start: match.index,
             end: match.index + match[0].length,
