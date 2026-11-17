@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-17
+
 ### Added
 - **Java symbol lint** (`jrxml.lint.javaSymbols`): imports, declaration
   `class` attributes, static helper calls and typed receiver calls are checked
