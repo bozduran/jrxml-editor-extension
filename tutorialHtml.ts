@@ -113,6 +113,7 @@ export interface DocumentedSettingGroup {
 
 export const DOCUMENTED_SETTING_GROUPS: readonly DocumentedSettingGroup[] = [
     { id: 'editor', summary: 'Indent size, auto-open, auto-format, typed completion and the target Java version.' },
+    { id: 'java', summary: 'Extra folders scanned for Java helper methods beyond every module’s src/main/java.' },
     { id: 'ifElse', summary: 'Null-safe guards, multi-line output and ternary vs IF() style.' },
     { id: 'diagnostics', summary: 'Unused warnings, dataset scope, duplicate names, report language, resource-bundle keys, subreport targets and parameter maps, layout bounds, query literals, expression validation, structural lint rules and the Boolean-comparison style rule.' },
     { id: 'format', summary: 'Report name, positionType, textAdjust, expression formatting and text check.' },
@@ -513,7 +514,7 @@ export function buildTutorialHtml({ nonce }: { nonce: string }): string {
   <ul>
     <li><strong>Syntax highlighting and bracket colorization</strong> for JRXML and Java expressions.</li>
     <li><strong>Outline</strong> and breadcrumbs for the report, declarations, bands and groups.</li>
-    <li><strong>Completion</strong> for <code>$F{}</code>, <code>$P{}</code> and <code>$V{}</code>, Jasper built-ins, Java types/statics, local public static methods and typed members. Typing <code>$F{customer}.</code> offers the members of the declared type; the target Java version is a setting.</li>
+    <li><strong>Completion</strong> for <code>$F{}</code>, <code>$P{}</code> and <code>$V{}</code>, Jasper built-ins, Java types/statics, workspace Java helpers and typed members. Typing <code>$F{customer}.</code> offers the members of the declared type; the target Java version is a setting. Helper methods come from every <code>src/main/java</code> in the workspace — including the modules of a multi-module Maven or Gradle project — and are inserted fully qualified, so no <code>&lt;import&gt;</code> is needed.</li>
     <li><strong>Go to Declaration</strong>, <strong>Find All References</strong> and hover information for every declared field, parameter and variable.</li>
     <li><strong>Diagnostics</strong> update on open, on save, when switching tabs, and after a short typing pause.</li>
   </ul>
