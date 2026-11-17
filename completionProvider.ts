@@ -7,13 +7,12 @@
 // Java types and typed-member completions.
 
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
 import { EXPRESSION_TAGS, findExpressionRegionAt } from './expressionUtils';
 import { parseDeclarations } from './jrxmlParser';
 import type { ParseResult } from './jrxmlParser';
 import { buildExpressionSuggestions, suggestionOptions } from './expressionSuggestions';
 import type { CustomMethod, ExpressionSuggestion, SuggestionKind } from './expressionSuggestions';
+import { collectJavaMethods } from './javaSourceScan';
 import { reportLanguage } from './reportLanguage';
 import { resourceEntriesForDocument } from './resourceIndex';
 import { visibleDeclarations } from './reportSymbols';
@@ -27,97 +26,34 @@ function clearCustomJavaCache(): void {
     cachedCustomJavaMethods = null;
 }
 
+/** `jrxml.java.sourcePaths`, ignoring malformed values. */
+function configuredJavaSourcePaths(): string[] {
+    const configured = vscode.workspace
+        .getConfiguration('jrxml')
+        .get<unknown>('java.sourcePaths', []);
+
+    if (!Array.isArray(configured)) return [];
+    return configured.filter((entry): entry is string => typeof entry === 'string');
+}
+
 function getCustomJavaMethods(): CustomMethod[] {
-    // Return cached results if we already scanned the project
     if (cachedCustomJavaMethods) return cachedCustomJavaMethods;
 
     cachedCustomJavaMethods = [];
 
-    // Get the current workspace folders
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) return cachedCustomJavaMethods;
+    if (!workspaceFolders || workspaceFolders.length === 0) return cachedCustomJavaMethods;
 
-    for (const folder of workspaceFolders) {
-        const javaSrcPath = path.join(folder.uri.fsPath, 'src', 'main', 'java');
-        try {
-            if (fs.existsSync(javaSrcPath)) {
-                scanDirectoryForJavaMethods(javaSrcPath, cachedCustomJavaMethods);
-            }
-        } catch (err) {
-            console.error(`Error scanning ${javaSrcPath}:`, err);
-        }
+    try {
+        cachedCustomJavaMethods = collectJavaMethods(
+            workspaceFolders.map(folder => folder.uri.fsPath),
+            { extraPaths: configuredJavaSourcePaths() }
+        );
+    } catch (err) {
+        console.error('Error scanning Java helper methods:', err);
     }
 
     return cachedCustomJavaMethods;
-}
-
-function scanDirectoryForJavaMethods(dir: string, results: CustomMethod[]): void {
-    let files: string[];
-    try {
-        files = fs.readdirSync(dir);
-    } catch {
-        return; // unreadable/unavailable directory — skip silently
-    }
-
-    for (const file of files) {
-        const fullPath = path.join(dir, file);
-        let stat: fs.Stats;
-        try {
-            stat = fs.statSync(fullPath);
-        } catch {
-            continue; // entry disappeared mid-scan
-        }
-        if (stat.isDirectory()) {
-            scanDirectoryForJavaMethods(fullPath, results); // Recursive call
-        } else if (fullPath.endsWith('.java')) {
-            extractStaticMethods(fullPath, results);
-        }
-    }
-}
-
-function extractStaticMethods(filePath: string, results: CustomMethod[]): void {
-
-    try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        
-        // Find class name
-        const classMatch = content.match(/public\s+(?:final\s+)?class\s+(\w+)/);
-        if (!classMatch) return; // Skip if no public class found
-        const className = classMatch[1];
-
-        // Find package name
-        const packageMatch = content.match(/package\s+([\w.]+);/);
-        const pkg = packageMatch ? packageMatch[1] : '';
-
-        // Match public static methods
-        const methodRegex = /public\s+static\s+([\w<>\[\]]+)\s+(\w+)\s*\(([^)]*)\)/g;
-        let match;
-
-        while ((match = methodRegex.exec(content)) !== null) {
-            const returnType = match[1];
-            const methodName = match[2];
-            const argsString = match[3].trim();
-
-            // Convert arguments to VS Code snippet format: String name, int age -> ${1:name}, ${2:age}
-            let snippetArgs = '';
-            if (argsString) {
-                const args = argsString.split(',').map(a => a.trim());
-                snippetArgs = args.map((arg, index) => {
-                    const varName = arg.split(/\s+/).pop();
-                    return `\${${index + 1}:${varName}}`;
-                }).join(', ');
-            }
-
-            results.push({
-                label: `${className}.${methodName}`,
-                detail: `${className}.${methodName}(${argsString}) : ${returnType}`,
-                doc: `**Class:** \`${pkg}.${className}\`\n\nReturns: \`${returnType}\``,
-                snippet: `${className}.${methodName}(${snippetArgs})`
-            });
-        }
-    } catch (err) {
-        console.error(`Error scanning Java file ${filePath}:`, err);
-    }
 }
 
 // ── Expression tag check ──────────────────────────────────────────────────────
