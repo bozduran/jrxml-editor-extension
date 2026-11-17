@@ -12,18 +12,18 @@ import { parseDeclarations } from './jrxmlParser';
 import type { ParseResult } from './jrxmlParser';
 import { buildExpressionSuggestions, suggestionOptions } from './expressionSuggestions';
 import type { CustomMethod, ExpressionSuggestion, SuggestionKind } from './expressionSuggestions';
-import { collectJavaMethods } from './javaSourceScan';
+import { getJavaProjectIndex, clearJavaProjectIndex } from './javaProjectIndex';
 import { reportLanguage } from './reportLanguage';
 import { resourceEntriesForDocument } from './resourceIndex';
 import { visibleDeclarations } from './reportSymbols';
 
 // ── Custom Java Method Scanner & Cache ───────────────────────────────────────
-
-let cachedCustomJavaMethods: CustomMethod[] | null = null;
+// The scan itself and its cache live in javaProjectIndex so lint reads exactly
+// the same class table as completion.
 
 /** Drop the cached Java scan (call when .java files or workspace folders change). */
 function clearCustomJavaCache(): void {
-    cachedCustomJavaMethods = null;
+    clearJavaProjectIndex();
 }
 
 /** `jrxml.java.sourcePaths`, ignoring malformed values. */
@@ -37,23 +37,13 @@ function configuredJavaSourcePaths(): string[] {
 }
 
 function getCustomJavaMethods(): CustomMethod[] {
-    if (cachedCustomJavaMethods) return cachedCustomJavaMethods;
-
-    cachedCustomJavaMethods = [];
-
     const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) return cachedCustomJavaMethods;
+    if (!workspaceFolders || workspaceFolders.length === 0) return [];
 
-    try {
-        cachedCustomJavaMethods = collectJavaMethods(
-            workspaceFolders.map(folder => folder.uri.fsPath),
-            { extraPaths: configuredJavaSourcePaths() }
-        );
-    } catch (err) {
-        console.error('Error scanning Java helper methods:', err);
-    }
-
-    return cachedCustomJavaMethods;
+    return getJavaProjectIndex(
+        workspaceFolders.map(folder => folder.uri.fsPath),
+        { extraPaths: configuredJavaSourcePaths() }
+    ).methods;
 }
 
 // ── Expression tag check ──────────────────────────────────────────────────────
@@ -114,7 +104,7 @@ const EMPTY_PARSE: ParseResult = {
     language: { language: 'java', declared: false, offset: -1, length: 0 },
     allFields: [], allParameters: [], allVariables: [],
     groups: [], styles: [], references: [], resourceReferences: [],
-    resourceBundle: null, datasets: [], scopeRanges: [], outline: [],
+    resourceBundle: null, imports: [], datasets: [], scopeRanges: [], outline: [],
 };
 
 // ── Provider ──────────────────────────────────────────────────────────────────

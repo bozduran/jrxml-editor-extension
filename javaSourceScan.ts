@@ -114,10 +114,11 @@ export function discoverJavaSourceRoots(
 const PACKAGE_PATTERN = /^\s*package\s+([\w.]+)\s*;/m;
 const TYPE_PATTERN = /\bpublic\s+(?:(?:final|abstract|sealed|non-sealed)\s+)*(?:class|interface|enum|record)\s+(\w+)/;
 
-// `public` … `static` in any modifier order, then the return type and the
-// method name. The return type may be qualified, generic or an array.
+// A public method in any modifier order. The return type may be qualified,
+// generic or an array; `static` is recorded rather than required, so a call to
+// an instance method can be reported as such instead of as unknown.
 const METHOD_PATTERN =
-    /\bpublic\s+((?:(?:final|synchronized|static|strictfp|native)\s+)*?)static\s+((?:(?:final|synchronized|strictfp|native)\s+)*)([^;{}()=]+?)\s+(\w+)\s*\(([^)]*)\)/g;
+    /\bpublic\s+((?:(?:final|synchronized|static|strictfp|native|abstract)\s+)*)([^;{}()=]+?)\s+(\w+)\s*\(([^)]*)\)/g;
 
 /** Drop a leading `<T extends X>` block from a generic method's return type. */
 function stripLeadingTypeParameters(type: string): string {
@@ -157,73 +158,149 @@ function splitParameters(args: string): string[] {
     return parts;
 }
 
-/** `String name, int age` → `['name', 'age']`; missing names become `argN`. */
-function parameterNames(argsString: string): string[] {
-    if (!argsString.trim()) return [];
+/** One parameter of a scanned method. */
+export interface JavaParameter {
+    readonly type: string;
+    readonly name: string;
+}
 
-    return splitParameters(argsString).map((parameter, index) => {
-        const withoutAnnotations = parameter.replace(/@\w+(?:\([^)]*\))?\s*/g, '').trim();
+/** A public method, static or not; callers decide which are callable. */
+export interface JavaMethod {
+    readonly name: string;
+    readonly returnType: string;
+    readonly parameters: readonly JavaParameter[];
+    readonly varargs: boolean;
+    readonly static: boolean;
+}
+
+/** A public top-level type and its public methods. */
+export interface JavaClass {
+    readonly packageName: string;
+    readonly className: string;
+    readonly qualifiedName: string;
+    readonly methods: readonly JavaMethod[];
+}
+
+/** `String name, int age` → two parameters; missing names become `argN`. */
+function parametersOf(argsString: string): { parameters: JavaParameter[]; varargs: boolean } {
+    const parameters: JavaParameter[] = [];
+    let varargs = false;
+
+    for (const raw of splitParameters(argsString)) {
+        const withoutAnnotations = raw.replace(/@\w+(?:\([^)]*\))?\s*/g, '').trim();
+        if (!withoutAnnotations) continue;
+
         const tokens = withoutAnnotations.split(/\s+/).filter(Boolean);
-        const name = tokens[tokens.length - 1] ?? '';
-        return /^[A-Za-z_$][\w$]*$/.test(name) ? name : `arg${index + 1}`;
-    });
+        const rawName = tokens[tokens.length - 1] ?? '';
+        const name = /^[A-Za-z_$][\w$]*$/.test(rawName) ? rawName : `arg${parameters.length + 1}`;
+
+        let type = tokens.slice(0, -1).join(' ').replace(/^final\s+/, '').trim();
+        if (type.endsWith('...')) {
+            varargs = true;
+            type = `${type.slice(0, -3).trim()}[]`;
+        }
+        parameters.push({ type, name });
+    }
+
+    return { parameters, varargs };
 }
 
 /**
- * Extract the callable static methods from one Java source. Only members of a
- * `public` top-level type are usable from a report expression, which compiles
- * in its own generated class.
+ * Extract the public members of the file's `public` top-level type. Only such
+ * members are usable from a report expression, which compiles in its own
+ * generated class.
  */
-export function extractStaticMethods(source: string): CustomMethod[] {
+export function extractJavaClass(source: string): JavaClass | null {
     const typeMatch = TYPE_PATTERN.exec(source);
-    if (!typeMatch) return [];
+    if (!typeMatch) return null;
 
     const className = typeMatch[1];
     const packageMatch = PACKAGE_PATTERN.exec(source);
-    const pkg = packageMatch ? packageMatch[1] : '';
-    const qualifiedClass = pkg ? `${pkg}.${className}` : className;
+    const packageName = packageMatch ? packageMatch[1] : '';
 
-    const methods: CustomMethod[] = [];
+    const methods: JavaMethod[] = [];
     const seen = new Set<string>();
 
     METHOD_PATTERN.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = METHOD_PATTERN.exec(source)) !== null) {
-        const returnType = stripLeadingTypeParameters(match[3] ?? '');
-        const methodName = match[4];
-        const argsString = (match[5] ?? '').trim();
-        if (!methodName || !returnType) continue;
+        const modifiers = match[1] ?? '';
+        const returnType = stripLeadingTypeParameters(match[2] ?? '');
+        const name = match[3] ?? '';
+        const argsString = (match[4] ?? '').trim();
+        if (!name || !returnType) continue;
 
-        const names = parameterNames(argsString);
-        const snippetArgs = names.map((name, index) => `\${${index + 1}:${name}}`).join(', ');
-        const snippet = `${qualifiedClass}.${methodName}(${snippetArgs})`;
-        if (seen.has(snippet)) continue;
-        seen.add(snippet);
+        const { parameters, varargs } = parametersOf(argsString);
+        const key = `${name}(${parameters.map(parameter => parameter.type).join(',')})`;
+        if (seen.has(key)) continue;
+        seen.add(key);
 
         methods.push({
-            label: `${className}.${methodName}`,
-            detail: `${qualifiedClass}.${methodName}(${argsString}) : ${returnType}`,
-            doc: `**Class:** \`${qualifiedClass}\`\n\nReturns: \`${returnType}\``,
-            snippet,
+            name,
+            returnType,
+            parameters,
+            varargs,
+            static: /\bstatic\b/.test(modifiers),
         });
     }
 
+    return {
+        packageName,
+        className,
+        qualifiedName: packageName ? `${packageName}.${className}` : className,
+        methods,
+    };
+}
+
+/** The completion entry for one static method. */
+function customMethodOf(javaClass: JavaClass, method: JavaMethod): CustomMethod {
+    const signature = method.parameters
+        .map(parameter => (parameter.type ? `${parameter.type} ${parameter.name}` : parameter.name))
+        .join(', ');
+    const snippetArgs = method.parameters
+        .map((parameter, index) => `\${${index + 1}:${parameter.name}}`)
+        .join(', ');
+
+    return {
+        label: `${javaClass.className}.${method.name}`,
+        detail: `${javaClass.qualifiedName}.${method.name}(${signature}) : ${method.returnType}`,
+        doc: `**Class:** \`${javaClass.qualifiedName}\`\n\nReturns: \`${method.returnType}\``,
+        snippet: `${javaClass.qualifiedName}.${method.name}(${snippetArgs})`,
+    };
+}
+
+/**
+ * The static methods of one source, as completion entries. Kept for the
+ * completion provider and its existing tests; lint uses `extractJavaClass`.
+ */
+export function extractStaticMethods(source: string): CustomMethod[] {
+    const javaClass = extractJavaClass(source);
+    if (!javaClass) return [];
+
+    const methods: CustomMethod[] = [];
+    const seen = new Set<string>();
+    for (const method of javaClass.methods) {
+        if (!method.static) continue;
+        const custom = customMethodOf(javaClass, method);
+        if (seen.has(custom.snippet)) continue;
+        seen.add(custom.snippet);
+        methods.push(custom);
+    }
     return methods;
 }
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
-
 /** Read every `.java` file below the given roots, in a stable order. */
-export function scanJavaMethods(
+export function scanJavaClasses(
     roots: readonly string[],
     options: JavaScanOptions = {}
-): CustomMethod[] {
+): JavaClass[] {
     const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
     const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
 
-    const methods: CustomMethod[] = [];
+    const classes: JavaClass[] = [];
     const seenFiles = new Set<string>();
-    const seenSnippets = new Set<string>();
+    const seenClasses = new Set<string>();
     let filesRead = 0;
     let exhausted = false;
 
@@ -259,11 +336,10 @@ export function scanJavaMethods(
                 continue; // unreadable file — skip it, keep the scan going
             }
 
-            for (const method of extractStaticMethods(source)) {
-                if (seenSnippets.has(method.snippet)) continue;
-                seenSnippets.add(method.snippet);
-                methods.push(method);
-            }
+            const javaClass = extractJavaClass(source);
+            if (!javaClass || seenClasses.has(javaClass.qualifiedName)) continue;
+            seenClasses.add(javaClass.qualifiedName);
+            classes.push(javaClass);
         }
     };
 
@@ -276,17 +352,40 @@ export function scanJavaMethods(
         );
     }
 
+    return classes;
+}
+
+/** Static methods of the scanned classes, ready for completion. */
+export function staticMethodsOf(classes: readonly JavaClass[]): CustomMethod[] {
+    const methods: CustomMethod[] = [];
+    const seen = new Set<string>();
+
+    for (const javaClass of classes) {
+        for (const method of javaClass.methods) {
+            if (!method.static) continue;
+            const custom = customMethodOf(javaClass, method);
+            if (seen.has(custom.snippet)) continue;
+            seen.add(custom.snippet);
+            methods.push(custom);
+        }
+    }
+
     return methods;
 }
 
-/**
- * Discover and scan in one step. `workspaceRoots` are the folder paths, in the
- * order the workspace lists them.
- */
-export function collectJavaMethods(
-    workspaceRoots: readonly string[],
+/** Read every `.java` file below the given roots and return static methods. */
+export function scanJavaMethods(
+    roots: readonly string[],
     options: JavaScanOptions = {}
 ): CustomMethod[] {
+    return staticMethodsOf(scanJavaClasses(roots, options));
+}
+
+/** Discover every module and scan it in one step. */
+export function collectJavaClasses(
+    workspaceRoots: readonly string[],
+    options: JavaScanOptions = {}
+): JavaClass[] {
     const roots: string[] = [];
     const seen = new Set<string>();
 
@@ -298,5 +397,16 @@ export function collectJavaMethods(
         }
     }
 
-    return scanJavaMethods(roots, options);
+    return scanJavaClasses(roots, options);
+}
+
+/**
+ * Discover and scan in one step. `workspaceRoots` are the folder paths, in the
+ * order the workspace lists them.
+ */
+export function collectJavaMethods(
+    workspaceRoots: readonly string[],
+    options: JavaScanOptions = {}
+): CustomMethod[] {
+    return staticMethodsOf(collectJavaClasses(workspaceRoots, options));
 }
