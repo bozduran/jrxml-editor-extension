@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-17
+
 ### Fixed
 - Java symbol lint reads `<propertyExpression>` and the dataset/subreport
   parameter expressions too, so an import used only there is no longer
