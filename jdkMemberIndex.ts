@@ -108,7 +108,8 @@ export interface MemberStats {
     types: number;
     members: number;
     baseline: number;
-    generatedWith?: string | null;
+    /** Absent on the minimal fallback table, exactly as `MemberIndex` is. */
+    generatedWith?: string | null | undefined;
     usingFallback: boolean;
 }
 
@@ -180,14 +181,90 @@ const flatCache = new Map<string, MemberTable>();
 
 // ── Loading ───────────────────────────────────────────────────────────────────
 
+// ── Data-file validation ──────────────────────────────────────────────────────
+//
+// The two JSON files below are the module's only untyped boundary. A bad file
+// must yield the minimal fallback table, never a member list built from a shape
+// we guessed at, so every field the index reads is checked here. The contract
+// these checks encode is the one test/jdkIndexData.test.js asserts.
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
+/** The fields a JdkMethod and a JdkField share. */
+function hasMemberHeader(value: Record<string, unknown>): boolean {
+    const { name, since, static: isStatic, deprecated } = value;
+    if (typeof name !== 'string') return false;
+    if (!Number.isInteger(since)) return false;
+    if (isStatic !== undefined && typeof isStatic !== 'boolean') return false;
+    if (deprecated !== undefined && typeof deprecated !== 'boolean') return false;
+    return true;
+}
+
+function isJdkMethod(value: unknown): value is JdkMethod {
+    if (!isRecord(value) || !hasMemberHeader(value)) return false;
+    const { params, returns, varargs } = value;
+    if (!isStringArray(params)) return false;
+    if (returns !== undefined && typeof returns !== 'string') return false;
+    if (varargs !== undefined && typeof varargs !== 'boolean') return false;
+    return true;
+}
+
+function isJdkField(value: unknown): value is JdkField {
+    if (!isRecord(value) || !hasMemberHeader(value)) return false;
+    const { type } = value;
+    return typeof type === 'string';
+}
+
+function isJdkType(value: unknown): value is JdkType {
+    if (!isRecord(value)) return false;
+    const { kind, super: supers, methods, fields } = value;
+    if (kind !== undefined && typeof kind !== 'string') return false;
+    if (supers !== undefined && !isStringArray(supers)) return false;
+    if (methods !== undefined && !(Array.isArray(methods) && methods.every(isJdkMethod))) return false;
+    if (fields !== undefined && !(Array.isArray(fields) && fields.every(isJdkField))) return false;
+    return true;
+}
+
+function isTypeMap(value: unknown): value is Record<string, JdkType> {
+    return isRecord(value) && Object.values(value).every(isJdkType);
+}
+
+function isEdgeMap(value: unknown): value is Record<string, string[]> {
+    return isRecord(value) && Object.values(value).every(isStringArray);
+}
+
+function isJdkIndexFile(value: unknown): value is JdkIndexFile {
+    if (!isRecord(value)) return false;
+    const { types, edges, baseline, schemaVersion, generatedWith } = value;
+    if (!isTypeMap(types)) return false;
+    if (edges !== undefined && !isEdgeMap(edges)) return false;
+    if (baseline !== undefined && typeof baseline !== 'number') return false;
+    if (schemaVersion !== undefined && typeof schemaVersion !== 'number') return false;
+    if (generatedWith !== undefined && generatedWith !== null && typeof generatedWith !== 'string') return false;
+    return true;
+}
+
+function isExtraTypesFile(value: unknown): value is ExtraTypesFile {
+    if (!isRecord(value)) return false;
+    const { types } = value;
+    return isTypeMap(types);
+}
+
 /**
- * Read a JSON data file. The shapes are exercised by test/jdkIndexData.test.js;
- * this is the one untyped file boundary, and a bad file yields the fallback.
+ * Read a JSON data file and check its shape. A shape mismatch returns null, the
+ * same as a missing file, so `buildIndex` falls back to the minimal table
+ * instead of completing members that are not really there.
  */
-function readJson<T>(file: string): T | null {
+function readJson<T>(file: string, isValid: (value: unknown) => value is T): T | null {
     try {
         const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
-        return parsed as T | null;
+        return isValid(parsed) ? parsed : null;
     } catch {
         return null; // missing/corrupt data must never break completion
     }
@@ -266,8 +343,8 @@ export function buildIndex(
 function loadIndex(): MemberIndex {
     if (!cachedIndex) {
         cachedIndex = buildIndex(
-            readJson<JdkIndexFile>(INDEX_PATH),
-            readJson<ExtraTypesFile>(EXTRA_PATH)
+            readJson(INDEX_PATH, isJdkIndexFile),
+            readJson(EXTRA_PATH, isExtraTypesFile)
         );
     }
     return cachedIndex;

@@ -27,6 +27,7 @@ import {
     escapeXmlText,
 } from './designSpec';
 import type { ContentKind, DesignPropertyName, PropertySpec } from './designSpec';
+import { textOf } from './textValue';
 
 const MAX_GEOMETRY = 100000;
 
@@ -173,7 +174,10 @@ function validatePatch(patch: unknown): string | null {
         if (!allowed.has(key)) return `Unknown edit type: ${key}.`;
     }
 
-    const geometry = patch.geometry;
+    // Read each field once. `patch` is an index signature after the guard, so
+    // dotted access is unavailable (noPropertyAccessFromIndexSignature).
+    const { geometry, properties, content, attributes, box, line } = patch;
+
     if (geometry !== undefined) {
         if (!isPlainObject(geometry)) return 'The geometry values are not valid.';
         for (const key of Object.keys(geometry)) {
@@ -181,7 +185,6 @@ function validatePatch(patch: unknown): string | null {
         }
     }
 
-    const properties = patch.properties;
     if (properties !== undefined) {
         if (!isPlainObject(properties)) return 'The property values are not valid.';
         for (const key of Object.keys(properties)) {
@@ -189,28 +192,27 @@ function validatePatch(patch: unknown): string | null {
         }
     }
 
-    const content = patch.content;
     if (content !== undefined) {
-        if (!isPlainObject(content) || typeof content.text !== 'string') {
-            return 'The content value is not valid.';
-        }
+        if (!isPlainObject(content)) return 'The content value is not valid.';
+        const { text } = content;
+        if (typeof text !== 'string') return 'The content value is not valid.';
         for (const key of Object.keys(content)) {
             if (key !== 'text') return `Unknown content field: ${key}.`;
         }
     }
 
-    if (patch.attributes !== undefined) {
-        const error = validateAttributesPatch(patch.attributes);
+    if (attributes !== undefined) {
+        const error = validateAttributesPatch(attributes);
         if (error) return error;
     }
 
-    if (patch.box !== undefined) {
-        const error = validateBoxPatch(patch.box);
+    if (box !== undefined) {
+        const error = validateBoxPatch(box);
         if (error) return error;
     }
 
-    if (patch.line !== undefined) {
-        const error = validateLinePatch(patch.line);
+    if (line !== undefined) {
+        const error = validateLinePatch(line);
         if (error) return error;
     }
 
@@ -224,8 +226,7 @@ function validateAttributesPatch(attributes: unknown): string | null {
         if (key !== 'set' && key !== 'remove') return `Unknown attribute edit: ${key}.`;
     }
 
-    const set = attributes.set;
-    const remove = attributes.remove;
+    const { set, remove } = attributes;
 
     if (set !== undefined) {
         if (!isPlainObject(set)) return 'The attribute values are not valid.';
@@ -262,7 +263,7 @@ function validateAttributesPatch(attributes: unknown): string | null {
 }
 
 function validateAttributeName(name: unknown): string | null {
-    const text = String(name ?? '');
+    const text = textOf(name);
     if (!ATTRIBUTE_NAME.test(text)) return `Attribute name ${text} is not valid.`;
     if (text.toLowerCase() === 'kind') return 'The element kind cannot be changed from the inspector.';
     if (text.toLowerCase() === 'xmlns' || text.toLowerCase().startsWith('xmlns:')) {
@@ -278,27 +279,24 @@ function validateBoxPatch(box: unknown): string | null {
         if (!allowed.has(key)) return `Unknown box field: ${key}.`;
     }
 
-    const border = box.border;
+    const { border, padding, width, style, color } = box;
+
     if (border !== undefined && typeof border !== 'boolean') {
         return 'The border value must be true or false.';
     }
 
-    const padding = box.padding;
     if (padding !== undefined && (!Number.isFinite(padding) || Number(padding) < 0)) {
         return 'Padding must be a non-negative number.';
     }
 
-    const width = box.width;
     if (width !== undefined && (!Number.isFinite(width) || Number(width) <= 0 || Number(width) > 100)) {
         return 'Border width must be between 0 and 100.';
     }
 
-    const style = box.style;
     if (style !== undefined && !normalizedEnum(LINE_STYLES, style)) {
         return `Line style must be one of: ${LINE_STYLES.join(', ')}.`;
     }
 
-    const color = box.color;
     if (color !== undefined && color !== '' && !isHexColor(color)) {
         return 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.';
     }
@@ -312,17 +310,16 @@ function validateLinePatch(line: unknown): string | null {
         if (!allowed.has(key)) return `Unknown line field: ${key}.`;
     }
 
-    const width = line.width;
+    const { width, style, color } = line;
+
     if (width !== undefined && (!Number.isFinite(width) || Number(width) <= 0 || Number(width) > 100)) {
         return 'Line width must be between 0 and 100.';
     }
 
-    const style = line.style;
     if (style !== undefined && !normalizedEnum(LINE_STYLES, style)) {
         return `Line style must be one of: ${LINE_STYLES.join(', ')}.`;
     }
 
-    const color = line.color;
     if (color !== undefined && color !== '' && !isHexColor(color)) {
         return 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.';
     }
@@ -380,7 +377,7 @@ function applyProperties(
 function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalProperty {
     switch (spec.type) {
         case 'fontName': {
-            const name = String(value ?? '').trim();
+            const name = textOf(value).trim();
             if (!name) return { value: null, error: 'Font name cannot be empty.' };
             if (name.length > 120) return { value: null, error: 'Font name is too long.' };
             if (/[\u0000-\u001f]/.test(name)) return { value: null, error: 'Font name contains invalid characters.' };
@@ -400,7 +397,7 @@ function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalPropert
             return { value: value ? 'true' : 'false', error: null };
 
         case 'color': {
-            const color = String(value ?? '').trim();
+            const color = textOf(value).trim();
             if (!isHexColor(color)) {
                 return { value: null, error: 'Colors must be written as #rgb, #rrggbb or #rrggbbaa.' };
             }
@@ -414,7 +411,7 @@ function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalPropert
         }
 
         case 'text': {
-            const text = String(value ?? '').trim();
+            const text = textOf(value).trim();
             if (!text) return { value: null, error: 'This value cannot be empty.' };
             if (text.length > 500) return { value: null, error: 'This value is too long.' };
             if (/[\u0000-\u001f]/.test(text)) return { value: null, error: 'The value contains invalid characters.' };
@@ -422,7 +419,7 @@ function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalPropert
         }
 
         case 'rawString': {
-            const text = String(value ?? '');
+            const text = textOf(value);
             if (text.length > 1000) return { value: null, error: 'This value is too long.' };
             return { value: escapeXmlAttr(text), error: null };
         }
@@ -443,12 +440,12 @@ function canonicalProperty(spec: PropertySpec, value: unknown): CanonicalPropert
 }
 
 function normalizedEnum(values: readonly string[], value: unknown): string | null {
-    const text = String(value ?? '').trim();
+    const text = textOf(value).trim();
     return values.find(allowed => allowed.toLowerCase() === text.toLowerCase()) || null;
 }
 
 function isHexColor(value: unknown): boolean {
-    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(String(value ?? '').trim());
+    return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(textOf(value).trim());
 }
 
 // ── Free-form attributes ────────────────────────────────────────────────────

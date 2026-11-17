@@ -646,7 +646,7 @@ class DesignViewPanel {
         clearTimeout(this._timer);
         clearTimeout(this._selectionTimer);
         this._panel.dispose();
-        this._disposables.forEach(disposable => disposable.dispose());
+        this._disposables.forEach(disposable => { disposable.dispose(); });
         this._disposables = [];
     }
 }

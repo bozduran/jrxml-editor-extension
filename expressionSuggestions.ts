@@ -602,9 +602,12 @@ function provideMemberItems(
     const hint = buildTypeHint(resolution);
     if (!hint) return null;
 
+    // The hint's label doubles as the filter text; both fall back to the empty
+    // string together so the completion never filters on a different word.
+    const hintLabel = hint.label || '';
     return [withPlain({
-        label:             hint.label || '',
-        filterText:        hint.label,
+        label:             hintLabel,
+        filterText:        hintLabel,
         detail:            hint.detail || '',
         documentation:     hint.documentation || '',
         insertTextSnippet: hint.insertText,

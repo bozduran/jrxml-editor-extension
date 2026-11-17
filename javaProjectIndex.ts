@@ -23,7 +23,7 @@ export interface JavaProjectIndex {
 }
 
 export const EMPTY_JAVA_PROJECT_INDEX: JavaProjectIndex = Object.freeze({
-    classes: Object.freeze([]) as readonly JavaClass[],
+    classes: Object.freeze([]),
     methods: [],
     byQualified: new Map<string, JavaClass>(),
     bySimpleName: new Map<string, readonly JavaClass[]>(),

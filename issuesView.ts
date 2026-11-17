@@ -346,7 +346,7 @@ function pickNavigationTarget(
         || ranges[ranges.length - 1];
 }
 
-async function navigate(direction: number): Promise<void> {
+function navigate(direction: number): void {
     const editor = vscode.window.activeTextEditor;
     if (!isJrxml(editor?.document)) {
         vscode.window.showWarningMessage('Open a .jrxml file first.');

@@ -40,9 +40,30 @@ interface PackageManifest {
     contributes: PackageContributes;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPackageCommand(value: unknown): value is PackageCommand {
+    if (!isRecord(value)) return false;
+    const { command, title } = value;
+    return typeof command === 'string' && typeof title === 'string';
+}
+
+function isPackageKeybinding(value: unknown): value is PackageKeybinding {
+    if (!isRecord(value)) return false;
+    const { command, key, mac } = value;
+    if (typeof command !== 'string' || typeof key !== 'string') return false;
+    return mac === undefined || typeof mac === 'string';
+}
+
 /**
  * The package manifest. The compiled module lives in out/, so try the source
  * root first (next to this file) and then the extension root one level up.
+ *
+ * package.json is a JSON boundary: the tutorial only renders contributed
+ * commands and keybindings, so those two lists are shape-checked and any entry
+ * that does not look right is dropped instead of rendered.
  */
 function packageManifest(): PackageManifest {
     const candidates = [
@@ -50,10 +71,25 @@ function packageManifest(): PackageManifest {
         path.join(__dirname, '..', 'package.json'),
     ];
     for (const candidate of candidates) {
-        if (fs.existsSync(candidate)) {
-            // The manifest tests validate package.json; this is the slice read here.
-            return JSON.parse(fs.readFileSync(candidate, 'utf8')) as PackageManifest;
+        if (!fs.existsSync(candidate)) continue;
+
+        const parsed: unknown = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+        if (!isRecord(parsed)) throw new Error(`package.json at ${candidate} is not an object`);
+        const { version, contributes } = parsed;
+        if (typeof version !== 'string') {
+            throw new Error(`package.json at ${candidate} does not declare a version`);
         }
+        if (!isRecord(contributes)) {
+            throw new Error(`package.json at ${candidate} does not contribute anything`);
+        }
+        const { commands, keybindings } = contributes;
+        return {
+            version,
+            contributes: {
+                commands: Array.isArray(commands) ? commands.filter(isPackageCommand) : [],
+                keybindings: Array.isArray(keybindings) ? keybindings.filter(isPackageKeybinding) : [],
+            },
+        };
     }
     throw new Error('package.json not found next to tutorialHtml');
 }

@@ -9,6 +9,7 @@
 
 import * as vscode from 'vscode';
 import { errorMessage } from './errors';
+import { textOf } from './textValue';
 import { formatExpression } from './expressionFormatter';
 import { buildPanelHtml, getNonce } from './expressionPanelHtml';
 import { applyExpressionToEditor } from './expressionApply';
@@ -117,7 +118,7 @@ class ExpressionEditorPanel {
                     this._openIfElseBuilder(message.expression);
                     break;
                 case 'draft':
-                    this._drafts.set(this._currentKey, String(message.text == null ? '' : message.text));
+                    this._drafts.set(this._currentKey, textOf(message.text));
                     break;
                 case 'autoFormat':
                     this._setAutoFormat(message.value === true);
@@ -299,7 +300,7 @@ class ExpressionEditorPanel {
     dispose(): void {
         ExpressionEditorPanel.currentPanel = undefined;
         this._panel.dispose();
-        this._disposables.forEach(d => d.dispose());
+        this._disposables.forEach(d => { d.dispose(); });
         this._disposables = [];
     }
 }

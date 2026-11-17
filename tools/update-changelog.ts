@@ -55,6 +55,8 @@ function insertVersionHeading(text: string, version: string, date: string): stri
 }
 
 function main(): void {
+    // Build tool, not shipped: this project's own package.json is the input, so
+    // the one-field cast is a local convenience rather than a runtime boundary.
     const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as { version: string };
     const version = process.argv[2] || packageJson.version;
     const date = process.argv[3] || new Date().toISOString().slice(0, 10);

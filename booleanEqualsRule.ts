@@ -8,26 +8,12 @@
 
 import { referenceTokens } from './referenceTokens';
 import type { ReferenceToken } from './referenceTokens';
+import type { Declaration, Declarations } from './declarationView';
 
 export const CODE = 'jrxml.booleanEquals';
 export const MESSAGE = 'Prefer EQUALS($ref, true/false) or NOT(EQUALS(...)) instead of == / != or a bare Boolean reference.';
 
 export type ReferenceSigil = 'F' | 'P' | 'V';
-
-export interface TypeDeclaration {
-    readonly name: string;
-    readonly type?: string;
-    readonly fullType?: string;
-}
-
-export interface Declarations {
-    readonly allFields?: readonly TypeDeclaration[];
-    readonly fields?: readonly TypeDeclaration[];
-    readonly allParameters?: readonly TypeDeclaration[];
-    readonly parameters?: readonly TypeDeclaration[];
-    readonly allVariables?: readonly TypeDeclaration[];
-    readonly variables?: readonly TypeDeclaration[];
-}
 
 export interface BooleanEqualsHit {
     start: number;
@@ -65,7 +51,7 @@ function buildTypeSet(
     return sets;
 }
 
-function parameterType(declaration: TypeDeclaration): string | null | undefined {
+function parameterType(declaration: Declaration): string | null | undefined {
     return declaration.fullType || declaration.type;
 }
 

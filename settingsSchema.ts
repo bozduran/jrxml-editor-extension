@@ -32,7 +32,12 @@ export interface SettingsGroup {
     readonly settings: readonly SettingDescriptor[];
 }
 
-export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
+/**
+ * The settings table. The literal is declared with `satisfies` so every group
+ * and descriptor is checked against the exported interfaces while the keys stay
+ * visible to the compiler and to editors.
+ */
+const SETTINGS_GROUP_TABLE = [
     {
         id: 'editor',
         title: 'Editor',
@@ -269,7 +274,10 @@ export const SETTINGS_GROUPS: readonly SettingsGroup[] = [
             },
         ],
     },
-];
+] satisfies readonly SettingsGroup[];
+
+/** The same table, in panel order, as the interface the UI consumes. */
+export const SETTINGS_GROUPS: readonly SettingsGroup[] = SETTINGS_GROUP_TABLE;
 
 /** Flat list of every setting in panel order. */
 export function allSettings(): SettingDescriptor[] {

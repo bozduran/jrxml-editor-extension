@@ -3,7 +3,7 @@
 // declaration. Providers format this record; they do not re-implement lookup.
 
 import { reportIndex } from './reportIndex';
-import type { ReportSymbol, ResolveAt } from './reportIndex';
+import type { IndexReference, ReportSymbol, ResolveAt } from './reportIndex';
 import { resolveDeclarationScope } from './jrxmlParser';
 import type { Declaration, DeclarationScope, ParseResult } from './jrxmlParser';
 import type { ExpressionSigil } from './expressionUtils';
@@ -53,6 +53,6 @@ export function declarationInAnyScope(
 }
 
 /** Every navigable reference of the same symbol in the same scope. */
-export function occurrences(parsed: ParseResult | null, symbol: ReportSymbol | null) {
+export function occurrences(parsed: ParseResult | null, symbol: ReportSymbol | null): IndexReference[] {
     return reportIndex(parsed)?.occurrences(symbol) ?? [];
 }

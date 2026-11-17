@@ -127,7 +127,14 @@ function declarationAttrs(extra: Record<string, AttributeRule> = {}): Record<str
     return { name: { required: true }, class: {}, ...extra };
 }
 
-export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
+/**
+ * Element-name → rule table. The literal is declared with `satisfies` so every
+ * entry is checked against `ElementRule` and the keys stay visible to the
+ * compiler; the exported value keeps an index signature because rules are
+ * looked up by the tag name found in the document (schemaChecks), not by a
+ * closed set of keys.
+ */
+const ELEMENT_RULE_TABLE = {
     // ── Report-level ────────────────────────────────────────────────────────
     jasperReport: {
         attrs: {
@@ -361,7 +368,10 @@ export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = {
     conditionExpression: { attrs: {} },
     printWhenExpression: { attrs: {} },
     partNameExpression: { attrs: {} },
-};
+} satisfies Readonly<Record<string, ElementRule>>;
+
+/** The same table, indexed by element name. */
+export const ELEMENT_RULES: Readonly<Record<string, ElementRule>> = ELEMENT_RULE_TABLE;
 
 /**
  * Direct children of `<jasperReport>` in schema order. `query` and
