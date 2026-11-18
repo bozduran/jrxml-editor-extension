@@ -886,12 +886,22 @@ export function prepareText(raw: string, markup: string): string {
     return decodeXmlEntities(out).replace(/\r\n?/g, '\n');
 }
 
-/** Strip markup from a styled/HTML/RTF text value, keeping the inner text. */
+/**
+ * Strip markup from a styled/HTML/RTF text value, keeping the inner text.
+ *
+ * The tag strip repeats until the value stops changing. This text is rendered
+ * in a webview, so the sanitizer has to be idempotent rather than "enough for
+ * one pass": CodeQL's incomplete-multi-character-sanitization query asks for
+ * exactly that, and a fixed point is the cheap way to guarantee it.
+ */
 export function flattenMarkup(value: string): string {
-    return value
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]*>/g, '')
-        .replace(/\n{3,}/g, '\n\n');
+    let out = value.replace(/<br\s*\/?>/gi, '\n');
+    for (;;) {
+        const next = out.replace(/<[^>]*>/g, '');
+        if (next === out) break;
+        out = next;
+    }
+    return out.replace(/\n{3,}/g, '\n\n');
 }
 
 /** Decode the predefined XML entities plus numeric character references. */

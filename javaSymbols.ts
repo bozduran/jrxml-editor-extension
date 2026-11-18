@@ -23,6 +23,7 @@ import type { JavaClass, JavaMethod } from './javaSourceScan';
 import { parseExpression, childExpressions } from './javaParser';
 import type { JavaExpressionNode, MethodCallNode } from './javaParser';
 import { maskReferences } from './expressionMask';
+import { escapeRegExp } from './escaping';
 import { suggestName } from './textDistance';
 import { regions } from './expressionRegions';
 import { EXPRESSION_TAGS } from './expressionTags';
@@ -262,7 +263,7 @@ function checkImports(
         }
 
         const simple = entry.value.slice(entry.value.lastIndexOf('.') + 1);
-        const used = new RegExp(`\\b${simple.replace(/[$]/g, '\\$')}\\b`).test(allExpressions);
+        const used = new RegExp(`\\b${escapeRegExp(simple)}\\b`).test(allExpressions);
         if (!used) {
             findings.push(finding(
                 entry.valueOffset, entry.valueLength,

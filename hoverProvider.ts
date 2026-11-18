@@ -9,6 +9,7 @@ import { bundleAttribute } from './resourceBundle';
 import { findReferenceToken } from './expressionUtils';
 import type { ReferenceToken } from './referenceTokens';
 import { resolveSymbol } from './reportSymbols';
+import { escapeMarkdownCode } from './escaping';
 import { textOf } from './textValue';
 
 /**
@@ -26,7 +27,7 @@ function mdSafe(text: unknown): string {
 
 /** Escape text that will be placed inside a markdown code span. */
 function mdCode(text: unknown): string {
-    return textOf(text).replace(/`/g, '\\`');
+    return escapeMarkdownCode(textOf(text));
 }
 
 /** Hover for a `$R{key}` resource-bundle reference. */
