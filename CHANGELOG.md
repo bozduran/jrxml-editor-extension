@@ -10,6 +10,15 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- Internal/hardening (the four CodeQL alerts on the 1.3.2 branch): the escaping
+  helpers now escape the escape character before the character they protect.
+  That covers hover markdown code spans and `$R{}` completion snippets (a value
+  ending in `\` could swallow the next escape), the RegExp built from an
+  imported class name, and the HTML/RTF tag strip in the design model, which now
+  runs to a fixed point. The helpers live in `escaping.ts`; no user-facing
+  behaviour changes.
+
 ## [1.3.2] - 2026-11-17
 
 ### Changed
