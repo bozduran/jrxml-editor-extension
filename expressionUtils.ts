@@ -7,6 +7,7 @@ import { findReferenceToken } from './referenceTokens';
 import { scanXml } from './xmlspan';
 import type { XmlScanResult } from './xmlspan';
 import { regions, regionAt } from './expressionRegions';
+import { escapeRegExp } from './escaping';
 
 /** A document the scan cache can key on and revalidate by version + text. */
 export interface ScannableDocument {
@@ -109,10 +110,6 @@ function wrapExpression(expr: string, useCdata: boolean): string {
 /** Detect whether the original tag content used CDATA. */
 function hasCdata(rawInner: string): boolean {
     return /^\s*<!\[CDATA\[/.test(rawInner);
-}
-
-function escapeRegExp(text: string): string {
-    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /** The declaration fields the offset lookup reads. */

@@ -11,6 +11,7 @@ import { languageOfScan } from './reportLanguage';
 import type { ReportLanguage } from './reportLanguage';
 import { REPORT_SECTIONS } from './jrxmlSections';
 import { localName } from './xmlName';
+import { escapeRegExp } from './escaping';
 import { bundleAttributeOfScan } from './resourceBundle';
 import type { BundleAttribute } from './resourceBundle';
 import { documentSource } from './reportSource';
@@ -1010,10 +1011,6 @@ function truncateLabel(text: string): string {
 }
 
 // ── XML helpers ───────────────────────────────────────────────────────────────
-
-function escapeRegExp(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Match `name="value"` / `name='value'` as a whole attribute (not a suffix of a

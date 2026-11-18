@@ -13,6 +13,7 @@ import { getMembers } from './jdkMemberIndex';
 import type { MemberLookup } from './jdkMemberIndex';
 import { buildMemberCandidates, buildTypeHint, documentationFor } from './typeCompletion';
 import { BUILTIN_VARIABLES, BUILTIN_PARAMETERS } from './jasperBuiltins';
+import { escapeSnippet } from './escaping';
 
 const MEMBER_WINDOW = 4000;
 const MEMBER_RE = /\.\s*([A-Za-z_$][\w$]*)?$/;
@@ -424,7 +425,7 @@ function resourceItems(resources: readonly ResourceEntry[]): ExpressionSuggestio
             documentation:     hasValue
                 ? `**${resource.key}**\n\n${markdownSafe(value)}`
                 : `**${resource.key}**\n\n_No default value in the default bundle._`,
-            insertTextSnippet: resource.key.replace(/\$/g, '\\$'),
+            insertTextSnippet: escapeSnippet(resource.key),
             kind:              'reference',
             sortText:          '0_' + resource.key,
         }, resource.key);

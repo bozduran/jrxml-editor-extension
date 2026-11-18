@@ -83,6 +83,20 @@ test('offers resource keys inside $R{ when a bundle is indexed', () => {
     assert.strictEqual(closed.items[0].insertTextPlain, 'title');
 });
 
+test('resource snippets escape backslashes before dollars', () => {
+    const resources = [
+        { key: 'a\\$b', defaultValue: '' },
+        { key: 'plain', defaultValue: '' },
+    ];
+    const result = suggest('$R{', 3, { resources });
+    const snippets = new Map(result.items.map(item => [item.label, item.insertTextSnippet]));
+
+    // One literal backslash plus one dollar becomes three backslashes then the
+    // dollar; a lone `$` would have started a snippet placeholder.
+    assert.strictEqual(snippets.get('a\\$b'), 'a\\\\\\$b');
+    assert.strictEqual(snippets.get('plain'), 'plain');
+});
+
 test('offers parameters inside $P!{} query fragments', () => {
     const result = suggest('$P!{', 4);
 

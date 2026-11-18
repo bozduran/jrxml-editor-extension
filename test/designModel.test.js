@@ -332,6 +332,22 @@ test('text helpers decode entities, flatten markup and strip tag prefixes', () =
     assert.strictEqual(localName('jr:jasperReport'), 'jasperreport');
 });
 
+test('flattenMarkup leaves no tag behind and is idempotent', () => {
+    const crafted = [
+        '<script>alert(1)</script>',
+        '<<b>script>alert(1)<</b>/script>',
+        'one<br/>two<BR>three<b>four</b>',
+        'a < b > c',
+        'x<y',
+        'no markup at all',
+    ];
+    for (const input of crafted) {
+        const once = flattenMarkup(input);
+        assert.doesNotMatch(once, /<[^>]*>/, `${JSON.stringify(input)} still contains a tag`);
+        assert.strictEqual(flattenMarkup(once), once, `${JSON.stringify(input)} is not idempotent`);
+    }
+});
+
 test('exposes editable content separate from the flattened display text', () => {
     const model = buildDesignModel(fixture('Blank_A4_1.jrxml'));
     const title = model.bands.find(band => band.key === 'title');
