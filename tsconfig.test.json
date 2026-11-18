@@ -1,0 +1,17 @@
+{
+  // Typechecks the unit tests. They import the compiled modules from out/ and
+  // resolve the emitted .d.ts, so `npm run build` must run first (the test
+  // script does that through `pretest`).
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["test/**/*.ts"]
+}

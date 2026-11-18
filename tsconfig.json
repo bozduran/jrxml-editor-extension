@@ -16,6 +16,9 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "sourceMap": true,
+    // The unit tests import the compiled modules from out/ and are typechecked
+    // against these declarations (see tsconfig.test.json).
+    "declaration": true,
     "noEmitOnError": true,
     "useDefineForClassFields": false,
     // Strictness ladder (see .local-docs/TYPESCRIPT_A_GRADE_PLAN.md).

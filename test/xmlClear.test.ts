@@ -1,0 +1,421 @@
+// test/xmlClear.test.js
+
+import test from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {
+    discoverClearFixes,
+    queryMigrationEdits,
+    collectUsedNames,
+    removalSpan,
+    BUILTIN_PARAMETERS,
+} from '../out/xmlClear.js';
+import type { ClearFixGroup } from '../out/xmlClear.js';
+import { applyEdits } from '../out/edits.js';
+import type { Edit } from '../out/edits.js';
+import { TEST_DIR } from './support.ts';
+
+function fixture(): string {
+    return fs.readFileSync(path.join(TEST_DIR, 'fixtures', 'ClearEdgeReport.jrxml'), 'utf8');
+}
+
+function group(text: string, label: string): ClearFixGroup | undefined {
+    return discoverClearFixes(text).find(g => g.label === label);
+}
+
+function descriptions(text: string, label: string): string[] {
+    const g = group(text, label);
+    return g ? g.fixes.map(f => f.description) : [];
+}
+
+function report(body: string): string {
+    return `<jasperReport name="R">\n${body}\n</jasperReport>`;
+}
+
+// ── golden fixture ────────────────────────────────────────────────────────────
+
+test('golden: ClearEdgeReport groups and descriptions match the hook', () => {
+    assert.deepStrictEqual(descriptions(fixture(), 'unused declarations'), [
+        "delete unused parameter 'UnusedParam'",
+        "delete unused field 'UnusedField'",
+        "delete unused variable 'UnusedVar'",
+    ]);
+    assert.deepStrictEqual(descriptions(fixture(), 'jsonql fixes'), [
+        'add net.sf.jasperreports.jsonql.field.expression = "a & b"',
+    ]);
+    assert.strictEqual(group(fixture(), 'description sync'), undefined);
+});
+
+test('golden: ClearEdgeReport applied result deletes lines and adds the property', () => {
+    const text = fixture();
+    const edits: Edit[] = discoverClearFixes(text).flatMap(g =>
+        g.fixes.flatMap(f => (f.edit ? [f.edit] : []))
+    );
+    const applied = applyEdits(text, edits);
+
+    assert.ok(!applied.includes('UnusedParam'));
+    assert.ok(!applied.includes('UnusedField'));
+    assert.ok(!applied.includes('UnusedVar'));
+    assert.ok(applied.includes('name="ReportTitle"'));
+    assert.ok(applied.includes('name="Total&amp;Tax"'));
+    assert.ok(applied.includes('\t\t<property name="net.sf.jasperreports.jsonql.field.expression" value="a &amp; b"/>'));
+});
+
+// ── unused detection ──────────────────────────────────────────────────────────
+
+test('references are only collected from expressions, not the whole document', () => {
+    const text = report([
+        '  <field name="onlyInComment" class="java.lang.String"/>',
+        '  <field name="onlyInDescription" class="java.lang.String">',
+        '    <description>$F{onlyInDescription}</description>',
+        '  </field>',
+        '  <!-- $F{onlyInComment} -->',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(!used.has('FIELD:onlyInComment'));
+    assert.ok(!used.has('FIELD:onlyInDescription'));
+
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), [
+        "delete unused field 'onlyInComment'",
+        "delete unused field 'onlyInDescription'",
+    ]);
+});
+
+test('$P!{} references inside a query count as used', () => {
+    const text = report([
+        '  <parameter name="Clause" class="java.lang.String"/>',
+        '  <query language="sql"><![CDATA[SELECT * FROM t WHERE $P!{Clause}]]></query>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(used.has('PARAMETER:Clause'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('a field used before its declaration in a propertyExpression is used (issue regression)', () => {
+    const text = report([
+        '  <propertyExpression name="net.sf.jasperreports.export.pdf.tag.language"><![CDATA[$F{Field_1}]]></propertyExpression>',
+        '  <field name="Field_1" class="java.lang.String"/>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(used.has('FIELD:Field_1'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('references in image/subreport/filter/chart expressions count as used', () => {
+    const text = report([
+        '  <parameter name="Src" class="java.lang.String"/>',
+        '  <field name="Logo" class="java.lang.String"/>',
+        '  <field name="Active" class="java.lang.Boolean"/>',
+        '  <image><imageExpression><![CDATA[$F{Logo}]]></imageExpression></image>',
+        '  <filterExpression><![CDATA[$F{Active}]]></filterExpression>',
+        '  <subreport><subreportExpression><![CDATA[$P{Src}]]></subreportExpression></subreport>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(used.has('FIELD:Logo'));
+    assert.ok(used.has('FIELD:Active'));
+    assert.ok(used.has('PARAMETER:Src'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('classic subreportParameterExpression counts as used', () => {
+    const text = report([
+        '  <parameter name="MainP" class="java.lang.String"/>',
+        '  <subreport>',
+        '    <subreportParameter name="SubP"><subreportParameterExpression><![CDATA[$P{MainP}]]></subreportParameterExpression></subreportParameter>',
+        '  </subreport>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(used.has('PARAMETER:MainP'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('a sortField references its field/variable by name attribute', () => {
+    const text = report([
+        '  <field name="ByName" class="java.lang.String"/>',
+        '  <variable name="ByVar" class="java.lang.String"/>',
+        '  <group name="G">',
+        '    <groupHeader><band height="1">',
+        '      <sortField name="ByName"/>',
+        '      <sortField name="ByVar" type="Variable"/>',
+        '    </band></groupHeader>',
+        '  </group>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(used.has('FIELD:ByName'));
+    assert.ok(used.has('VARIABLE:ByVar'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('collectUsedNames returns null for an unscannable document', () => {
+    assert.strictEqual(collectUsedNames('<r><a></b></r>'), null);
+});
+
+test('a declaration used before it appears in the file is not unused', () => {
+    const text = report([
+        '  <expression><![CDATA[$F{Late}+$P{LateP}+$V{LateV}]]></expression>',
+        '  <field name="Late" class="java.lang.String"/>',
+        '  <parameter name="LateP" class="java.lang.String"/>',
+        '  <variable name="LateV" class="java.lang.String"/>',
+    ].join('\n'));
+
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('golden: DatasetScopeReport keeps dataset/nested declarations out of report scope', () => {
+    const text = fs.readFileSync(path.join(TEST_DIR, 'fixtures', 'DatasetScopeReport.jrxml'), 'utf8');
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+
+    // Field_1 appears only before its declaration, inside a propertyExpression.
+    assert.ok(used.has('FIELD:Field_1'));
+    // Dataset members are referenced inside the dataset.
+    assert.ok(used.has('FIELD:CompanyName'));
+    assert.ok(used.has('PARAMETER:FIL_PARAMETER'));
+
+    // Dataset members and the subreport pass-through are never offered for
+    // deletion; only the genuinely unused report variable is.
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), [
+        "delete unused variable 'Variable_1'",
+    ]);
+});
+
+test('subreport pass-throughs and return values count as used', () => {
+    const text = report([
+        '  <parameter name="Passed" class="java.lang.String"/>',
+        '  <variable name="Returned" class="java.lang.Integer"/>',
+        '  <subreportParameter name="Passed"/>',
+        '  <returnValue toVariable="Returned"/>',
+    ].join('\n'));
+
+    const used = collectUsedNames(text);
+    assert.ok(used, 'the document must be scannable');
+    assert.ok(used.has('PARAMETER:Passed'));
+    assert.ok(used.has('VARIABLE:Returned'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('nested subreport parameters count as used', () => {
+    const text = report([
+        '  <parameter name="Nested" class="java.lang.String"/>',
+        '  <element kind="subreport"><parameter name="Nested" class="java.lang.String"/></element>',
+    ].join('\n'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('built-in parameters are never deleted', () => {
+    for (const name of ['REPORT_LOCALE', 'JSON_TIME_ZONE', 'REPORT_SCRIPTLET']) {
+        assert.ok(BUILTIN_PARAMETERS.has(name));
+        const text = report(`  <parameter name="${name}" class="java.lang.Object"/>`);
+        assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+    }
+});
+
+test('an entity-encoded declaration name matches its decoded reference', () => {
+    const text = report([
+        '  <field name="Total&amp;Tax" class="java.lang.String"/>',
+        '  <expression><![CDATA[$F{Total&Tax}]]></expression>',
+    ].join('\n'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('only direct root children are treated as declarations', () => {
+    const text = report([
+        '  <detail><band height="10">',
+        '    <variable name="Inner" class="java.lang.Integer"/>',
+        '  </band></detail>',
+    ].join('\n'));
+    assert.deepStrictEqual(descriptions(text, 'unused declarations'), []);
+});
+
+test('removal is line-aware and keeps a same-line comment', () => {
+    const text = report('  <field name="A" class="java.lang.String"/><!-- keep -->');
+    const span = removalSpan(text, text.indexOf('<field'), text.indexOf('/>') + 2);
+
+    assert.strictEqual(text.slice(span.start, span.end), '<field name="A" class="java.lang.String"/>');
+    assert.ok(text.includes('<!-- keep -->'));
+});
+
+// ── description sync ──────────────────────────────────────────────────────────
+
+test('description sync uses the jsonql value, preserving CDATA', () => {
+    const text = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <description><![CDATA[old text]]></description>',
+        '    <property name="net.sf.jasperreports.jsonql.field.expression" value="new text"/>',
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+
+    const g = group(text, 'description sync');
+    assert.ok(g, 'expected a description-sync group');
+    const fix = g.fixes[0];
+    assert.ok(fix.edit, 'the description-sync fix must carry an edit');
+    assert.strictEqual(fix.description, `change description for field 'F' from "old text" to "new text"`);
+    assert.strictEqual(fix.edit.replacement, 'new text');
+    assert.ok(applyEdits(text, [fix.edit]).includes('<![CDATA[new text]]>'));
+});
+
+test('description sync XML-encodes when the description has no CDATA', () => {
+    const text = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <description>old &amp; text</description>',
+        '    <property name="net.sf.jasperreports.jsonql.field.expression" value="new &amp; value"/>',
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+
+    const g = group(text, 'description sync');
+    assert.ok(g, 'expected a description-sync group');
+    const fix = g.fixes[0];
+    assert.ok(fix.edit, 'the description-sync fix must carry an edit');
+    assert.strictEqual(fix.description, `change description for field 'F' from "old & text" to "new & value"`);
+    assert.strictEqual(fix.edit.replacement, 'new &amp; value');
+});
+
+test('description sync skips unused fields and unchanged values', () => {
+    const unchanged = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <description><![CDATA[same]]></description>',
+        '    <property name="net.sf.jasperreports.jsonql.field.expression" value="same"/>',
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+    assert.strictEqual(group(unchanged, 'description sync'), undefined);
+
+    const unused = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <description><![CDATA[old]]></description>',
+        '    <property name="net.sf.jasperreports.jsonql.field.expression" value="new"/>',
+        '  </field>',
+    ].join('\n'));
+    const labels = discoverClearFixes(unused).map(g => g.label);
+    assert.ok(labels.includes('unused declarations'));
+    assert.ok(!labels.includes('description sync'));
+    assert.ok(!labels.includes('jsonql fixes'));
+});
+
+// ── jsonql fixes ──────────────────────────────────────────────────────────────
+
+test('legacy property is removed when jsonql is present', () => {
+    const text = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <property name="net.sf.jasperreports.json.field.expression" value="x"/>',
+        '    <property name="net.sf.jasperreports.jsonql.field.expression" value="y"/>',
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+
+    assert.deepStrictEqual(descriptions(text, 'jsonql fixes'), [
+        'remove legacy net.sf.jasperreports.json.field.expression from field \'F\'',
+    ]);
+    const g = group(text, 'jsonql fixes');
+    assert.ok(g, 'expected a jsonql fix group');
+    const fix = g.fixes[0];
+    assert.ok(fix.edit, 'the jsonql fix must carry an edit');
+    const applied = applyEdits(text, [fix.edit]);
+    assert.ok(!applied.includes('net.sf.jasperreports.json.field.expression'));
+    assert.ok(applied.includes('net.sf.jasperreports.jsonql.field.expression'));
+});
+
+test('legacy property is renamed when jsonql is absent', () => {
+    const text = report([
+        '  <field name="F" class="java.lang.String">',
+        "    <property name='net.sf.jasperreports.json.field.expression' value='x'/>",
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+
+    assert.deepStrictEqual(descriptions(text, 'jsonql fixes'), [
+        'rename net.sf.jasperreports.json.field.expression to net.sf.jasperreports.jsonql.field.expression',
+    ]);
+    const g = group(text, 'jsonql fixes');
+    assert.ok(g, 'expected a jsonql fix group');
+    const fix = g.fixes[0];
+    assert.ok(fix.edit, 'the jsonql fix must carry an edit');
+    const applied = applyEdits(text, [fix.edit]);
+    assert.ok(applied.includes("name='net.sf.jasperreports.jsonql.field.expression'"));
+});
+
+test('propertyExpression counts as jsonql for the add rule', () => {
+    const text = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <description>text</description>',
+        '    <propertyExpression name="net.sf.jasperreports.jsonql.field.expression"><![CDATA[$P{x}]]></propertyExpression>',
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+
+    assert.strictEqual(group(text, 'jsonql fixes'), undefined);
+    assert.strictEqual(group(text, 'description sync'), undefined);
+});
+
+test('a blank description produces no jsonql property', () => {
+    const text = report([
+        '  <field name="F" class="java.lang.String">',
+        '    <description>   </description>',
+        '  </field>',
+        '  <expression><![CDATA[$F{F}]]></expression>',
+    ].join('\n'));
+    assert.strictEqual(group(text, 'jsonql fixes'), undefined);
+});
+
+// ── query migration ───────────────────────────────────────────────────────────
+
+test('SQL query migration is discovered and needs input', () => {
+    const text = report('  <query language="sql"><![CDATA[SELECT 1]]></query>');
+    const g = group(text, 'query migration');
+
+    assert.ok(g);
+    assert.strictEqual(g.fixes[0].description, 'migrate SQL query to jsonql');
+    assert.strictEqual(g.fixes[0].kind, 'queryMigration');
+
+    // An empty answer applies nothing.
+    assert.deepStrictEqual(queryMigrationEdits(g.fixes[0].query, ''), []);
+
+    const applied = applyEdits(text, queryMigrationEdits(g.fixes[0].query, 'SELECT 2'));
+    assert.ok(applied.includes('language="jsonql"'));
+    assert.ok(applied.includes('SELECT 2'));
+});
+
+test('query migration handles single quotes and an empty body', () => {
+    const text = report("  <query language='SQL'><![CDATA[]]></query>");
+    const g = group(text, 'query migration');
+    assert.ok(g, 'expected a query-migration group');
+    const applied = applyEdits(text, queryMigrationEdits(g.fixes[0].query, 'expr'));
+
+    assert.ok(applied.includes("language='jsonql'"));
+    assert.ok(applied.includes('<![CDATA[expr]]>'));
+});
+
+test('a non-SQL query is not reported', () => {
+    const text = report('  <query language="jsonql"><![CDATA[x]]></query>');
+    assert.strictEqual(group(text, 'query migration'), undefined);
+});
+
+test('query migration writes the configured target language', () => {
+    const text = report('  <query language="sql"><![CDATA[SELECT 1]]></query>');
+    const g = group(text, 'query migration');
+    assert.ok(g, 'expected a query-migration group');
+    const applied = applyEdits(text, queryMigrationEdits(g.fixes[0].query, 'expr', 'jsonql2'));
+
+    assert.ok(applied.includes('language="jsonql2"'));
+    assert.ok(!applied.includes('language="sql"'));
+});
+
+test('malformed XML yields no clear fixes', () => {
+    assert.deepStrictEqual(discoverClearFixes('<r><a></b></r>'), []);
+});

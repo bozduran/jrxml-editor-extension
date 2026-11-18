@@ -1,0 +1,618 @@
+// test/completionProvider.test.ts
+// completionProvider requires 'vscode' at load time, so a stub is installed
+// before the module is loaded. The provider is exercised end to end: document
+// text in, CompletionItems out — covering both the typed-member path and the
+// legacy list it must fall back to.
+//
+// The test is an ES module while the compiled host module is CommonJS, so the
+// stub goes through Node's CJS loader: createRequire keeps that path, which a
+// static `import` would bypass.
+
+import test from 'node:test';
+import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import Module from 'node:module';
+import { createRequire } from 'node:module';
+
+import { clearJavaProjectIndex } from '../out/javaProjectIndex.js';
+
+const require = createRequire(import.meta.url);
+
+/** The label object VS Code uses for the rich method labels. */
+interface FakeCompletionLabel {
+    label: string;
+    detail?: string;
+    description?: string;
+}
+
+type CompletionLabel = string | FakeCompletionLabel;
+
+class FakeSnippetString {
+    value: string;
+
+    constructor(value: string) { this.value = value; }
+
+    toString(): string { return this.value; }
+}
+
+class FakeMarkdownString {
+    value: string;
+
+    constructor(value: string) { this.value = value; }
+
+    toString(): string { return this.value; }
+}
+
+class FakeCompletionItem {
+    label: CompletionLabel;
+    kind: number;
+    detail: string;
+    documentation: FakeMarkdownString;
+    insertText: FakeSnippetString;
+    filterText: string;
+    sortText: string;
+    tags?: number[];
+
+    constructor(label: CompletionLabel, kind: number) {
+        this.label = label;
+        this.kind = kind;
+        this.detail = '';
+        this.documentation = new FakeMarkdownString('');
+        this.insertText = new FakeSnippetString('');
+        this.filterText = '';
+        this.sortText = '';
+        this.tags = undefined;
+    }
+}
+
+/** A workspace folder as the provider reads it. */
+interface WorkspaceFolder {
+    uri: { fsPath: string };
+}
+
+/** The provider method this test drives. */
+interface CompletionProviderLike {
+    provideCompletionItems(
+        document: FakeDocument,
+        position: FakePosition,
+        context: unknown,
+    ): FakeCompletionItem[];
+}
+
+/** The slice of the vscode API the provider imports. */
+interface VscodeStub {
+    CompletionItem: typeof FakeCompletionItem;
+    CompletionItemKind: Record<string, number>;
+    CompletionItemTag: { Deprecated: number };
+    SnippetString: typeof FakeSnippetString;
+    MarkdownString: typeof FakeMarkdownString;
+    languages: {
+        registerCompletionItemProvider(
+            selector: unknown,
+            provider: CompletionProviderLike,
+        ): { dispose(): void };
+    };
+    workspace: {
+        getConfiguration(): { get(key: string, fallback: unknown): unknown };
+        readonly workspaceFolders: WorkspaceFolder[] | null;
+        onDidChangeWorkspaceFolders(): { dispose(): void };
+        onDidSaveTextDocument(): { dispose(): void };
+        onDidCreateFiles(): { dispose(): void };
+        onDidDeleteFiles(): { dispose(): void };
+        onDidRenameFiles(): { dispose(): void };
+    };
+}
+
+/** Node's internal CJS loader hook: the only way to stub `vscode`. */
+interface LoaderHost {
+    _load(request: string, parent: unknown, isMain: boolean): unknown;
+}
+
+let settings: Record<string, unknown> = {};
+let workspaceFolders: WorkspaceFolder[] | null = null;
+
+let registered: CompletionProviderLike | null = null;
+
+const loader = Module as unknown as LoaderHost;
+const originalLoad = loader._load;
+loader._load = (request: string, parent: unknown, isMain: boolean): unknown => {
+    if (request === 'vscode') {
+        const stub: VscodeStub = {
+            CompletionItem: FakeCompletionItem,
+            CompletionItemKind: { Text: 0, Method: 2, Field: 5, Variable: 6, Class: 7, Function: 3, TypeParameter: 25, Reference: 18 },
+            CompletionItemTag: { Deprecated: 1 },
+            SnippetString: FakeSnippetString,
+            MarkdownString: FakeMarkdownString,
+            languages: {
+                registerCompletionItemProvider: (_selector, provider) => {
+                    registered = provider;
+                    return { dispose() {} };
+                },
+            },
+            workspace: {
+                getConfiguration: () => ({
+                    get: (key: string, fallback: unknown) => (key in settings ? settings[key] : fallback),
+                }),
+                get workspaceFolders() { return workspaceFolders; },
+                onDidChangeWorkspaceFolders: () => ({ dispose() {} }),
+                onDidSaveTextDocument: () => ({ dispose() {} }),
+                onDidCreateFiles: () => ({ dispose() {} }),
+                onDidDeleteFiles: () => ({ dispose() {} }),
+                onDidRenameFiles: () => ({ dispose() {} }),
+            },
+        };
+        return stub;
+    }
+    return originalLoad.call(loader, request, parent, isMain);
+};
+
+// The module exports the registration disposable; the provider object itself is
+// what the stub captured. The require must come after the loader patch above.
+require('../out/completionProvider.js');
+assert.ok(registered, 'completionProvider must register a provider');
+const provider: CompletionProviderLike = registered;
+
+let seq = 0;
+
+interface FakePosition {
+    line: number;
+    character: number;
+}
+
+/** The slice of a `vscode.TextDocument` the provider uses. */
+interface FakeDocument {
+    uri: { toString(): string };
+    fileName: string;
+    version: number;
+    getText(): string;
+    offsetAt(position: FakePosition): number;
+    lineAt(lineOrPosition: number | FakePosition): { text: string };
+}
+
+/** Build a document stub with the offset/line APIs the provider uses. */
+function makeDoc(text: string, fileName?: string): FakeDocument {
+    const id = `file:///completion-${seq++}.jrxml`;
+    const lineStarts = [0];
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === '\n') lineStarts.push(i + 1);
+    }
+    return {
+        uri: { toString: () => id },
+        fileName: fileName || '/test/report.jrxml',
+        version: 1,
+        getText: () => text,
+        offsetAt: (position) => lineStarts[position.line] + position.character,
+        // The real API accepts either a line number or a Position.
+        lineAt: (lineOrPosition) => {
+            const line = typeof lineOrPosition === 'number' ? lineOrPosition : lineOrPosition.line;
+            return { text: text.split('\n')[line] ?? '' };
+        },
+    };
+}
+
+function positionAt(text: string, index: number): FakePosition {
+    const before = text.slice(0, index);
+    const line = before.split('\n').length - 1;
+    const lastBreak = before.lastIndexOf('\n');
+    return { line, character: index - (lastBreak + 1) };
+}
+
+const DECLARATIONS = [
+    '<field name="CustomerName" class="java.lang.String"/>',
+    '<field name="Unset"/>',
+    '<field name="Items" class="java.util.List"/>',
+    '<field name="When" class="java.sql.Timestamp"/>',
+    '<field name="Custom" class="com.acme.Customer"/>',
+    '<field name="Ambiguous" class="Date"/>',
+    '<parameter name="Total" class="java.math.BigDecimal"/>',
+    '<variable name="Count" class="java.lang.Integer" calculation="Count">',
+    '  <variableExpression><![CDATA[1]]></variableExpression>',
+    '</variable>',
+].join('\n  ');
+
+function report(expression: string, declarations: string = DECLARATIONS): string {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport name="R">
+  ${declarations}
+  <detail>
+    <band height="20">
+      <textField>
+        <reportElement x="0" y="0" width="100" height="20"/>
+        <textFieldExpression><![CDATA[${expression}]]></textFieldExpression>
+      </textField>
+    </band>
+  </detail>
+</jasperReport>`;
+}
+
+interface CompleteOptions {
+    settings?: Record<string, unknown>;
+    declarations?: string;
+}
+
+/** Complete at the end of `expression` inside a report. */
+function completeExpression(expression: string, options: CompleteOptions = {}): FakeCompletionItem[] {
+    settings = options.settings || {};
+    const text = report(expression, options.declarations);
+    // Anchor on the CDATA block: the same text can appear in the XML prolog.
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.indexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+/** The label is either a string or a CompletionItemLabel object. */
+function labelOf(item: FakeCompletionItem): string {
+    return typeof item.label === 'object' ? item.label.label : item.label;
+}
+
+/** The label's detail, when the provider attached the rich label object. */
+function labelDetail(item: FakeCompletionItem): string | undefined {
+    return typeof item.label === 'object' ? item.label.detail : undefined;
+}
+
+function labels(items: FakeCompletionItem[]): string[] {
+    return items.map(labelOf);
+}
+
+function find(items: FakeCompletionItem[], name: string): FakeCompletionItem | undefined {
+    return items.find(item => labelOf(item) === name);
+}
+
+// ── Typed members ─────────────────────────────────────────────────────────────
+
+test('a field receiver offers the members of its declared class', () => {
+    const items = completeExpression('$F{CustomerName}.');
+
+    const upper = find(items, 'toUpperCase');
+    assert.ok(upper, `expected toUpperCase, got ${labels(items).slice(0, 8).join(', ')}`);
+    assert.strictEqual(upper.kind, 2, 'methods are CompletionItemKind.Method');
+    assert.strictEqual(upper.insertText.value, 'toUpperCase()');
+    assert.strictEqual(upper.filterText, 'toUpperCase');
+    assert.strictEqual(upper.detail, 'toUpperCase() : String');
+    assert.match(upper.sortText, /^0_/);
+    assert.match(upper.documentation.value, /java\.lang\.String/);
+});
+
+test('members complete after a partial name and inside a longer expression', () => {
+    const items = completeExpression('$F{CustomerName} == null ? "x" : $F{CustomerName}.toU');
+    assert.ok(find(items, 'toUpperCase'), 'the receiver before the dot is what counts');
+});
+
+test('overloads are separate items carrying their parameter types', () => {
+    const items = completeExpression('$F{CustomerName}.');
+    const substrings = items.filter(item => labelOf(item) === 'substring');
+    assert.strictEqual(substrings.length, 2);
+    assert.deepStrictEqual(substrings.map(labelDetail), ['(int)', '(int, int)']);
+    assert.deepStrictEqual(substrings.map(i => i.insertText.value), ['substring(${1:n})', 'substring(${1:n}, ${2:n2})']);
+});
+
+test('parameters and variables complete through their declared class', () => {
+    const fromParameter = completeExpression('$P{Total}.');
+    assert.ok(find(fromParameter, 'setScale'), 'BigDecimal member from a parameter');
+    assert.ok(find(fromParameter, 'add'));
+
+    const fromVariable = completeExpression('$V{Count}.');
+    assert.ok(find(fromVariable, 'intValue'), 'Integer member from a variable');
+});
+
+test('built-in parameters resolve through the JasperReports type table', () => {
+    const items = completeExpression('$P{REPORT_DATA_SOURCE}.');
+    assert.ok(find(items, 'next'), 'JRDataSource.next');
+    assert.ok(find(items, 'getFieldValue'));
+});
+
+test('a method chain keeps completing on the return type', () => {
+    const items = completeExpression('$F{CustomerName}.trim().');
+    assert.ok(find(items, 'toUpperCase'), 'trim() returns a String');
+    assert.ok(find(items, 'length'));
+});
+
+test('inherited members are offered and marked as inherited', () => {
+    const items = completeExpression('$F{When}.');
+    const label = labelDetail;
+
+    // Timestamp declares before(Timestamp) and also inherits before(Date):
+    // both are offered, the own one first.
+    const befores = items.filter(item => labelOf(item) === 'before');
+    assert.deepStrictEqual(befores.map(label), ['(Timestamp)', '(Date)']);
+
+    const [own, inherited] = befores;
+    assert.match(own.sortText, /^0_/, 'own members come first');
+    assert.match(own.documentation.value, /Declared by `java\.sql\.Timestamp`/);
+
+    assert.match(inherited.sortText, /^1_/, 'inherited members sort after own ones');
+    assert.match(inherited.documentation.value, /Declared by `java\.util\.Date`/);
+    assert.match(inherited.documentation.value, /Inherited for/);
+});
+
+test('the deprecated flag is surfaced as an item tag', () => {
+    const items = completeExpression('$F{When}.getYear');
+    const getYear = find(items, 'getYear');
+    assert.ok(getYear);
+    assert.deepStrictEqual(getYear.tags, [1]);
+});
+
+test('the configured JDK baseline decides which members are offered', () => {
+    const java8 = completeExpression('$F{CustomerName}.');
+    assert.ok(!find(java8, 'isBlank'), 'isBlank is Java 11');
+
+    const java11 = completeExpression('$F{CustomerName}.', { settings: { 'typeCompletion.jdkBaseline': '11' } });
+    assert.ok(find(java11, 'isBlank'));
+});
+
+// ── Hints ─────────────────────────────────────────────────────────────────────
+
+test('a field without a class gets one hint that inserts nothing', () => {
+    const items = completeExpression('$F{Unset}.');
+    assert.strictEqual(items.length, 1, 'no member list can be produced, only the hint');
+
+    const hint = items[0];
+    assert.match(labelOf(hint), /\$F\{Unset\} is not declared/);
+    assert.match(labelOf(hint), /class="\.\.\."/);
+    assert.strictEqual(hint.insertText.value, '$0');
+    assert.match(hint.documentation.value, /class="java\.lang\.String"/);
+});
+
+test('an unindexed class explains what the index covers', () => {
+    const items = completeExpression('$F{Custom}.');
+    assert.strictEqual(items.length, 1);
+    assert.match(labelOf(items[0]), /com\.acme\.Customer is not in the type index/);
+});
+
+test('an ambiguous short class name lists the alternatives', () => {
+    const items = completeExpression('$F{Ambiguous}.');
+    assert.strictEqual(items.length, 1);
+    assert.match(labelOf(items[0]), /java\.util\.Date and java\.sql\.Date/);
+});
+
+test('an undeclared reference falls back to the normal list instead of a hint', () => {
+    const items = completeExpression('$F{Mystery}.');
+    assert.ok(items.length > 1, 'the legacy list is offered');
+    assert.ok(find(items, 'TODAY'), 'Jasper built-ins are still there');
+});
+
+// ── Dataset scope ────────────────────────────────────────────────────────────
+
+const SCOPED_DECLARATIONS = [
+    '<field name="ReportField" class="java.lang.String"/>',
+    '<dataset name="DS">',
+    '  <field name="DatasetField" class="java.lang.Integer"/>',
+    '  <filterExpression><![CDATA[%EXPR%]]></filterExpression>',
+    '</dataset>',
+    '<detail><band>',
+    '  <element kind="component"><component kind="list">',
+    '    <datasetRun subDataset="DS"/>',
+    '    <contents><element kind="textField"><expression><![CDATA[%EXPR%]]></expression></element></contents>',
+    '  </component></element>',
+    '</band></detail>',
+].join('\n  ');
+
+/** Complete at the end of the expression in the dataset definition. */
+function completeInDatasetDefinition(expression: string): FakeCompletionItem[] {
+    settings = {};
+    const text = `<jasperReport name="R">\n  ${SCOPED_DECLARATIONS.replaceAll('%EXPR%', expression)}\n</jasperReport>`;
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.indexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+/** Complete at the end of the expression in a list's dataset-run contents. */
+function completeInListContents(expression: string): FakeCompletionItem[] {
+    settings = {};
+    const text = `<jasperReport name="R">\n  ${SCOPED_DECLARATIONS.replaceAll('%EXPR%', expression)}\n</jasperReport>`;
+    const open = `<![CDATA[${expression}`;
+    const cursor = text.lastIndexOf(open) + open.length;
+    return provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+}
+
+test('inside a dataset only that dataset’s fields are offered', () => {
+    const names = labels(completeInDatasetDefinition('$F{'));
+
+    assert.ok(names.includes('DatasetField'), 'dataset field is offered');
+    assert.ok(!names.includes('ReportField'), 'master field is not');
+});
+
+test('inside a list dataset-run consumer only the run dataset’s fields are offered', () => {
+    const names = labels(completeInListContents('$F{'));
+
+    assert.ok(names.includes('DatasetField'));
+    assert.ok(!names.includes('ReportField'));
+});
+
+test('outside datasets only report-scope fields are offered', () => {
+    settings = {};
+    const text = report('$F{', [
+        '<field name="ReportField" class="java.lang.String"/>',
+        '<dataset name="DS"><field name="DatasetField" class="java.lang.Integer"/></dataset>',
+    ].join('\n  '));
+    const open = '<![CDATA[$F{';
+    const cursor = text.indexOf(open) + open.length;
+    const names = labels(provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {}));
+
+    assert.ok(names.includes('ReportField'));
+    assert.ok(!names.includes('DatasetField'));
+});
+
+// ── Falling back ──────────────────────────────────────────────────────────────
+
+test('a decimal point does not start member completion', () => {
+    const items = completeExpression('1.5');
+    assert.ok(find(items, 'TODAY'), 'legacy list, not members');
+    assert.ok(!find(items, 'toUpperCase'));
+});
+
+test('settings can turn typed completion off entirely', () => {
+    const items = completeExpression('$F{CustomerName}.', { settings: { 'typeCompletion.enabled': false } });
+    assert.ok(find(items, 'TODAY'), 'legacy list is unchanged');
+    assert.ok(!find(items, 'toUpperCase'));
+});
+
+test('completion outside an expression tag is empty', () => {
+    const text = '<jasperReport name="R"><field name="A" class="java.lang.String"/></jasperReport>';
+    settings = {};
+    const cursor = text.indexOf('</jasperReport>');
+    assert.deepStrictEqual(provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {}), []);
+});
+
+test('the legacy contexts still work', () => {
+    const insideField = completeExpression('$F{');
+    assert.ok(labels(insideField).includes('CustomerName'), '$F{ lists the fields');
+
+    const insideParameter = completeExpression('$P{');
+    assert.ok(labels(insideParameter).includes('Total'));
+
+    const insideVariable = completeExpression('$V{');
+    assert.ok(labels(insideVariable).includes('Count'));
+
+    const afterDollar = completeExpression('$');
+    assert.deepStrictEqual(labels(afterDollar), ['$F{', '$P{', '$V{', '$R{', '$X{']);
+});
+
+test('a single dot without a receiver falls back instead of erroring', () => {
+    const items = completeExpression('.');
+    assert.ok(items.length > 1);
+    assert.ok(find(items, 'TODAY'));
+});
+
+test('typed member completion is disabled for a non-Java report', () => {
+    settings = {};
+    const text = report('$F{CustomerName}.').replace(
+        '<jasperReport name="R">',
+        '<jasperReport name="R" language="groovy">'
+    );
+    const open = '<![CDATA[$F{CustomerName}.';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+
+    assert.ok(find(items, 'TODAY'), 'the language-neutral list is still offered');
+    assert.ok(!find(items, 'toUpperCase'), 'no Java member list');
+});
+
+test('$R{ completes keys from the report resource bundle', () => {
+    settings = {};
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-completion-'));
+    fs.writeFileSync(path.join(dir, 'messages.properties'), 'title=Welcome\nbody=Body text\n');
+
+    const text = `<jasperReport name="R" resourceBundle="messages">
+  <detail><band><textField>
+    <reportElement x="0" y="0" width="100" height="20"/>
+    <textFieldExpression><![CDATA[$R{]]></textFieldExpression>
+  </textField></band></detail>
+</jasperReport>`;
+    const open = '<![CDATA[$R{';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(
+        makeDoc(text, path.join(dir, 'report.jrxml')),
+        positionAt(text, cursor),
+        {}
+    );
+
+    assert.deepStrictEqual(labels(items).sort(), ['body', 'title']);
+    const title = find(items, 'title');
+    assert.ok(title, 'expected the title resource key');
+    assert.strictEqual(title.detail, 'Welcome');
+});
+
+test('$P!{ completes parameters inside a <query>', () => {
+    settings = {};
+    const text = `<jasperReport name="R">
+  <parameter name="Clause" class="java.lang.String"/>
+  <query language="sql"><![CDATA[SELECT * FROM t WHERE x = $P!{]]></query>
+</jasperReport>`;
+    const open = 'WHERE x = $P!{';
+    const cursor = text.indexOf(open) + open.length;
+    const items = provider.provideCompletionItems(makeDoc(text), positionAt(text, cursor), {});
+
+    assert.ok(labels(items).includes('Clause'));
+});
+
+// ── Workspace Java helpers ───────────────────────────────────────────────────
+
+/** A temporary workspace root plus a helper that writes files under it. */
+interface JavaWorkspace {
+    dir: string;
+    write(relative: string, content: string): void;
+}
+
+function javaWorkspace(): JavaWorkspace {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'jrxml-java-ws-'));
+    const write = (relative: string, content: string): void => {
+        const file = path.join(dir, relative);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+    };
+    return { dir, write };
+}
+
+function useWorkspace(dir: string): void {
+    workspaceFolders = [{ uri: { fsPath: dir } }];
+    settings = {};
+    clearJavaProjectIndex();
+}
+
+function releaseWorkspace(dir: string): void {
+    workspaceFolders = null;
+    settings = {};
+    clearJavaProjectIndex();
+    fs.rmSync(dir, { recursive: true, force: true });
+}
+
+test('helpers from nested Maven modules complete fully qualified', () => {
+    const { dir, write } = javaWorkspace();
+    write('core/src/main/java/com/acme/core/Helpers.java',
+        'package com.acme.core;\npublic final class Helpers {\n  public static String upper(String name) { return name; }\n}');
+    write('services/api/src/main/java/com/acme/api/Codec.java',
+        'package com.acme.api;\npublic final class Codec {\n  public static String encode(byte[] bytes) { return ""; }\n}');
+    write('services/api/target/generated-sources/com/acme/Generated.java',
+        'package com.acme; public class Generated { public static void nope() {} }');
+
+    useWorkspace(dir);
+    try {
+        const items = completeExpression('Co');
+        const encode = find(items, 'Codec.encode');
+
+        assert.ok(encode, `expected Codec.encode, got ${labels(items).join(', ').slice(0, 200)}`);
+        assert.strictEqual(encode.insertText.value, 'com.acme.api.Codec.encode(${1:bytes})');
+        assert.match(encode.detail, /com\.acme\.api\.Codec\.encode/);
+        assert.ok(!find(items, 'Generated.nope'), 'build output must not be scanned');
+    } finally {
+        releaseWorkspace(dir);
+    }
+});
+
+test('jrxml.java.sourcePaths adds non-standard source folders', () => {
+    const { dir, write } = javaWorkspace();
+    write('lib/java/com/acme/Extra.java',
+        'package com.acme; public final class Extra { public static int seven() { return 7; } }');
+
+    useWorkspace(dir);
+    try {
+        const items = completeExpression('Ex', { settings: { 'java.sourcePaths': ['lib/java'] } });
+        const extra = find(items, 'Extra.seven');
+        assert.ok(extra, 'the configured folder is scanned');
+        assert.strictEqual(extra.insertText.value, 'com.acme.Extra.seven()');
+    } finally {
+        releaseWorkspace(dir);
+    }
+});
+
+test('clearing the Java cache picks up modules added later', () => {
+    const { dir, write } = javaWorkspace();
+
+    useWorkspace(dir);
+    try {
+        assert.ok(!find(completeExpression('La'), 'Late.now'), 'nothing to scan yet');
+
+        write('late/src/main/java/com/acme/Late.java',
+            'package com.acme; public final class Late { public static String now() { return "now"; } }');
+        clearJavaProjectIndex();
+
+        const late = find(completeExpression('La'), 'Late.now');
+        assert.ok(late, 'a newly added module is picked up after invalidation');
+        assert.strictEqual(late.insertText.value, 'com.acme.Late.now()');
+    } finally {
+        releaseWorkspace(dir);
+    }
+});

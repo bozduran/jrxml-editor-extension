@@ -10,6 +10,16 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Changed
+- Internal: the unit tests are TypeScript now. All 76 files were converted from
+  CommonJS `.js` to ES-module `.ts`, typed helpers and fixtures included, and
+  they are typechecked by `tsconfig.test.json` — which `npm run typecheck` (and
+  therefore CI) now runs. The compiled modules emit `out/**/*.d.ts` for the
+  tests to resolve, `node --test test/` runs the suite through Node's type
+  stripping, and CI moved from Node 20 to Node 24. Suite size is unchanged
+  (822 tests) and no test was renamed, removed or weakened. No user-facing
+  behaviour changes.
+
 ## [1.3.3] - 2026-11-18
 
 ### Fixed

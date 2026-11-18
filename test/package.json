@@ -1,0 +1,4 @@
+{
+  "//": "Unit tests are ES modules: test/*.ts imports the compiled CommonJS modules from out/ and runs under Node's type stripping.",
+  "type": "module"
+}

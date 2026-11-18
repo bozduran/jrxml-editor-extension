@@ -9,9 +9,21 @@ import tseslint from "typescript-eslint";
 // recommended plus the ones that catch dead conditions, implicit string
 // conversion, void-returning expressions and the like. The stylistic tier is
 // deliberately not enabled (see .local-docs/TYPESCRIPT_A_GRADE_PLAN.md).
+//
+// The unit tests are TypeScript too, but they are test code: they are
+// typechecked by tsconfig.test.json, not linted for production-grade
+// strictness, so every host block below ignores test/.
 const typescriptRecommended = tseslint.configs.strictTypeChecked.map(config => ({
     ...config,
     files: config.files ?? ["**/*.ts"],
+    ignores: [...(config.ignores ?? []), "test/**"],
+}));
+
+// The test block is the non-type-checked tier: it parses TypeScript and keeps
+// the recommended correctness rules, without asking the compiler for types.
+const typescriptTests = tseslint.configs.recommended.map(config => ({
+    ...config,
+    files: config.files ?? ["test/**/*.ts"],
 }));
 
 export default tseslint.config(
@@ -20,11 +32,13 @@ export default tseslint.config(
         ignores: [".vscode-test/**", "out/**", ".npm-cache/**"],
     },
     ...typescriptRecommended,
+    ...typescriptTests,
     {
         // Rules that need the compiler's project graph. Both projects are
         // listed so host sources and the DOM client each resolve to their own
         // tsconfig.
         files: ["**/*.ts"],
+        ignores: ["test/**"],
         languageOptions: {
             parserOptions: {
                 project: ["./tsconfig.json", "./tsconfig.webview.json"],
@@ -90,6 +104,19 @@ export default tseslint.config(
                 INITIAL_FILE: "readonly",
                 INITIAL_VERSION: "readonly",
             },
+        },
+    },
+    {
+        // Test fakes deliberately stand in for VS Code and Node internals; the
+        // plan allows explicit `any` at exactly those seams, not elsewhere.
+        files: ["test/**/*.ts"],
+        rules: {
+            "@typescript-eslint/no-explicit-any": "off",
+            "@typescript-eslint/no-unused-vars": ["warn", {
+                argsIgnorePattern: "^_",
+                caughtErrorsIgnorePattern: "^_",
+                varsIgnorePattern: "^_",
+            }],
         },
     },
     {
