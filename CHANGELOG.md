@@ -10,6 +10,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- Internal: `npm run typecheck` works on a clean checkout again. The tests
+  resolve the emitted `out/**/*.d.ts`, and the Typecheck step runs before the
+  first build in CI, so every `../out/*.js` import failed with TS2307 there.
+  `typecheck:tests` now builds first.
+
 ## [1.3.4] - 2026-11-18
 
 ### Changed
