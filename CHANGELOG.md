@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-11-18
+
 ### Changed
 - Internal: the unit tests are TypeScript now. All 76 files were converted from
   CommonJS `.js` to ES-module `.ts`, typed helpers and fixtures included, and
