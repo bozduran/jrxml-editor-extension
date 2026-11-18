@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-11-18
+
 ### Fixed
 - Internal/hardening (the four CodeQL alerts on the 1.3.2 branch): the escaping
   helpers now escape the escape character before the character they protect.
