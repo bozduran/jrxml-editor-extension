@@ -1,0 +1,25 @@
+// test/functionCatalogue.test.js
+// Guard the completion catalogue against the checked-in official reference.
+
+import test from 'node:test';
+import assert from 'node:assert';
+
+import { JASPER_FUNCTIONS } from '../out/expressionSuggestions.js';
+import reference from './fixtures/jasper-functions.json' with { type: 'json' };
+
+const labels = new Set(JASPER_FUNCTIONS.map(fn => fn.label));
+
+test('every official date/time function is offered', () => {
+    const missing = reference.dateTime.filter(name => !labels.has(name));
+    assert.deepStrictEqual(missing, [], `missing functions: ${missing.join(', ')}`);
+});
+
+test('the catalogue has no duplicate labels and DATERANGE keeps its contract', () => {
+    assert.strictEqual(labels.size, JASPER_FUNCTIONS.length);
+
+    const daterange = JASPER_FUNCTIONS.find(fn => fn.label === 'DATERANGE');
+    assert.ok(daterange, 'DATERANGE must be in the catalogue');
+    assert.strictEqual(daterange.detail, 'DATERANGE(value)');
+    assert.ok(daterange.doc, 'DATERANGE must be documented');
+    assert.match(daterange.doc, /DateRange/);
+});
