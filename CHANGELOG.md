@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-11-18
+
 ### Fixed
 - Internal: `npm run typecheck` works on a clean checkout again. The tests
   resolve the emitted `out/**/*.d.ts`, and the Typecheck step runs before the
