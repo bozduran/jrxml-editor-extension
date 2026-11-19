@@ -696,7 +696,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.webview.json && npm run typecheck:tests",
     "typecheck:tests": "npm run build && tsc --noEmit -p tsconfig.test.json",
     "pretest": "npm run build",
-    "test": "node --enable-source-maps --test test/",
+    "test": "node scripts/test.mjs",
     "test:integration": "npm run build && vscode-test",
     "test:integration:headless": "npm run build && vscode-test --config .vscode-test.headless.mjs",
     "lint": "eslint .",

@@ -10,6 +10,14 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+### Fixed
+- Internal: `npm test` no longer relies on the test runner's default file
+  discovery. `node --test test/` walks a directory using the runner's default
+  patterns, and Node 24's do not include `.ts`, so CI executed `test/` as a
+  single file and failed with `MODULE_NOT_FOUND`. `scripts/test.mjs` now lists
+  the `test/*.test.ts` files explicitly — 76 files / 822 tests — which works on
+  every Node version (verified on 24.22.2 and 26.13.0).
+
 ## [1.3.5] - 2026-11-18
 
 ### Fixed
