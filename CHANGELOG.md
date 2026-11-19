@@ -10,6 +10,8 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-11-19
+
 ### Fixed
 - Internal: `npm test` no longer relies on the test runner's default file
   discovery. `node --test test/` walks a directory using the runner's default
